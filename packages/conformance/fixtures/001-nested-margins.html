@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>nested blocks, collapsing top margins</title>
+<style>
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  #outer {
+    width: 400px;
+    margin: 20px;
+  }
+  #inner {
+    margin: 30px 10px;
+    height: 50px;
+  }
+</style>
+<div id="outer" data-ref="outer">
+  <div id="inner" data-ref="inner"></div>
+</div>
