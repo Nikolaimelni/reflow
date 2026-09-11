@@ -1,3 +1,5 @@
+export type ExtractedRect = { x: number; y: number; width: number; height: number };
+
 export type ExtractedElement = {
   tag: string;
   id: string | null;
@@ -5,10 +7,12 @@ export type ExtractedElement = {
   attributes: Record<string, string>;
   parent: number | null;
   computed: Record<string, string>;
+  rect: ExtractedRect;
 };
 
 export type ExtractedPage = {
   css: string;
+  viewport: { width: number; height: number };
   elements: ExtractedElement[];
 };
 
@@ -38,6 +42,8 @@ export function extractPage(propertyNames: string[]): ExtractedPage {
       attributes[attribute.name] = attribute.value;
     }
 
+    const box = node.getBoundingClientRect();
+
     const at = elements.length;
     elements.push({
       tag: node.tagName.toLowerCase(),
@@ -46,11 +52,16 @@ export function extractPage(propertyNames: string[]): ExtractedPage {
       attributes,
       parent,
       computed: values,
+      rect: { x: box.x, y: box.y, width: box.width, height: box.height },
     });
 
     for (const child of Array.from(node.children)) walk(child, at);
   };
 
   walk(document.documentElement, null);
-  return { css, elements };
+  return {
+    css,
+    viewport: { width: document.documentElement.clientWidth, height: window.innerHeight },
+    elements,
+  };
 }

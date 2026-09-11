@@ -35,7 +35,15 @@ export function expandShorthand(cssName: string, value: readonly Token[]): Longh
     case 'inset':
       return perSide(INSET, value);
     case 'border':
-      return border(value);
+      return border(BORDER_WIDTH, BORDER_STYLE, value);
+    case 'border-top':
+      return border(['borderTopWidth'], ['borderTopStyle'], value);
+    case 'border-right':
+      return border(['borderRightWidth'], ['borderRightStyle'], value);
+    case 'border-bottom':
+      return border(['borderBottomWidth'], ['borderBottomStyle'], value);
+    case 'border-left':
+      return border(['borderLeftWidth'], ['borderLeftStyle'], value);
     default:
       return null;
   }
@@ -76,7 +84,11 @@ function perSide(names: readonly PropertyName[], value: readonly Token[]): Longh
   return names.map((property, index) => ({ property, value: box[index] ?? [] }));
 }
 
-function border(value: readonly Token[]): Longhand[] | null {
+function border(
+  widthNames: readonly PropertyName[],
+  styleNames: readonly PropertyName[],
+  value: readonly Token[],
+): Longhand[] | null {
   let width: Token[] = [{ type: 'ident', value: 'medium' }];
   let style: Token[] = [{ type: 'ident', value: 'none' }];
 
@@ -97,7 +109,7 @@ function border(value: readonly Token[]): Longhand[] | null {
   }
 
   return [
-    ...BORDER_WIDTH.map((property) => ({ property, value: width })),
-    ...BORDER_STYLE.map((property) => ({ property, value: style })),
+    ...widthNames.map((property) => ({ property, value: width })),
+    ...styleNames.map((property) => ({ property, value: style })),
   ];
 }

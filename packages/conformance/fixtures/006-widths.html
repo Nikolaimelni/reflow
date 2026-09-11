@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>width resolution and the box model</title>
+<style>
+  body {
+    margin: 0;
+    width: 600px;
+  }
+  div {
+    height: 10px;
+  }
+  .fill {
+    margin: 0 25px;
+  }
+  .centred {
+    width: 200px;
+    margin: 0 auto;
+  }
+  .over {
+    width: 300px;
+    margin-left: 50px;
+    margin-right: 400px;
+  }
+  .border-box {
+    box-sizing: border-box;
+    width: 200px;
+    padding: 10px;
+    border: 5px solid;
+  }
+  .content-box {
+    width: 200px;
+    padding: 10px;
+    border: 5px solid;
+  }
+  .clamped {
+    width: 500px;
+    max-width: 120px;
+    margin: 0 auto;
+  }
+  .percent {
+    width: 50%;
+    padding: 0 10%;
+  }
+  .nested {
+    width: 50%;
+  }
+</style>
+<div class="fill"></div>
+<div class="centred"></div>
+<div class="over"></div>
+<div class="border-box"></div>
+<div class="content-box"></div>
+<div class="clamped"></div>
+<div class="percent"><div class="nested"></div></div>

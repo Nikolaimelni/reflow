@@ -24,6 +24,9 @@ h6 { font-size: 0.67em; margin: 2.33em 0 }
 ul, ol { margin: 1em 0; padding-left: 40px }
 dd { margin-left: 40px }
 blockquote, figure { margin: 1em 40px }
-pre { white-space: pre; margin: 1em 0 }
+pre { white-space: pre; margin: 1em 0; font-family: monospace }
+code, kbd, samp { font-family: monospace }
+h1, h2, h3, h4, h5, h6, strong, b { font-weight: bold }
+em, i, cite, address, var { font-style: italic }
 hr { margin: 0.5em auto; border-width: 1px; border-style: solid }
 `;

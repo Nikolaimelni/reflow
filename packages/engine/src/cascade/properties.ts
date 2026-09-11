@@ -23,6 +23,7 @@ export type Overflow = 'visible' | 'hidden';
 export type BorderStyle = 'none' | 'solid' | 'dashed' | 'dotted';
 export type TextAlign = 'left' | 'right' | 'center';
 export type WhiteSpace = 'normal' | 'pre' | 'nowrap';
+export type FontStyle = 'normal' | 'italic' | 'oblique';
 
 export type ComputedStyle = {
   display: Display;
@@ -63,6 +64,9 @@ export type ComputedStyle = {
   left: Inset;
 
   fontSize: number;
+  fontFamily: string[];
+  fontWeight: number;
+  fontStyle: FontStyle;
   lineHeight: LineHeight;
   textAlign: TextAlign;
   whiteSpace: WhiteSpace;
@@ -173,6 +177,36 @@ const lineHeight: PropertyDefinition<LineHeight>['parse'] = (value, context) => 
   return nonNegative(lengthPercentage(value, context));
 };
 
+/** `Times New Roman` arrives as three idents, and quoted names as one string token. */
+const fontFamily: PropertyDefinition<string[]>['parse'] = (value) => {
+  const families: string[] = [];
+  let current: string[] = [];
+
+  for (const token of value) {
+    if (token.type === 'comma') {
+      if (current.length > 0) families.push(current.join(' '));
+      current = [];
+    } else if (token.type === 'string' || token.type === 'ident') {
+      current.push(token.value);
+    } else if (token.type !== 'whitespace') {
+      return null;
+    }
+  }
+
+  if (current.length > 0) families.push(current.join(' '));
+  return families.length === 0 ? null : families;
+};
+
+const fontWeight: PropertyDefinition<number>['parse'] = (value) => {
+  const named = keyword('normal', 'bold')(value);
+  if (named === 'normal') return 400;
+  if (named === 'bold') return 700;
+
+  const token = single(value);
+  if (token?.type !== 'number') return null;
+  return token.value >= 1 && token.value <= 1000 ? token.value : null;
+};
+
 const zIndex: PropertyDefinition<ZIndex>['parse'] = (value) => {
   if (keyword('auto')(value) === 'auto') return AUTO;
   const token = single(value);
@@ -249,6 +283,19 @@ export const properties: PropertyTable = {
   left: own('left', AUTO, inset),
 
   fontSize: { cssName: 'font-size', initial: 16, inherited: true, parse: fontSize },
+  fontFamily: {
+    cssName: 'font-family',
+    initial: ['serif'],
+    inherited: true,
+    parse: fontFamily,
+  },
+  fontWeight: { cssName: 'font-weight', initial: 400, inherited: true, parse: fontWeight },
+  fontStyle: {
+    cssName: 'font-style',
+    initial: 'normal',
+    inherited: true,
+    parse: keyword('normal', 'italic', 'oblique'),
+  },
   lineHeight: {
     cssName: 'line-height',
     initial: NORMAL_LINE_HEIGHT,

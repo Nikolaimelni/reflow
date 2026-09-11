@@ -22,6 +22,9 @@ const SIDES = ['top', 'right', 'bottom', 'left'] as const;
  * Only properties whose computed value the browser reports back unchanged. Width, height and
  * anything else that `getComputedStyle` resolves against a real box belongs to the geometry
  * harness, not here: comparing a percentage against a used pixel value is a guaranteed miss.
+ *
+ * `font-family` is left out on purpose. Its initial value is whatever the user picked in the
+ * browser's settings, so there is nothing to agree on. Fixtures declare a family instead.
  */
 const FORMATTERS: Record<string, Formatter> = {
   display: (style) => style.display,
@@ -31,6 +34,8 @@ const FORMATTERS: Record<string, Formatter> = {
   'text-align': (style) => style.textAlign,
   'white-space': (style) => style.whiteSpace,
   'font-size': (style) => `${round(style.fontSize)}px`,
+  'font-weight': (style) => String(style.fontWeight),
+  'font-style': (style) => style.fontStyle,
   'line-height': (style) => lineHeight(style),
   'z-index': (style) => (style.zIndex.kind === 'auto' ? 'auto' : String(style.zIndex.value)),
 };

@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>margin collapsing in every direction</title>
+<style>
+  body {
+    margin: 0;
+  }
+  .a {
+    height: 20px;
+    margin-bottom: 30px;
+  }
+  .b {
+    height: 20px;
+    margin-top: 10px;
+  }
+  .empty {
+    margin: 25px 0;
+  }
+  .parent {
+    margin-top: 40px;
+  }
+  .child {
+    margin-top: 15px;
+    height: 10px;
+  }
+  .bfc {
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .in-bfc {
+    margin-top: 22px;
+    height: 10px;
+  }
+  .padded {
+    padding-top: 1px;
+    margin-top: 9px;
+  }
+  .in-padded {
+    margin-top: 33px;
+    height: 10px;
+  }
+  .negative {
+    height: 10px;
+    margin-top: -12px;
+  }
+  .last {
+    height: 10px;
+    margin-bottom: 60px;
+  }
+</style>
+<div class="a"></div>
+<div class="empty"></div>
+<div class="b"></div>
+<div class="parent"><div class="child"></div></div>
+<div class="bfc"><div class="in-bfc"></div></div>
+<div class="padded"><div class="in-padded"></div></div>
+<div class="negative"></div>
+<div class="last"></div>

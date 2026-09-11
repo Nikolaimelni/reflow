@@ -17,8 +17,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm typecheck
       - run: pnpm build
+      - run: pnpm typecheck
       - run: pnpm -F @reflow/conformance exec playwright install --with-deps chromium
       - run: pnpm test
       - uses: actions/upload-artifact@v4
