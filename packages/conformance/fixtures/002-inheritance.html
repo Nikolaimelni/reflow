@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>font size chains and inherited properties</title>
+<style>
+  html {
+    font-size: 20px;
+  }
+  body {
+    font-size: 0.8em;
+    text-align: center;
+  }
+  .outer {
+    font-size: 150%;
+    padding: 1em;
+  }
+  .inner {
+    font-size: 2rem;
+    margin: 0.5em 1em;
+    line-height: 1.5;
+  }
+  .quiet {
+    font-size: inherit;
+  }
+</style>
+<div class="outer">
+  <div class="inner"><span class="quiet">text</span></div>
+</div>

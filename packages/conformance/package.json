@@ -2,5 +2,17 @@
   "name": "@reflow/conformance",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.2",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@reflow/engine": "workspace:^"
+  },
+  "scripts": {
+    "test": "pnpm -F @reflow/engine build && playwright test",
+    "typecheck": "tsc -p tsconfig.json"
+  }
 }

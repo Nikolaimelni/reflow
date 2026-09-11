@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>specificity, order and the style attribute</title>
+<style>
+  p {
+    padding-top: 1px;
+  }
+  .note {
+    padding-top: 2px;
+  }
+  p.note {
+    padding-top: 3px;
+  }
+  #lead {
+    padding-top: 4px;
+  }
+  .late {
+    padding-top: 5px;
+  }
+  .loud {
+    padding-bottom: 9px !important;
+  }
+</style>
+<p id="lead" class="note">specificity</p>
+<p class="note late">order</p>
+<p class="note" style="padding-top: 7px">style attribute</p>
+<p class="note loud" style="padding-bottom: 1px">important</p>

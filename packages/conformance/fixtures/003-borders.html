@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>border width only counts with a border style</title>
+<style>
+  div {
+    margin: 0;
+  }
+  .styled {
+    border: 4px solid;
+  }
+  .widthless {
+    border-width: 6px;
+  }
+  .thick {
+    border: thick dotted;
+  }
+  .mixed {
+    border-style: dashed;
+    border-top-width: 2px;
+  }
+  .padded {
+    padding: 3px 6px;
+    border: 1px solid;
+    box-sizing: border-box;
+  }
+</style>
+<div class="styled"></div>
+<div class="widthless"></div>
+<div class="thick"></div>
+<div class="mixed"></div>
+<div class="padded"></div>
