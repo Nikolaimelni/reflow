@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>relative and absolute positioning</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 500px;
+  }
+  div {
+    height: 20px;
+  }
+  .moved {
+    position: relative;
+    top: 5px;
+    left: 7px;
+  }
+  .pulled {
+    position: relative;
+    bottom: 8px;
+    right: 3px;
+  }
+  .anchor {
+    position: relative;
+    margin: 30px;
+    padding: 12px;
+    border: 3px solid;
+    height: 90px;
+  }
+  .middle {
+    margin: 10px;
+  }
+  .pinned {
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+  }
+  .stretched {
+    position: absolute;
+    left: 20px;
+    right: 30px;
+    height: 12px;
+  }
+  .centred {
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: 100px;
+    height: 12px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .far {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 16px;
+    height: 16px;
+  }
+  .shrunk {
+    position: absolute;
+    left: 2px;
+    bottom: 30px;
+    height: auto;
+  }
+  .staticky {
+    position: absolute;
+    width: 40px;
+    height: 8px;
+  }
+</style>
+<div class="moved"></div>
+<div class="pulled"></div>
+<div class="anchor">
+  <div class="middle">
+    <div class="pinned"></div>
+  </div>
+  <div class="stretched"></div>
+  <div class="centred"></div>
+  <div class="far"></div>
+  <div class="shrunk">two words</div>
+</div>
+<div>after</div>
+<div class="staticky"></div>
+<div>last</div>

@@ -1,5 +1,5 @@
 import type { BorderStyle, ComputedStyle } from '../cascade/properties.js';
-import type { LengthPercentage, Margin, MaxSize, Px, Size } from '../cascade/values.js';
+import type { Inset, LengthPercentage, Margin, MaxSize, Px, Size } from '../cascade/values.js';
 import type { Edges } from '../geometry.js';
 
 /**
@@ -41,6 +41,10 @@ export function usedMaxSize(value: MaxSize, basis: number | null): number | null
 }
 
 export function usedMargin(value: Margin, basis: number): number | null {
+  return value.kind === 'auto' ? null : usedLength(value, basis);
+}
+
+export function usedInset(value: Inset, basis: number): number | null {
   return value.kind === 'auto' ? null : usedLength(value, basis);
 }
 

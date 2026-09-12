@@ -1,6 +1,6 @@
 import type { BlockBox, Box, BoxId, InlineBox } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
-import { zeroEdges } from '../geometry.js';
+import { type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { fontOf, segmentText, type TextMeasurer, usedLineHeight, wraps } from './text.js';
 
@@ -25,6 +25,8 @@ export type InlineInput = {
   available: number;
   measurer: TextMeasurer;
   fragments: Map<BoxId, Fragment>;
+  /** One rect per line a box appears on, which is what a pointer is tested against. */
+  pieces: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
@@ -79,6 +81,9 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         height: piece.height,
       };
 
+      record(input.pieces, piece.box, rect);
+      for (const ancestor of piece.ancestors) record(input.pieces, ancestor, rect);
+
       if (piece.source !== null) {
         // Laid out once to measure it and again where the line put it. The second pass is
         // what ends up in the fragments, and the trace shows both.
@@ -122,6 +127,12 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 /** An atomic inline with no line boxes of its own sits on its bottom edge. */
 function baselineOf(piece: Piece): number {
   return piece.baseline ?? piece.height;
+}
+
+function record(pieces: Map<BoxId, Rect[]>, box: BoxId, rect: Rect): void {
+  const existing = pieces.get(box);
+  if (existing === undefined) pieces.set(box, [rect]);
+  else existing.push(rect);
 }
 
 type Extent = { left: number; top: number; right: number; bottom: number };

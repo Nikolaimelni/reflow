@@ -34,6 +34,8 @@ export function expandShorthand(cssName: string, value: readonly Token[]): Longh
       return perSide(BORDER_STYLE, value);
     case 'inset':
       return perSide(INSET, value);
+    case 'flex':
+      return flex(value);
     case 'border':
       return border(BORDER_WIDTH, BORDER_STYLE, value);
     case 'border-top':
@@ -82,6 +84,62 @@ function perSide(names: readonly PropertyName[], value: readonly Token[]): Longh
           : [a, b, c, d];
 
   return names.map((property, index) => ({ property, value: box[index] ?? [] }));
+}
+
+const ZERO_TOKEN: Token = { type: 'number', value: 0 };
+const ONE_TOKEN: Token = { type: 'number', value: 1 };
+const AUTO_TOKEN: Token = { type: 'ident', value: 'auto' };
+
+/**
+ * `flex: 1` means `1 1 0`, not `1 1 auto`. That difference is why a one-word `flex` makes
+ * items share the space evenly while `flex: auto` lets their content matter.
+ */
+function flex(value: readonly Token[]): Longhand[] | null {
+  const parts = words(value);
+  const first = parts[0]?.[0];
+
+  if (parts.length === 1 && first?.type === 'ident') {
+    switch (first.value.toLowerCase()) {
+      case 'none':
+        return factors(ZERO_TOKEN, ZERO_TOKEN, AUTO_TOKEN);
+      case 'auto':
+        return factors(ONE_TOKEN, ONE_TOKEN, AUTO_TOKEN);
+      case 'initial':
+        return factors(ZERO_TOKEN, ONE_TOKEN, AUTO_TOKEN);
+      default:
+        return null;
+    }
+  }
+
+  let grow: Token | null = null;
+  let shrink: Token | null = null;
+  let basis: Token | null = null;
+
+  for (const part of parts) {
+    const token = part[0];
+    if (part.length !== 1 || token === undefined) return null;
+
+    if (token.type === 'number' && basis === null) {
+      if (grow === null) grow = token;
+      else if (shrink === null) shrink = token;
+      else return null;
+      continue;
+    }
+
+    if (basis !== null) return null;
+    basis = token;
+  }
+
+  if (grow === null) return null;
+  return factors(grow, shrink ?? ONE_TOKEN, basis ?? ZERO_TOKEN);
+}
+
+function factors(grow: Token, shrink: Token, basis: Token): Longhand[] {
+  return [
+    { property: 'flexGrow', value: [grow] },
+    { property: 'flexShrink', value: [shrink] },
+    { property: 'flexBasis', value: [basis] },
+  ];
 }
 
 function border(

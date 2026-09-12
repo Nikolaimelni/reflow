@@ -1,0 +1,171 @@
+import { describe, expect, it } from 'vitest';
+import type { AlignItems, JustifyContent } from '../cascade/properties.js';
+import { type FlexItemInput, type FlexLineInput, solveFlexLine } from './flex.js';
+
+function item(overrides: Partial<FlexItemInput> = {}): FlexItemInput {
+  return {
+    grow: 0,
+    shrink: 1,
+    basis: 100,
+    minMain: 0,
+    maxMain: null,
+    mainSurround: 0,
+    crossSurround: 0,
+    marginMainStart: 0,
+    marginCrossStart: 0,
+    crossSize: 20,
+    ...overrides,
+  };
+}
+
+function line(overrides: Partial<FlexLineInput> = {}) {
+  const input: FlexLineInput = {
+    mainSize: 300,
+    crossSize: null,
+    justify: 'flex-start',
+    align: 'stretch',
+    items: [item(), item()],
+    crossOf: () => 0,
+    baselineOf: () => null,
+    ...overrides,
+  };
+  return solveFlexLine(input);
+}
+
+const mains = (result: ReturnType<typeof line>) => result.placements.map((one) => one.mainSize);
+const starts = (result: ReturnType<typeof line>) => result.placements.map((one) => one.mainStart);
+
+describe('main axis sizing', () => {
+  it('leaves items at their base size when nothing grows', () => {
+    expect(mains(line({ items: [item({ basis: 60 }), item({ basis: 90 })] }))).toEqual([60, 90]);
+  });
+
+  it('shares free space by the grow factor', () => {
+    const result = line({
+      items: [item({ basis: 50, grow: 1 }), item({ basis: 50, grow: 2 })],
+    });
+    // 200 left over, split one to two
+    expect(mains(result)).toEqual([50 + 200 / 3, 50 + 400 / 3]);
+  });
+
+  it('weighs shrinking by the base size as well as the factor', () => {
+    const result = line({
+      mainSize: 200,
+      items: [item({ basis: 100, shrink: 1 }), item({ basis: 300, shrink: 1 })],
+    });
+    // 200 to give back, weighted 100 to 300
+    expect(mains(result)).toEqual([100 - 50, 300 - 150]);
+  });
+
+  it('refuses to shrink past the minimum', () => {
+    const result = line({
+      mainSize: 100,
+      items: [item({ basis: 200, minMain: 150 }), item({ basis: 200, minMain: 0 })],
+    });
+    expect(mains(result)[0]).toBe(150);
+  });
+
+  it('refuses to grow past the maximum', () => {
+    const result = line({
+      items: [item({ basis: 50, grow: 1, maxMain: 70 }), item({ basis: 50 })],
+    });
+    expect(mains(result)[0]).toBe(70);
+  });
+
+  it("counts an item's own padding and margin against the free space", () => {
+    const result = line({
+      items: [item({ basis: 50, grow: 1, mainSurround: 20, marginMainStart: 10 })],
+    });
+    expect(mains(result)[0]).toBe(280);
+    expect(starts(result)[0]).toBe(10);
+  });
+
+  it('hands out nothing when the container has no definite main size', () => {
+    const result = line({ mainSize: null, items: [item({ basis: 40, grow: 1 })] });
+    expect(mains(result)).toEqual([40]);
+    expect(result.mainSize).toBe(40);
+  });
+});
+
+describe('justify-content', () => {
+  const run = (justify: JustifyContent, count = 2) =>
+    starts(line({ justify, items: Array.from({ length: count }, () => item({ basis: 50 })) }));
+
+  it('packs to the start by default', () => {
+    expect(run('flex-start')).toEqual([0, 50]);
+  });
+
+  it('packs to the end', () => {
+    expect(run('flex-end')).toEqual([200, 250]);
+  });
+
+  it('centres the group', () => {
+    expect(run('center')).toEqual([100, 150]);
+  });
+
+  it('pushes the gap between them', () => {
+    expect(run('space-between')).toEqual([0, 250]);
+  });
+
+  it('gives each item half a gap on each side', () => {
+    expect(run('space-around')).toEqual([50, 200]);
+  });
+
+  it('gives every gap the same width', () => {
+    expect(run('space-evenly')).toEqual([200 / 3, 50 + (200 / 3) * 2]);
+  });
+});
+
+describe('cross axis', () => {
+  const crosses = (align: AlignItems, crossSize: number | null) => {
+    const result = line({
+      align,
+      crossSize,
+      items: [item({ crossSize: 20 }), item({ crossSize: 40 })],
+    });
+    return result.placements.map((one) => [one.crossStart, one.crossSize]);
+  };
+
+  it('takes the line height from the tallest item', () => {
+    const result = line({
+      align: 'flex-start',
+      items: [item({ crossSize: 20 }), item({ crossSize: 40 })],
+    });
+    expect(result.crossSize).toBe(40);
+  });
+
+  it('stretches only the items whose cross size is auto', () => {
+    const result = line({
+      align: 'stretch',
+      crossSize: 60,
+      items: [item({ crossSize: null }), item({ crossSize: 25 })],
+    });
+    expect(result.placements.map((one) => one.crossSize)).toEqual([60, 25]);
+  });
+
+  it('leaves a short item at the start, the end or the middle', () => {
+    expect(crosses('flex-start', 100)).toEqual([
+      [0, 20],
+      [0, 40],
+    ]);
+    expect(crosses('flex-end', 100)).toEqual([
+      [80, 20],
+      [60, 40],
+    ]);
+    expect(crosses('center', 100)).toEqual([
+      [40, 20],
+      [30, 40],
+    ]);
+  });
+
+  it('lines baselines up and lets the line grow to fit', () => {
+    const result = line({
+      align: 'baseline',
+      items: [item({ crossSize: 20 }), item({ crossSize: 40 })],
+      baselineOf: (index) => (index === 0 ? 15 : 32),
+    });
+
+    expect(result.placements.map((one) => one.crossStart)).toEqual([17, 0]);
+    expect(result.crossSize).toBe(40);
+  });
+});

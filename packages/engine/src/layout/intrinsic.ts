@@ -27,6 +27,11 @@ export function intrinsicWidths(box: Box, measurer: TextMeasurer): Intrinsic {
   return outerIntrinsic(box, measurer);
 }
 
+/** Without the box's own margins, border and padding, for a caller that adds them itself. */
+export function intrinsicContentWidths(box: Box, measurer: TextMeasurer): Intrinsic {
+  return contentIntrinsic(box, measurer);
+}
+
 export function shrinkToFit(intrinsic: Intrinsic, available: number): number {
   return Math.min(Math.max(intrinsic.min, available), intrinsic.max);
 }

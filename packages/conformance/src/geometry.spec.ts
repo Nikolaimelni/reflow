@@ -28,6 +28,12 @@ const reportDir = join(here, '..', 'report');
 const fixtures = readdirSync(fixturesDir).filter((name) => name.endsWith('.html'));
 const results = new Map<string, { matched: number; compared: number; misses: string[] }>();
 
+function name(element: { tag: string; id: string | null; classes: string[] }): string {
+  const id = element.id === null ? '' : `#${element.id}`;
+  const classes = element.classes.length === 0 ? '' : `.${element.classes.join('.')}`;
+  return `<${element.tag}${id}${classes}>`;
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('geometry against Chromium', () => {
@@ -68,7 +74,7 @@ test.describe('geometry against Chromium', () => {
           if (Math.abs(ours - theirs) <= TOLERANCE) {
             matched++;
           } else {
-            misses.push(`<${element.tag}> ${edge}: engine ${ours}, chromium ${theirs}`);
+            misses.push(`${name(element)} ${edge}: engine ${ours}, chromium ${theirs}`);
           }
         }
       });

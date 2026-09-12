@@ -78,13 +78,32 @@ export {
   zeroEdges,
 } from './geometry.js';
 export { type LayoutResult, layoutDocument, type Viewport } from './layout/block.js';
+export {
+  type FlexItemInput,
+  type FlexLineInput,
+  type FlexLineResult,
+  type FlexPlacement,
+  solveFlexLine,
+} from './layout/flex.js';
 export { type AtomicSize, layoutInlineContent } from './layout/inline.js';
+export {
+  type Intrinsic,
+  intrinsicContentWidths,
+  intrinsicWidths,
+  shrinkToFit,
+} from './layout/intrinsic.js';
 export {
   type CollapsedMargin,
   mergeMargins,
   resolveMargin,
   withMargin,
 } from './layout/margins.js';
+export {
+  type AxisInput,
+  type AxisResult,
+  relativeOffset,
+  solveAbsoluteAxis,
+} from './layout/position.js';
 export {
   type FontMetrics,
   type FontSpec,
@@ -96,6 +115,14 @@ export {
   usedLineHeight,
 } from './layout/text.js';
 export { usedBorderWidths } from './layout/used.js';
+export {
+  buildDisplayList,
+  type DisplayList,
+  formsStackingContext,
+  hitTest,
+  type PaintItem,
+  type StackingContext,
+} from './paint/display-list.js';
 export {
   applyEvent,
   type Constraint,

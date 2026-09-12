@@ -1,9 +1,10 @@
 import { type BlockBox, type Box, type BoxId, type InlineBox, isBlock } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
-import type { Edges } from '../geometry.js';
+import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
+import { type FlexItemInput, solveFlexLine } from './flex.js';
 import { type AtomicSize, layoutInlineContent } from './inline.js';
-import { intrinsicWidths, shrinkToFit } from './intrinsic.js';
+import { intrinsicContentWidths, intrinsicWidths, shrinkToFit } from './intrinsic.js';
 import {
   type CollapsedMargin,
   mergeMargins,
@@ -11,10 +12,12 @@ import {
   resolveMargin,
   withMargin,
 } from './margins.js';
+import { relativeOffset, solveAbsoluteAxis } from './position.js';
 import type { TextMeasurer } from './text.js';
 import {
   clampSize,
   usedBorderWidths,
+  usedInset,
   usedMargin,
   usedMaxSize,
   usedPadding,
@@ -25,6 +28,8 @@ export type Viewport = { width: number; height: number };
 
 export type LayoutResult = {
   fragments: Map<BoxId, Fragment>;
+  /** Per line rects for inline content, where one box can appear in several places. */
+  pieces: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
 };
 
@@ -37,8 +42,32 @@ type ContainingBlock = {
 
 type Context = {
   fragments: Map<BoxId, Fragment>;
+  pieces: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   measurer: TextMeasurer;
+  /** The initial containing block, which is what an absolute box falls back to. */
+  icb: Rect;
+};
+
+/** An out of flow box, parked until the containing block it belongs to has a size. */
+type Deferred = { box: BlockBox; staticX: number; staticY: number };
+
+/** Absolute positioning solves width, position and margins together, so it hands them over. */
+type Override = {
+  x: number;
+  contentWidth: number;
+  margin: Edges;
+  contentHeight: number | null;
+};
+
+type BlockInput = {
+  box: BlockBox;
+  containing: ContainingBlock;
+  /** Where the border box goes in the flow, before any relative offset. */
+  top: number;
+  absolutes: Deferred[];
+  isRoot: boolean;
+  override: Override | null;
 };
 
 type BlockResult = {
@@ -63,27 +92,29 @@ export function layoutDocument(
   viewport: Viewport,
   measurer: TextMeasurer,
 ): LayoutResult {
-  const context: Context = { fragments: new Map(), trace: [], measurer };
+  const icb: Rect = { x: 0, y: 0, width: viewport.width, height: viewport.height };
+  const context: Context = {
+    fragments: new Map(),
+    pieces: new Map(),
+    trace: [],
+    measurer,
+    icb,
+  };
   const containing: ContainingBlock = { x: 0, width: viewport.width, height: viewport.height };
 
   // The root's margins never collapse with anything, so its own top margin is all there is.
   const top = usedMargin(root.style.marginTop, viewport.width) ?? 0;
-  layoutBlock(root, containing, top, context, true);
+  layoutBlock({ box: root, containing, top, absolutes: [], isRoot: true, override: null }, context);
 
-  return { fragments: context.fragments, trace: context.trace };
+  return { fragments: context.fragments, pieces: context.pieces, trace: context.trace };
 }
 
 /**
  * `top` is the final position of the border box. The caller already knows it, because every
  * margin that could still move the box has been collapsed on the way in.
  */
-function layoutBlock(
-  box: BlockBox,
-  containing: ContainingBlock,
-  top: number,
-  context: Context,
-  isRoot = false,
-): BlockResult {
+function layoutBlock(input: BlockInput, context: Context): BlockResult {
+  const { box, containing, top, isRoot, override } = input;
   const style = box.style;
 
   context.trace.push({
@@ -94,23 +125,35 @@ function layoutBlock(
 
   const border = usedBorderWidths(style);
   const padding = usedPadding(style, containing.width);
-  const horizontal = resolveHorizontal(style, containing.width, border, padding);
+  const horizontal =
+    override === null
+      ? resolveHorizontal(style, containing.width, border, padding)
+      : {
+          marginLeft: override.margin.left,
+          marginRight: override.margin.right,
+          contentWidth: override.contentWidth,
+          reason: 'width from the insets that placed it',
+        };
 
-  const margin: Edges = {
-    top: usedMargin(style.marginTop, containing.width) ?? 0,
-    right: horizontal.marginRight,
-    bottom: usedMargin(style.marginBottom, containing.width) ?? 0,
-    left: horizontal.marginLeft,
-  };
+  const margin: Edges =
+    override === null
+      ? {
+          top: usedMargin(style.marginTop, containing.width) ?? 0,
+          right: horizontal.marginRight,
+          bottom: usedMargin(style.marginBottom, containing.width) ?? 0,
+          left: horizontal.marginLeft,
+        }
+      : override.margin;
 
-  const x = containing.x + margin.left;
-  const contentTop = top + border.top + padding.top;
-  const specifiedHeight = contentHeight(
-    style,
-    usedSize(style.height, containing.height),
-    border,
-    padding,
-  );
+  const offset = relativeOffset(style, containing);
+  const x = (override === null ? containing.x + margin.left : override.x) + offset.dx;
+  const boxTop = top + offset.dy;
+  const contentTop = boxTop + border.top + padding.top;
+
+  const specifiedHeight =
+    override === null
+      ? contentHeight(style, usedSize(style.height, containing.height), border, padding)
+      : override.contentHeight;
 
   const childContaining: ContainingBlock = {
     x: x + border.left + padding.left,
@@ -118,7 +161,15 @@ function layoutBlock(
     height: specifiedHeight,
   };
 
-  const flow = layoutChildren(box, childContaining, contentTop, border, padding, context, isRoot);
+  // A positioned box is the containing block for the absolute boxes under it, so it collects
+  // them on the way down and places them once its own size is known.
+  const positioned = isRoot || style.position !== 'static';
+  const mine = positioned ? [] : input.absolutes;
+
+  const flow =
+    style.display === 'flex'
+      ? layoutFlexItems(box, childContaining, contentTop, context, mine)
+      : layoutChildren(box, childContaining, contentTop, border, padding, context, isRoot, mine);
   const bottomEscapes = !isRoot && canCollapseBottom(style, padding, border, specifiedHeight);
 
   // A trailing margin that cannot escape has to be paid for in this box's own height.
@@ -134,7 +185,7 @@ function layoutBlock(
     box: box.id,
     rect: {
       x,
-      y: top,
+      y: boxTop,
       width: horizontal.contentWidth + padding.left + padding.right + border.left + border.right,
       height: height + padding.top + padding.bottom + border.top + border.bottom,
     },
@@ -150,6 +201,19 @@ function layoutBlock(
     fragment,
     reason: `${horizontal.reason}; ${specifiedHeight === null ? 'height from content' : 'height from the style'}`,
   });
+
+  if (positioned) {
+    const paddingBox: Rect = isRoot
+      ? context.icb
+      : {
+          x: x + border.left,
+          y: boxTop + border.top,
+          width: horizontal.contentWidth + padding.left + padding.right,
+          height: height + padding.top + padding.bottom,
+        };
+
+    for (const deferred of mine) layoutAbsolute(deferred, paddingBox, context);
+  }
 
   const ownBottom = withMargin(NO_MARGIN, margin.bottom);
 
@@ -178,6 +242,7 @@ function layoutChildren(
   padding: Edges,
   context: Context,
   isRoot: boolean,
+  absolutes: Deferred[],
 ): FlowResult {
   const blocks = box.children.filter(isBlock);
 
@@ -192,6 +257,7 @@ function layoutChildren(
       available: containing.width,
       measurer: context.measurer,
       fragments: context.fragments,
+      pieces: context.pieces,
       trace: context.trace,
       layoutAtomic: (child, available) => measureAtomic(child, available, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing.width, context),
@@ -207,6 +273,15 @@ function layoutChildren(
   let baseline: number | null = null;
 
   for (const child of blocks) {
+    if (child.style.position === 'absolute') {
+      absolutes.push({
+        box: child,
+        staticX: containing.x,
+        staticY: contentTop + height + resolveMargin(pending),
+      });
+      continue;
+    }
+
     if (!placed && collapseIntoTop) {
       // Already folded into this box's own top margin, so it must not push the child down.
       pending = NO_MARGIN;
@@ -220,7 +295,10 @@ function layoutChildren(
     }
 
     const childTop = contentTop + height + resolveMargin(pending);
-    const result = layoutBlock(child, containing, childTop, context);
+    const result = layoutBlock(
+      { box: child, containing, top: childTop, absolutes, isRoot: false, override: null },
+      context,
+    );
 
     if (result.collapsedThrough) {
       pending = mergeMargins(pending, result.marginBottom);
@@ -435,7 +513,9 @@ function collapsesThrough(box: BlockBox, containingWidth: number): boolean {
 }
 
 function inFlowChildren(box: BlockBox): Box[] {
-  return box.children.filter((child) => !isWhitespaceText(child));
+  return box.children.filter(
+    (child) => !isWhitespaceText(child) && child.style.position !== 'absolute',
+  );
 }
 
 function isWhitespaceText(box: Box): boolean {
@@ -447,9 +527,19 @@ function isWhitespaceText(box: Box): boolean {
  * a throwaway context first just to find out how big it is.
  */
 function measureAtomic(box: InlineBox, available: number, context: Context): AtomicSize {
-  const scratch: Context = { fragments: new Map(), trace: [], measurer: context.measurer };
+  const scratch: Context = { ...context, fragments: new Map(), pieces: new Map(), trace: [] };
   const width = atomicWidth(box, available, context);
-  const result = layoutBlock(asBlock(box), { x: 0, width, height: null }, 0, scratch);
+  const result = layoutBlock(
+    {
+      box: asBlock(box),
+      containing: { x: 0, width, height: null },
+      top: 0,
+      absolutes: [],
+      isRoot: false,
+      override: null,
+    },
+    scratch,
+  );
   const fragment = scratch.fragments.get(box.id);
 
   // An inline-block that clips its overflow hides its baseline with it, so it aligns on its
@@ -467,7 +557,17 @@ function placeAtomic(
   context: Context,
 ): void {
   const width = atomicWidth(box, available, context);
-  layoutBlock(asBlock(box), { x, width, height: null }, y, context);
+  layoutBlock(
+    {
+      box: asBlock(box),
+      containing: { x, width, height: null },
+      top: y,
+      absolutes: [],
+      isRoot: false,
+      override: null,
+    },
+    context,
+  );
 }
 
 /**
@@ -486,5 +586,249 @@ function asBlock(box: InlineBox): BlockBox {
     element: box.element,
     style: box.style,
     children: box.children,
+  };
+}
+
+/**
+ * An absolutely positioned box is out of the flow, so nothing about it is known until the
+ * containing block it hangs from has a size. Both axes go through the same solver; the
+ * horizontal one has to finish first, because the height depends on the width.
+ */
+function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context): void {
+  const box = deferred.box;
+  const style = box.style;
+  const border = usedBorderWidths(style);
+  const padding = usedPadding(style, containing.width);
+  const across = border.left + border.right + padding.left + padding.right;
+  const down = border.top + border.bottom + padding.top + padding.bottom;
+
+  const horizontal = solveAbsoluteAxis({
+    containerSize: containing.width,
+    start: usedInset(style.left, containing.width),
+    end: usedInset(style.right, containing.width),
+    size: contentHeight(style, usedSize(style.width, containing.width), border, padding),
+    marginStart: usedMargin(style.marginLeft, containing.width),
+    marginEnd: usedMargin(style.marginRight, containing.width),
+    surround: across,
+    staticStart: deferred.staticX - containing.x,
+    autoSize: (available) => shrinkToFit(intrinsicContentWidths(box, context.measurer), available),
+  });
+
+  const fromContent = measureAbsolute(box, horizontal.size, context);
+
+  const vertical = solveAbsoluteAxis({
+    containerSize: containing.height,
+    start: usedInset(style.top, containing.height),
+    end: usedInset(style.bottom, containing.height),
+    size: contentHeight(style, usedSize(style.height, containing.height), border, padding),
+    // Percentage margins go against the containing block's width on both axes.
+    marginStart: usedMargin(style.marginTop, containing.width),
+    marginEnd: usedMargin(style.marginBottom, containing.width),
+    surround: down,
+    staticStart: deferred.staticY - containing.y,
+    autoSize: () => fromContent,
+  });
+
+  layoutBlock(
+    {
+      box,
+      containing: { x: containing.x, width: containing.width, height: containing.height },
+      top: containing.y + vertical.start,
+      absolutes: [],
+      isRoot: false,
+      override: {
+        x: containing.x + horizontal.start,
+        contentWidth: horizontal.size,
+        contentHeight: vertical.size,
+        margin: {
+          top: vertical.marginStart,
+          right: horizontal.marginEnd,
+          bottom: vertical.marginEnd,
+          left: horizontal.marginStart,
+        },
+      },
+    },
+    context,
+  );
+}
+
+/** A throwaway pass just to find out how tall the content comes out at that width. */
+function measureAbsolute(box: BlockBox, contentWidth: number, context: Context): number {
+  const scratch: Context = { ...context, fragments: new Map(), pieces: new Map(), trace: [] };
+  const border = usedBorderWidths(box.style);
+  const padding = usedPadding(box.style, contentWidth);
+
+  const result = layoutBlock(
+    {
+      box,
+      containing: { x: 0, width: contentWidth, height: null },
+      top: 0,
+      absolutes: [],
+      isRoot: false,
+      override: { x: 0, contentWidth, contentHeight: null, margin: zeroEdges },
+    },
+    scratch,
+  );
+
+  return Math.max(0, result.height - border.top - border.bottom - padding.top - padding.bottom);
+}
+
+/**
+ * A single flex line. Wrapping is out of the subset, so every item shares one line, and the
+ * container's cross size comes from that line.
+ */
+function layoutFlexItems(
+  box: BlockBox,
+  containing: ContainingBlock,
+  contentTop: number,
+  context: Context,
+  absolutes: Deferred[],
+): FlowResult {
+  const isRow = box.style.flexDirection === 'row';
+  const items: BlockBox[] = [];
+
+  for (const child of box.children.filter(isBlock)) {
+    if (child.style.position === 'absolute') {
+      absolutes.push({ box: child, staticX: containing.x, staticY: contentTop });
+      continue;
+    }
+    items.push(child);
+  }
+
+  const metrics = items.map((item) => itemMetrics(item, containing, isRow, context));
+
+  const line = solveFlexLine({
+    mainSize: isRow ? containing.width : containing.height,
+    crossSize: isRow ? containing.height : containing.width,
+    justify: box.style.justifyContent,
+    align: box.style.alignItems,
+    items: metrics.map((one) => one.input),
+    crossOf: (index, main) => metrics[index]?.measure(main).cross ?? 0,
+    baselineOf: (index, main) => metrics[index]?.measure(main).baseline ?? null,
+  });
+
+  items.forEach((item, index) => {
+    const placement = line.placements[index];
+    const metric = metrics[index];
+    if (placement === undefined || metric === undefined) return;
+
+    const x = containing.x + (isRow ? placement.mainStart : placement.crossStart);
+    const y = contentTop + (isRow ? placement.crossStart : placement.mainStart);
+
+    layoutBlock(
+      {
+        box: item,
+        containing,
+        top: y,
+        absolutes,
+        isRoot: false,
+        override: {
+          x,
+          contentWidth: isRow ? placement.mainSize : placement.crossSize,
+          contentHeight: isRow ? placement.crossSize : placement.mainSize,
+          margin: metric.margin,
+        },
+      },
+      context,
+    );
+  });
+
+  return {
+    height: isRow ? line.crossSize : line.mainSize,
+    trailing: NO_MARGIN,
+    baseline: null,
+  };
+}
+
+type ItemMetrics = {
+  input: FlexItemInput;
+  margin: Edges;
+  measure: (main: number) => { cross: number; baseline: number | null };
+};
+
+function itemMetrics(
+  item: BlockBox,
+  containing: ContainingBlock,
+  isRow: boolean,
+  context: Context,
+): ItemMetrics {
+  const style = item.style;
+  const border = usedBorderWidths(style);
+  const padding = usedPadding(style, containing.width);
+
+  const margin: Edges = {
+    top: usedMargin(style.marginTop, containing.width) ?? 0,
+    right: usedMargin(style.marginRight, containing.width) ?? 0,
+    bottom: usedMargin(style.marginBottom, containing.width) ?? 0,
+    left: usedMargin(style.marginLeft, containing.width) ?? 0,
+  };
+
+  const across = border.left + border.right + padding.left + padding.right;
+  const down = border.top + border.bottom + padding.top + padding.bottom;
+  const intrinsic = intrinsicContentWidths(item, context.measurer);
+
+  const measure = (main: number) => {
+    const width = isRow ? main : containing.width;
+    const scratch: Context = {
+      ...context,
+      fragments: new Map(),
+      pieces: new Map(),
+      trace: [],
+    };
+    const result = layoutBlock(
+      {
+        box: item,
+        containing: { x: 0, width, height: null },
+        top: 0,
+        absolutes: [],
+        isRoot: false,
+        override: { x: 0, contentWidth: width, contentHeight: null, margin: zeroEdges },
+      },
+      scratch,
+    );
+
+    return {
+      cross: Math.max(0, result.height - down),
+      baseline: result.baseline,
+    };
+  };
+
+  const mainStyle = isRow ? style.width : style.height;
+  const mainBasis = isRow ? containing.width : (containing.height ?? 0);
+  const specified = usedSize(mainStyle, isRow ? containing.width : containing.height);
+  const fromBasis = usedSize(style.flexBasis, mainBasis);
+
+  const basis = fromBasis ?? specified ?? (isRow ? intrinsic.max : measure(containing.width).cross);
+
+  // min-width and min-height are auto on a flex item, and auto means min-content: that is
+  // what stops flex-shrink from squeezing a word in half.
+  const minStyle = isRow ? style.minWidth : style.minHeight;
+  const automatic = isRow ? intrinsic.min : 0;
+  const minMain = usedSize(minStyle, isRow ? containing.width : containing.height) ?? automatic;
+  const maxMain = usedMaxSize(
+    isRow ? style.maxWidth : style.maxHeight,
+    isRow ? containing.width : containing.height,
+  );
+
+  const crossStyle = isRow ? style.height : style.width;
+  const crossSize = usedSize(crossStyle, isRow ? containing.height : containing.width);
+
+  return {
+    input: {
+      grow: style.flexGrow,
+      shrink: style.flexShrink,
+      basis,
+      minMain,
+      maxMain,
+      mainSurround: isRow ? across + margin.left + margin.right : down + margin.top + margin.bottom,
+      crossSurround: isRow
+        ? down + margin.top + margin.bottom
+        : across + margin.left + margin.right,
+      marginMainStart: isRow ? margin.left : margin.top,
+      marginCrossStart: isRow ? margin.top : margin.left,
+      crossSize,
+    },
+    margin,
+    measure,
   };
 }

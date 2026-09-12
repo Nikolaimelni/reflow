@@ -24,6 +24,15 @@ export type BorderStyle = 'none' | 'solid' | 'dashed' | 'dotted';
 export type TextAlign = 'left' | 'right' | 'center';
 export type WhiteSpace = 'normal' | 'pre' | 'nowrap';
 export type FontStyle = 'normal' | 'italic' | 'oblique';
+export type FlexDirection = 'row' | 'column';
+export type JustifyContent =
+  | 'flex-start'
+  | 'flex-end'
+  | 'center'
+  | 'space-between'
+  | 'space-around'
+  | 'space-evenly';
+export type AlignItems = 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'baseline';
 
 export type ComputedStyle = {
   display: Display;
@@ -72,6 +81,13 @@ export type ComputedStyle = {
   whiteSpace: WhiteSpace;
 
   zIndex: ZIndex;
+
+  flexDirection: FlexDirection;
+  justifyContent: JustifyContent;
+  alignItems: AlignItems;
+  flexGrow: number;
+  flexShrink: number;
+  flexBasis: Size;
 };
 
 export type PropertyName = keyof ComputedStyle;
@@ -207,6 +223,12 @@ const fontWeight: PropertyDefinition<number>['parse'] = (value) => {
   return token.value >= 1 && token.value <= 1000 ? token.value : null;
 };
 
+const flexFactor: PropertyDefinition<number>['parse'] = (value) => {
+  const token = single(value);
+  if (token?.type !== 'number') return null;
+  return token.value < 0 ? null : token.value;
+};
+
 const zIndex: PropertyDefinition<ZIndex>['parse'] = (value) => {
   if (keyword('auto')(value) === 'auto') return AUTO;
   const token = single(value);
@@ -316,6 +338,21 @@ export const properties: PropertyTable = {
   },
 
   zIndex: own('z-index', AUTO, zIndex),
+
+  flexDirection: own('flex-direction', 'row', keyword('row', 'column')),
+  justifyContent: own(
+    'justify-content',
+    'flex-start',
+    keyword('flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'),
+  ),
+  alignItems: own(
+    'align-items',
+    'stretch',
+    keyword('stretch', 'flex-start', 'flex-end', 'center', 'baseline'),
+  ),
+  flexGrow: own('flex-grow', 0, flexFactor),
+  flexShrink: own('flex-shrink', 1, flexFactor),
+  flexBasis: own('flex-basis', AUTO, size),
 };
 
 // why: Object.entries and Object.keys widen the key to string. The table above is annotated

@@ -26,6 +26,17 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
 
   const children = buildChildren(node, style, styles, ids);
 
+  // An out of flow box is always block-level, whatever display the author asked for.
+  if (style.position === 'absolute' && style.display !== 'flex') {
+    return {
+      kind: 'block',
+      id: ids(),
+      element: node,
+      style,
+      children: organise(children, style, ids),
+    };
+  }
+
   if (style.display === 'inline') {
     return { kind: 'inline', id: ids(), element: node, style, atomic: false, children };
   }
@@ -46,8 +57,55 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
     id: ids(),
     element: node,
     style,
-    children: organise(children, style, ids),
+    children:
+      style.display === 'flex' ? flexItems(children, style, ids) : organise(children, style, ids),
   };
+}
+
+/**
+ * Every child of a flex container becomes a block-level flex item: an inline box is
+ * blockified, and a run of text gets an anonymous block of its own.
+ */
+function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
+  const items: Box[] = [];
+  let run: Box[] = [];
+
+  const flush = () => {
+    if (run.length > 0 && !run.every(isWhitespace)) {
+      items.push({
+        kind: 'block',
+        id: ids(),
+        element: null,
+        style: anonymousStyle(parentStyle),
+        children: run,
+      });
+    }
+    run = [];
+  };
+
+  for (const child of children) {
+    if (child.kind === 'text') {
+      run.push(child);
+      continue;
+    }
+
+    flush();
+
+    items.push(
+      child.kind === 'block'
+        ? child
+        : {
+            kind: 'block',
+            id: child.id,
+            element: child.element,
+            style: child.style,
+            children: organise(child.children, child.style, ids),
+          },
+    );
+  }
+
+  flush();
+  return items;
 }
 
 function buildChildren(

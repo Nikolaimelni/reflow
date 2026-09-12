@@ -1,0 +1,106 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>single line flexbox</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 400px;
+  }
+  .row {
+    display: flex;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .row > div {
+    height: 20px;
+  }
+  .fixed {
+    width: 60px;
+  }
+  .grows {
+    flex-grow: 1;
+  }
+  .grows-twice {
+    flex-grow: 2;
+  }
+  .basis {
+    flex-basis: 80px;
+  }
+  .nogrow {
+    flex: none;
+    width: 50px;
+  }
+  .shrinks {
+    width: 300px;
+    flex-shrink: 1;
+  }
+  .shrinks-hard {
+    width: 300px;
+    flex-shrink: 3;
+  }
+  .spaced {
+    justify-content: space-between;
+  }
+  .around {
+    justify-content: space-around;
+  }
+  .evenly {
+    justify-content: space-evenly;
+  }
+  .middle {
+    justify-content: center;
+  }
+  .ending {
+    justify-content: flex-end;
+  }
+  .tall {
+    height: 60px;
+  }
+  .stretchy {
+    align-items: stretch;
+  }
+  .topped {
+    align-items: flex-start;
+  }
+  .bottomed {
+    align-items: flex-end;
+  }
+  .centred {
+    align-items: center;
+  }
+  .auto-height > div {
+    height: auto;
+  }
+  .padded > div {
+    padding: 4px;
+    border: 2px solid;
+    margin: 3px;
+  }
+  .column {
+    display: flex;
+    flex-direction: column;
+    height: 120px;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .column > div {
+    width: 40px;
+  }
+</style>
+
+<div class="row"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row"><div class="grows"></div><div class="grows-twice"></div></div>
+<div class="row"><div class="basis"></div><div class="grows"></div><div class="nogrow"></div></div>
+<div class="row"><div class="shrinks"></div><div class="shrinks-hard"></div></div>
+<div class="row spaced"><div class="fixed"></div><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row around"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row evenly"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row middle"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row ending"><div class="fixed"></div></div>
+<div class="row tall stretchy auto-height"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row tall topped"><div class="fixed"></div></div>
+<div class="row tall bottomed"><div class="fixed"></div></div>
+<div class="row tall centred"><div class="fixed"></div></div>
+<div class="row padded"><div class="fixed"></div><div class="grows"></div></div>
+<div class="column"><div class="fixed"></div><div class="grows"></div></div>

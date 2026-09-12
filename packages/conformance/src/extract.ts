@@ -109,7 +109,9 @@ export function measureInPage(requests: MeasureRequest[]): Measurements {
 
   const normalLineHeight = (font: string): number => {
     const host = document.createElement('div');
-    host.style.cssText = `position:absolute;top:-9999px;left:0;white-space:nowrap;font:${font};line-height:normal`;
+    // `all: initial` first, or the fixture's own `div { height: 20px }` measures the probe
+    // instead of the font. That mistake cost an evening.
+    host.style.cssText = `all:initial;display:block;position:absolute;top:-9999px;left:0;white-space:nowrap;font:${font}`;
     host.textContent = 'x';
 
     document.body.append(host);
@@ -135,4 +137,32 @@ export function measureInPage(requests: MeasureRequest[]): Measurements {
   }
 
   return { widths, metrics };
+}
+
+/**
+ * Runs in the page. Numbers the elements exactly the way `extractPage` does, so a hit test
+ * answer can be matched up with the engine's own tree.
+ */
+export function hitTestInPage(points: readonly { x: number; y: number }[]): number[] {
+  const skip = ['head', 'style', 'script', 'link', 'meta', 'title', 'base'];
+  const indexOf = new Map<Element, number>();
+  let index = 0;
+
+  const walk = (node: Element): void => {
+    if (skip.includes(node.tagName.toLowerCase())) return;
+    indexOf.set(node, index);
+    index++;
+
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) index++;
+      else if (child.nodeType === 1) walk(child as Element);
+    }
+  };
+
+  walk(document.documentElement);
+
+  return points.map((point) => {
+    const found = document.elementFromPoint(point.x, point.y);
+    return found === null ? -1 : (indexOf.get(found) ?? -1);
+  });
 }
