@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>inline boxes, every corner the generator found</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  p,
+  div {
+    margin: 0;
+  }
+  .empty {
+    display: inline;
+  }
+  .padded {
+    display: inline;
+    padding: 4px 9px;
+    border: 2px solid;
+  }
+  .spaced {
+    display: inline;
+    margin: 1px 7px;
+  }
+  .shifted {
+    display: inline;
+    position: relative;
+    top: 6px;
+    right: 4px;
+  }
+  .kept {
+    display: inline;
+    white-space: nowrap;
+  }
+  .taller {
+    display: inline;
+    font-size: 24px;
+  }
+  .fit {
+    display: inline-block;
+    padding: 4%;
+  }
+  .sunk {
+    display: inline-block;
+    width: 18px;
+    height: 12px;
+    margin-bottom: 9px;
+  }
+  .clipped {
+    display: inline-block;
+    overflow: hidden;
+    width: 30px;
+  }
+  .wraps-a-block {
+    display: inline;
+  }
+  .inner-block {
+    height: 14px;
+    border: 1px solid;
+  }
+</style>
+
+<p>before <span class="empty"></span> after an empty inline</p>
+<p>before <span class="padded">padded</span> after</p>
+<p>before <span class="spaced">spaced</span> after</p>
+<p>before <span class="shifted">shifted</span> after</p>
+<p>a paragraph with <span class="kept">a run that refuses to break however long it is</span> in it</p>
+<p>text with a <span class="taller">taller</span> run</p>
+<p>before <span class="clipped">clipped overflow</span> after</p>
+<p>
+  <span class="empty">
+  </span>
+</p>
+<div class="wraps-a-block">
+  <div class="inner-block"></div>
+</div>

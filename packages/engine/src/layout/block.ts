@@ -4,7 +4,7 @@ import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { type FlexItemInput, solveFlexLine } from './flex.js';
 import { type AtomicSize, layoutInlineContent } from './inline.js';
-import { intrinsicContentWidths, intrinsicWidths, shrinkToFit } from './intrinsic.js';
+import { intrinsicContentWidths, shrinkToFit } from './intrinsic.js';
 import {
   type CollapsedMargin,
   mergeMargins,
@@ -16,6 +16,7 @@ import { relativeOffset, solveAbsoluteAxis } from './position.js';
 import type { TextMeasurer } from './text.js';
 import {
   clampSize,
+  toContentBox,
   usedBorderWidths,
   usedInset,
   usedMargin,
@@ -125,6 +126,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
 
   const border = usedBorderWidths(style);
   const padding = usedPadding(style, containing.width);
+  const down = border.top + border.bottom + padding.top + padding.bottom;
   const horizontal =
     override === null
       ? resolveHorizontal(style, containing.width, border, padding)
@@ -152,7 +154,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
 
   const specifiedHeight =
     override === null
-      ? contentHeight(style, usedSize(style.height, containing.height), border, padding)
+      ? toContentBox(style.boxSizing, usedSize(style.height, containing.height), down)
       : override.contentHeight;
 
   const childContaining: ContainingBlock = {
@@ -175,10 +177,14 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   // A trailing margin that cannot escape has to be paid for in this box's own height.
   const fromContent = flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing));
 
-  const height = clampSize(
-    specifiedHeight ?? fromContent,
-    contentHeight(style, usedSize(style.minHeight, containing.height), border, padding),
-    contentHeight(style, usedMaxSize(style.maxHeight, containing.height), border, padding),
+  // A used height is never negative, however far a negative margin pulls the content up.
+  const height = Math.max(
+    0,
+    clampSize(
+      specifiedHeight ?? fromContent,
+      toContentBox(style.boxSizing, usedSize(style.minHeight, containing.height), down),
+      toContentBox(style.boxSizing, usedMaxSize(style.maxHeight, containing.height), down),
+    ),
   );
 
   const fragment: Fragment = {
@@ -344,17 +350,6 @@ function collapseWithTrace(
   return merged;
 }
 
-/** Turns a border-box measurement into a content-box one when `box-sizing` asks for it. */
-function contentHeight(
-  style: ComputedStyle,
-  value: number | null,
-  border: Edges,
-  padding: Edges,
-): number | null {
-  if (value === null || style.boxSizing !== 'border-box') return value;
-  return Math.max(0, value - padding.top - padding.bottom - border.top - border.bottom);
-}
-
 function resolveHorizontal(
   style: ComputedStyle,
   containingWidth: number,
@@ -367,8 +362,8 @@ function resolveHorizontal(
   const first = solveHorizontal(style, containingWidth, surround, specified);
   const clamped = clampSize(
     first.contentWidth,
-    usedSize(style.minWidth, containingWidth),
-    usedMaxSize(style.maxWidth, containingWidth),
+    toContentBox(style.boxSizing, usedSize(style.minWidth, containingWidth), surround),
+    toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, containingWidth), surround),
   );
 
   if (clamped === first.contentWidth) {
@@ -528,25 +523,48 @@ function isWhitespaceText(box: Box): boolean {
  */
 function measureAtomic(box: InlineBox, available: number, context: Context): AtomicSize {
   const scratch: Context = { ...context, fragments: new Map(), pieces: new Map(), trace: [] };
-  const width = atomicWidth(box, available, context);
+  const margin = atomicMargin(box, available);
+  const contentWidth = atomicContentWidth(box, available, context);
+
   const result = layoutBlock(
     {
       box: asBlock(box),
-      containing: { x: 0, width, height: null },
+      containing: { x: 0, width: available, height: null },
       top: 0,
       absolutes: [],
       isRoot: false,
-      override: null,
+      override: {
+        x: 0,
+        contentWidth,
+        contentHeight: atomicContentHeight(box, available),
+        margin,
+      },
     },
     scratch,
   );
+
   const fragment = scratch.fragments.get(box.id);
 
-  // An inline-block that clips its overflow hides its baseline with it, so it aligns on its
-  // bottom margin edge instead. Otherwise the last line inside it is what lines up outside.
-  const baseline = box.style.overflow === 'visible' ? result.baseline : null;
+  // An inline-block that clips its overflow hides its baseline with it, and one with no line
+  // boxes at all has none to offer. Both fall back to the bottom margin edge, which is what
+  // a null baseline means to the line builder.
+  const inner = box.style.overflow === 'visible' ? result.baseline : null;
 
-  return { width: fragment?.rect.width ?? 0, height: result.height, baseline };
+  return {
+    width: (fragment?.rect.width ?? 0) + margin.left + margin.right,
+    height: result.height + margin.top + margin.bottom,
+    baseline: inner === null ? null : margin.top + inner,
+  };
+}
+
+/** An atomic inline takes its place in the line as a margin box, not a border box. */
+function atomicMargin(box: InlineBox, available: number): Edges {
+  return {
+    top: usedMargin(box.style.marginTop, available) ?? 0,
+    right: usedMargin(box.style.marginRight, available) ?? 0,
+    bottom: usedMargin(box.style.marginBottom, available) ?? 0,
+    left: usedMargin(box.style.marginLeft, available) ?? 0,
+  };
 }
 
 function placeAtomic(
@@ -556,27 +574,63 @@ function placeAtomic(
   available: number,
   context: Context,
 ): void {
-  const width = atomicWidth(box, available, context);
+  const margin = atomicMargin(box, available);
+  const contentWidth = atomicContentWidth(box, available, context);
+
+  // x and y arrive as the margin box origin.
   layoutBlock(
     {
       box: asBlock(box),
-      containing: { x, width, height: null },
-      top: y,
+      containing: { x, width: available, height: null },
+      top: y + margin.top,
       absolutes: [],
       isRoot: false,
-      override: null,
+      override: {
+        x: x + margin.left,
+        contentWidth,
+        contentHeight: atomicContentHeight(box, available),
+        margin,
+      },
     },
     context,
   );
 }
 
 /**
- * An inline-block with an auto width shrinks to fit. Handing the block path a containing
- * block of exactly that width gets the same answer, because an auto width fills it.
+ * An inline-block keeps its own height. Percentages have no basis to resolve against inside
+ * a line, so they read as auto, which is the same rule an auto height parent gets.
  */
-function atomicWidth(box: InlineBox, available: number, context: Context): number {
-  if (box.style.width.kind !== 'auto') return available;
-  return shrinkToFit(intrinsicWidths(asBlock(box), context.measurer), available);
+function atomicContentHeight(box: InlineBox, available: number): number | null {
+  const border = usedBorderWidths(box.style);
+  const padding = usedPadding(box.style, available);
+  const down = border.top + border.bottom + padding.top + padding.bottom;
+
+  return toContentBox(box.style.boxSizing, usedSize(box.style.height, null), down);
+}
+
+/**
+ * An inline-block with an auto width shrinks to fit. The width is solved here rather than by
+ * handing the block path a narrower containing block, because every percentage inside the box
+ * resolves against the room the line had, not against the width the box ended up with. A one
+ * per cent padding on an empty inline-block is not zero.
+ */
+function atomicContentWidth(box: InlineBox, available: number, context: Context): number {
+  const style = box.style;
+  const border = usedBorderWidths(style);
+  const padding = usedPadding(style, available);
+  const surround = border.left + border.right + padding.left + padding.right;
+  const margin = atomicMargin(box, available);
+
+  const definite = toContentBox(style.boxSizing, usedSize(style.width, available), surround);
+  const room = Math.max(0, available - margin.left - margin.right - surround);
+  const inner =
+    definite ?? shrinkToFit(intrinsicContentWidths(asBlock(box), context.measurer), room);
+
+  return clampSize(
+    inner,
+    toContentBox(style.boxSizing, usedSize(style.minWidth, available), surround),
+    toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, available), surround),
+  );
 }
 
 function asBlock(box: InlineBox): BlockBox {
@@ -602,32 +656,57 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
   const across = border.left + border.right + padding.left + padding.right;
   const down = border.top + border.bottom + padding.top + padding.bottom;
 
-  const horizontal = solveAbsoluteAxis({
-    containerSize: containing.width,
-    start: usedInset(style.left, containing.width),
-    end: usedInset(style.right, containing.width),
-    size: contentHeight(style, usedSize(style.width, containing.width), border, padding),
-    marginStart: usedMargin(style.marginLeft, containing.width),
-    marginEnd: usedMargin(style.marginRight, containing.width),
-    surround: across,
-    staticStart: deferred.staticX - containing.x,
-    autoSize: (available) => shrinkToFit(intrinsicContentWidths(box, context.measurer), available),
-  });
+  const acrossAxis = (size: number | null) =>
+    solveAbsoluteAxis({
+      containerSize: containing.width,
+      start: usedInset(style.left, containing.width),
+      end: usedInset(style.right, containing.width),
+      size,
+      marginStart: usedMargin(style.marginLeft, containing.width),
+      marginEnd: usedMargin(style.marginRight, containing.width),
+      surround: across,
+      staticStart: deferred.staticX - containing.x,
+      autoSize: (available) =>
+        shrinkToFit(intrinsicContentWidths(box, context.measurer), available),
+    });
+
+  // Solve, clamp, and solve again if the clamp moved it. That second pass is what the spec
+  // asks for when a min or max bites, and it is how `width: 1px; max-width: 0` lands on zero.
+  const wide = acrossAxis(
+    toContentBox(style.boxSizing, usedSize(style.width, containing.width), across),
+  );
+  const width = clampSize(
+    wide.size,
+    toContentBox(style.boxSizing, usedSize(style.minWidth, containing.width), across),
+    toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, containing.width), across),
+  );
+  const horizontal = width === wide.size ? wide : acrossAxis(width);
 
   const fromContent = measureAbsolute(box, horizontal.size, context);
 
-  const vertical = solveAbsoluteAxis({
-    containerSize: containing.height,
-    start: usedInset(style.top, containing.height),
-    end: usedInset(style.bottom, containing.height),
-    size: contentHeight(style, usedSize(style.height, containing.height), border, padding),
-    // Percentage margins go against the containing block's width on both axes.
-    marginStart: usedMargin(style.marginTop, containing.width),
-    marginEnd: usedMargin(style.marginBottom, containing.width),
-    surround: down,
-    staticStart: deferred.staticY - containing.y,
-    autoSize: () => fromContent,
-  });
+  const downAxis = (size: number | null) =>
+    solveAbsoluteAxis({
+      containerSize: containing.height,
+      start: usedInset(style.top, containing.height),
+      end: usedInset(style.bottom, containing.height),
+      size,
+      // Percentage margins go against the containing block's width on both axes.
+      marginStart: usedMargin(style.marginTop, containing.width),
+      marginEnd: usedMargin(style.marginBottom, containing.width),
+      surround: down,
+      staticStart: deferred.staticY - containing.y,
+      autoSize: () => fromContent,
+    });
+
+  const tall = downAxis(
+    toContentBox(style.boxSizing, usedSize(style.height, containing.height), down),
+  );
+  const height = clampSize(
+    tall.size,
+    toContentBox(style.boxSizing, usedSize(style.minHeight, containing.height), down),
+    toContentBox(style.boxSizing, usedMaxSize(style.maxHeight, containing.height), down),
+  );
+  const vertical = height === tall.size ? tall : downAxis(height);
 
   layoutBlock(
     {
@@ -804,10 +883,13 @@ function itemMetrics(
   // what stops flex-shrink from squeezing a word in half.
   const minStyle = isRow ? style.minWidth : style.minHeight;
   const automatic = isRow ? intrinsic.min : 0;
-  const minMain = usedSize(minStyle, isRow ? containing.width : containing.height) ?? automatic;
-  const maxMain = usedMaxSize(
-    isRow ? style.maxWidth : style.maxHeight,
-    isRow ? containing.width : containing.height,
+  const along = isRow ? across : down;
+  const basis_ = isRow ? containing.width : containing.height;
+  const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;
+  const maxMain = toContentBox(
+    style.boxSizing,
+    usedMaxSize(isRow ? style.maxWidth : style.maxHeight, basis_),
+    along,
   );
 
   const crossStyle = isRow ? style.height : style.width;

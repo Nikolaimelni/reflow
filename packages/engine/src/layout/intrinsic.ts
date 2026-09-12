@@ -3,6 +3,7 @@ import { isBlock } from '../boxtree/box.js';
 import { fontOf, segmentText, type TextMeasurer, wraps } from './text.js';
 import {
   clampSize,
+  toContentBox,
   usedBorderWidths,
   usedMargin,
   usedMaxSize,
@@ -49,8 +50,8 @@ function outerIntrinsic(box: Box, measurer: TextMeasurer): Intrinsic {
   const inner =
     definite === null ? contentIntrinsic(box, measurer) : { min: definite, max: definite };
 
-  const min = usedSize(style.minWidth, null);
-  const max = usedMaxSize(style.maxWidth, null);
+  const min = toContentBox(style.boxSizing, usedSize(style.minWidth, null), surround);
+  const max = toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, null), surround);
   const extra = margins + (definite !== null && style.boxSizing === 'border-box' ? 0 : surround);
 
   return {
@@ -83,39 +84,100 @@ function inlineIntrinsic(
   measurer: TextMeasurer,
   canWrap: boolean,
 ): Intrinsic {
+  /**
+   * The same rules the line breaker follows, or the two disagree about what a line costs.
+   * A space only counts once it has a word after it, a run with no space in it cannot be
+   * broken however wide it gets, and an inline box's own padding travels with its content.
+   */
   let min = 0;
   let max = 0;
   let line = 0;
+  let run = 0;
+  /** A space that could be broken at: it belongs to the line but not to the run. */
+  let gap = 0;
+  /** A space that could not: it belongs to both, because nothing may split it off. */
+  let glue = 0;
+  let content = false;
+
+  const endRun = () => {
+    min = Math.max(min, run);
+    run = 0;
+  };
+
+  const endLine = () => {
+    endRun();
+    max = Math.max(max, line);
+    line = 0;
+    gap = 0;
+    glue = 0;
+    content = false;
+  };
+
+  const add = (width: number) => {
+    line += gap + glue + width;
+    run += glue + width;
+    gap = 0;
+    glue = 0;
+    content = true;
+  };
+
+  /** An inline box's own padding cannot be broken away from its content, or counted twice. */
+  const addEdge = (width: number) => {
+    line += width;
+    run += width;
+  };
 
   const visit = (boxes: readonly Box[]): void => {
     for (const child of boxes) {
       if (child.kind === 'text') {
+        const preserve = child.style.whiteSpace === 'pre';
+
         for (const segment of segmentText(child.text, child.style.whiteSpace)) {
           if (segment.kind === 'newline') {
-            max = Math.max(max, line);
-            line = 0;
+            endLine();
             continue;
           }
+
           const width = measurer.advance(segment.text, fontOf(child.style));
-          line += width;
-          if (segment.kind === 'word') min = Math.max(min, width);
+
+          if (segment.kind === 'space') {
+            if (preserve) add(width);
+            else if (!content) continue;
+            else if (wraps(child.style.whiteSpace)) {
+              endRun();
+              gap = width;
+            } else {
+              glue = width;
+            }
+            continue;
+          }
+
+          add(width);
         }
         continue;
       }
 
       if (child.kind === 'inline' && !child.atomic) {
+        const border = usedBorderWidths(child.style);
+        const padding = usedPadding(child.style, 0);
+        const margin =
+          (usedMargin(child.style.marginLeft, 0) ?? 0) +
+          (usedMargin(child.style.marginRight, 0) ?? 0);
+
+        addEdge(border.left + padding.left);
         visit(child.children);
+        addEdge(border.right + padding.right + margin);
         continue;
       }
 
       const outer = outerIntrinsic(child, measurer);
-      line += outer.max;
+      add(outer.max);
       min = Math.max(min, outer.min);
     }
   };
 
   visit(children);
-  max = Math.max(max, line);
+  endLine();
 
   // Nothing can break, so the narrowest the content goes is also the widest it gets.
   return canWrap ? { min, max } : { min: max, max };

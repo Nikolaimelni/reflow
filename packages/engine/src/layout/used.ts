@@ -20,8 +20,18 @@ function used(borderStyle: BorderStyle, width: Px): number {
   return borderStyle === 'none' ? 0 : width.value;
 }
 
+/**
+ * Blink keeps every used length as a LayoutUnit, which is a sixty-fourth of a pixel, and it
+ * truncates on the way in rather than rounding. So `padding: 4%` of a 180px box is 7.1875
+ * and not 7.2, and a box with that padding on both sides comes out a fortieth of a pixel
+ * narrower than the arithmetic says.
+ */
+export function layoutUnit(value: number): number {
+  return Math.floor(value * 64) / 64;
+}
+
 export function usedLength(value: LengthPercentage, basis: number): number {
-  return value.kind === 'px' ? value.value : (value.value / 100) * basis;
+  return layoutUnit(value.kind === 'px' ? value.value : (value.value / 100) * basis);
 }
 
 /**
@@ -56,6 +66,20 @@ export function usedPadding(style: ComputedStyle, containingWidth: number): Edge
     bottom: usedLength(style.paddingBottom, containingWidth),
     left: usedLength(style.paddingLeft, containingWidth),
   };
+}
+
+/**
+ * `box-sizing: border-box` applies to min-width and max-width too, not only to width. A
+ * `max-width: 1px` on a box with a 1px border either side leaves no content at all, and the
+ * box comes out two pixels wide because a border cannot shrink.
+ */
+export function toContentBox(
+  boxSizing: ComputedStyle['boxSizing'],
+  value: number | null,
+  surround: number,
+): number | null {
+  if (value === null || boxSizing !== 'border-box') return value;
+  return Math.max(0, value - surround);
 }
 
 export function clampSize(value: number, min: number | null, max: number | null): number {

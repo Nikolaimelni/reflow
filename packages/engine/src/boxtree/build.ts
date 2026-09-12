@@ -37,6 +37,19 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
     };
   }
 
+  // A block inside an inline is supposed to split the inline in two around it. Turning the
+  // inline into a block container instead stacks the same boxes in the same places, and the
+  // only thing given up is the split inline's own reported rectangle.
+  if (style.display === 'inline' && children.some(isBlock)) {
+    return {
+      kind: 'block',
+      id: ids(),
+      element: node,
+      style,
+      children: organise(children, style, ids),
+    };
+  }
+
   if (style.display === 'inline') {
     return { kind: 'inline', id: ids(), element: node, style, atomic: false, children };
   }
@@ -173,8 +186,9 @@ function organise(children: Box[], parentStyle: ComputedStyle, ids: IdSource): B
   return organised;
 }
 
+/** Under `pre` a run of whitespace is content, and it gets an anonymous box like any other. */
 function isWhitespace(box: Box): boolean {
-  return box.kind === 'text' && box.text.trim() === '';
+  return box.kind === 'text' && box.text.trim() === '' && box.style.whiteSpace !== 'pre';
 }
 
 /** An anonymous box inherits what is inheritable and takes the initial value for the rest. */

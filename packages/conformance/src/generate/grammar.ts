@@ -1,0 +1,146 @@
+import fc from 'fast-check';
+
+export type GeneratedNode = {
+  tag: string;
+  declarations: Record<string, string>;
+  text: string;
+  children: GeneratedNode[];
+};
+
+export type GeneratedDocument = {
+  width: number;
+  roots: GeneratedNode[];
+};
+
+/**
+ * Only properties the engine claims to support, so a failure is a bug rather than a gap.
+ * Values are deliberately awkward: zero, negative margins, percentages that do not divide
+ * cleanly, and the auto that has a different meaning on every property it appears on.
+ */
+const px = fc.integer({ min: 0, max: 90 }).map((n) => `${String(n)}px`);
+const percent = fc.integer({ min: 0, max: 100 }).map((n) => `${String(n)}%`);
+const size = fc.oneof(px, percent, fc.constant('auto'));
+const margin = fc.oneof(px, percent, fc.constant('auto'), fc.constant('-12px'));
+const factor = fc.integer({ min: 0, max: 3 }).map(String);
+
+const declarations = fc.record(
+  {
+    display: fc.constantFrom('block', 'inline', 'inline-block', 'flex'),
+    position: fc.constantFrom('static', 'relative', 'absolute'),
+    'box-sizing': fc.constantFrom('content-box', 'border-box'),
+    overflow: fc.constantFrom('visible', 'hidden'),
+
+    width: size,
+    height: size,
+    'min-height': fc.oneof(px, fc.constant('auto')),
+    'max-width': fc.oneof(px, percent, fc.constant('none')),
+
+    margin: margin,
+    'margin-top': margin,
+    'margin-bottom': margin,
+    padding: fc.oneof(px, percent),
+    'padding-left': fc.oneof(px, percent),
+
+    border: fc
+      .tuple(fc.integer({ min: 0, max: 6 }), fc.constantFrom('solid', 'dashed', 'none'))
+      .map(([width, style]) => `${String(width)}px ${style}`),
+
+    top: fc.oneof(px, fc.constant('auto')),
+    left: fc.oneof(px, fc.constant('auto')),
+    right: fc.oneof(px, fc.constant('auto')),
+
+    'font-size': fc.integer({ min: 9, max: 30 }).map((n) => `${String(n)}px`),
+    'line-height': fc.oneof(
+      fc.constant('normal'),
+      px,
+      fc.integer({ min: 10, max: 24 }).map((n) => String(n / 10)),
+    ),
+    'text-align': fc.constantFrom('left', 'right', 'center'),
+    'white-space': fc.constantFrom('normal', 'pre', 'nowrap'),
+
+    'flex-grow': factor,
+    'flex-shrink': factor,
+    'flex-basis': fc.oneof(px, fc.constant('auto')),
+    'justify-content': fc.constantFrom('flex-start', 'flex-end', 'center', 'space-between'),
+    'align-items': fc.constantFrom('stretch', 'flex-start', 'center', 'baseline'),
+  },
+  { requiredKeys: [] },
+);
+
+const WORDS = ['one', 'two', 'three', 'liquorice', 'a', 'of', 'internationalisation', 'xy'];
+
+const text = fc.oneof(
+  { weight: 2, arbitrary: fc.constant('') },
+  {
+    weight: 3,
+    arbitrary: fc
+      .array(fc.constantFrom(...WORDS), { maxLength: 9 })
+      .map((parts) => parts.join(' ')),
+  },
+);
+
+/**
+ * Shallow and narrow on purpose. Deep trees make slow pages and long shrinking runs without
+ * finding anything a three level tree does not already find.
+ */
+const node: fc.Arbitrary<GeneratedNode> = fc.letrec<{ node: GeneratedNode }>((tie) => ({
+  node: fc.record({
+    tag: fc.constantFrom('div', 'p', 'span', 'section', 'em'),
+    declarations,
+    text,
+    children: fc.oneof(
+      { weight: 4, arbitrary: fc.constant<GeneratedNode[]>([]) },
+      { weight: 1, arbitrary: fc.array(tie('node'), { maxLength: 3 }) },
+    ),
+  }),
+})).node;
+
+export const documents: fc.Arbitrary<GeneratedDocument> = fc.record({
+  width: fc.integer({ min: 180, max: 640 }),
+  roots: fc.array(node, { minLength: 1, maxLength: 3 }),
+});
+
+export type Rendered = { html: string; css: string; document: string };
+
+/**
+ * The family is pinned on the body so both sides measure the same font, and the body margin
+ * is zeroed so a difference shows up where it happened rather than shifted by eight pixels.
+ */
+export function render(generated: GeneratedDocument): Rendered {
+  const rules: string[] = [
+    `body { margin: 0; font-family: Arial, sans-serif; width: ${String(generated.width)}px }`,
+  ];
+
+  let next = 0;
+
+  const emit = (current: GeneratedNode, indent: string): string => {
+    const name = `c${String(next++)}`;
+    const pairs = Object.entries(current.declarations);
+
+    if (pairs.length > 0) {
+      rules.push(`.${name} { ${pairs.map(([key, value]) => `${key}: ${value}`).join('; ')} }`);
+    }
+
+    const inside = [
+      current.text === '' ? '' : `${indent}  ${current.text}`,
+      ...current.children.map((child) => emit(child, `${indent}  `)),
+    ].filter((part) => part !== '');
+
+    if (inside.length === 0) return `${indent}<${current.tag} class="${name}"></${current.tag}>`;
+
+    return [
+      `${indent}<${current.tag} class="${name}">`,
+      ...inside,
+      `${indent}</${current.tag}>`,
+    ].join('\n');
+  };
+
+  const html = generated.roots.map((root) => emit(root, '')).join('\n');
+  const css = rules.join('\n');
+
+  return {
+    html,
+    css,
+    document: `<!doctype html>\n<meta charset="utf-8" />\n<style>\n${css}\n</style>\n${html}\n`,
+  };
+}

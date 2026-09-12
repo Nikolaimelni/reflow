@@ -5,4 +5,5 @@ export default defineConfig({
   reporter: 'list',
   workers: 1,
   use: { browserName: 'chromium' },
+  globalTeardown: './src/summarise.ts',
 });

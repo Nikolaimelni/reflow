@@ -6,6 +6,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.2",
+    "fast-check": "^4.10.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {

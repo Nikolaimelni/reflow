@@ -63,8 +63,10 @@ export function solveAbsoluteAxis(input: AxisInput): AxisResult {
     const after = marginEnd ?? 0;
     const available = Math.max(0, containerSize - input.staticStart - surround - before - after);
 
+    // The static position is where the margin edge would have been, so the border box sits
+    // one margin further in.
     return {
-      start: input.staticStart,
+      start: input.staticStart + before,
       size: size ?? input.autoSize(available),
       marginStart: before,
       marginEnd: after,

@@ -7,6 +7,8 @@ export type PaintItem = {
   box: BoxId;
   /** `visibility: hidden` keeps a box's space but takes it out of painting and hit testing. */
   visible: boolean;
+  /** The nearest ancestor that clips its overflow, if there is one. */
+  clippedBy: BoxId | null;
   /** Position in the flat list, which is the order a painter would draw in. */
   order: number;
   /** The stacking context this box paints inside. */
@@ -27,14 +29,17 @@ export type DisplayList = {
   contexts: StackingContext[];
 };
 
+/** One entry in a bucket: the box, and the clip it inherited on the way down. */
+type Entry = { box: Box; clip: BoxId | null };
+
 type Bucket = {
-  negative: { z: number; box: Box }[];
+  negative: (Entry & { z: number })[];
   /** `own` marks a box that paints in the block step but as one unit of its own. */
-  blocks: { box: Box; own: boolean }[];
-  inlines: Box[];
+  blocks: (Entry & { own: boolean })[];
+  inlines: Entry[];
   /** Positioned, but with no z-index of its own, so it paints on top of the plain content. */
-  level: Box[];
-  positive: { z: number; box: Box }[];
+  level: Entry[];
+  positive: (Entry & { z: number })[];
 };
 
 type State = {
@@ -52,7 +57,7 @@ export function buildDisplayList(root: BlockBox): DisplayList {
   const state: State = { items: [], contexts: [] };
 
   state.contexts.push({ box: root.id, zIndex: 'auto', parent: null, depth: 0 });
-  paint(root, state, root.id, 0);
+  paint(root, state, root.id, 0, null);
 
   return state;
 }
@@ -66,35 +71,40 @@ export function formsStackingContext(style: ComputedStyle): boolean {
   return style.position !== 'static' && style.zIndex.kind === 'integer';
 }
 
-function paint(box: Box, state: State, context: BoxId, depth: number): void {
-  push(box, state, context, depth);
+function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
+  push(box, state, context, depth, clip);
   if (box.kind === 'text') return;
 
+  // Anything but visible overflow clips what is inside it, and the clip travels down
+  // the tree with the descendants rather than applying to the box itself.
+  const inner = box.style.overflow === 'visible' ? clip : box.id;
+
   const bucket: Bucket = { negative: [], blocks: [], inlines: [], level: [], positive: [] };
-  collect(box.children, bucket);
+  collect(box.children, bucket, inner);
 
   for (const entry of [...bucket.negative].sort((a, b) => a.z - b.z)) {
-    descend(entry.box, state, context, depth);
+    descend(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of bucket.blocks) {
-    if (entry.own) descend(entry.box, state, context, depth);
-    else push(entry.box, state, context, depth);
+    if (entry.own) descend(entry.box, state, context, depth, entry.clip);
+    else push(entry.box, state, context, depth, entry.clip);
   }
-  for (const child of bucket.inlines) {
-    push(child, state, context, depth);
+  for (const entry of bucket.inlines) {
+    push(entry.box, state, context, depth, entry.clip);
   }
-  for (const child of bucket.level) {
-    descend(child, state, context, depth);
+  for (const entry of bucket.level) {
+    descend(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of [...bucket.positive].sort((a, b) => a.z - b.z)) {
-    descend(entry.box, state, context, depth);
+    descend(entry.box, state, context, depth, entry.clip);
   }
 }
 
-function push(box: Box, state: State, context: BoxId, depth: number): void {
+function push(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
   state.items.push({
     box: box.id,
     visible: box.style.visibility === 'visible',
+    clippedBy: clip,
     order: state.items.length,
     context,
     depth,
@@ -105,15 +115,15 @@ function push(box: Box, state: State, context: BoxId, depth: number): void {
  * A positioned box with `z-index: auto` does not start a stacking context, but it does paint
  * as one piece, so it recurses without adding a level.
  */
-function descend(box: Box, state: State, context: BoxId, depth: number): void {
+function descend(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
   if (box.kind === 'text' || !formsStackingContext(box.style)) {
-    paint(box, state, context, depth);
+    paint(box, state, context, depth, clip);
     return;
   }
 
   const zIndex = box.style.zIndex.kind === 'integer' ? box.style.zIndex.value : 'auto';
   state.contexts.push({ box: box.id, zIndex, parent: context, depth: depth + 1 });
-  paint(box, state, box.id, depth + 1);
+  paint(box, state, box.id, depth + 1, clip);
 }
 
 /**
@@ -121,10 +131,10 @@ function descend(box: Box, state: State, context: BoxId, depth: number): void {
  * descendants over to the same buckets, which is why all the blocks come before all the
  * inline content rather than being interleaved per subtree.
  */
-function collect(children: readonly Box[], bucket: Bucket): void {
+function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
   for (const child of children) {
     if (child.kind === 'text') {
-      bucket.inlines.push(child);
+      bucket.inlines.push({ box: child, clip });
       continue;
     }
 
@@ -132,29 +142,31 @@ function collect(children: readonly Box[], bucket: Bucket): void {
       // Transparent but not positioned. It keeps its place among the plain content, and it
       // paints as one unit, because the compositor needs the whole subtree before it can
       // fade it.
-      bucket.blocks.push({ box: child, own: true });
+      bucket.blocks.push({ box: child, own: true, clip });
       continue;
     }
 
     if (child.style.position !== 'static') {
       const zIndex = child.style.zIndex;
       if (zIndex.kind === 'integer' && zIndex.value < 0) {
-        bucket.negative.push({ z: zIndex.value, box: child });
+        bucket.negative.push({ z: zIndex.value, box: child, clip });
       } else if (zIndex.kind === 'integer' && zIndex.value > 0) {
-        bucket.positive.push({ z: zIndex.value, box: child });
+        bucket.positive.push({ z: zIndex.value, box: child, clip });
       } else {
-        bucket.level.push(child);
+        bucket.level.push({ box: child, clip });
       }
       continue;
     }
 
     if (child.kind === 'inline') {
-      bucket.inlines.push(child);
+      bucket.inlines.push({ box: child, clip });
     } else {
-      bucket.blocks.push({ box: child, own: false });
+      bucket.blocks.push({ box: child, own: false, clip });
     }
 
-    collect(child.children, bucket);
+    // A box that clips its overflow clips its descendants, whether or not it happens to be
+    // the root of a stacking context.
+    collect(child.children, bucket, child.style.overflow === 'visible' ? clip : child.id);
   }
 }
 
@@ -178,15 +190,22 @@ export function hitTest(
     const item = list.items[i];
     if (item === undefined || !item.visible || !accept(item.box)) continue;
 
+    if (item.clippedBy !== null && !inside(geometry.fragments.get(item.clippedBy)?.rect, x, y)) {
+      continue;
+    }
+
     const fragment = geometry.fragments.get(item.box);
     const rects = geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]);
 
     for (const rect of rects) {
-      if (x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height) {
-        return item.box;
-      }
+      if (inside(rect, x, y)) return item.box;
     }
   }
 
   return null;
+}
+
+function inside(rect: Rect | undefined, x: number, y: number): boolean {
+  if (rect === undefined) return false;
+  return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }

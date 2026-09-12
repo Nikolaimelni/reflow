@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>white space, which belongs to the text and not to the block</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 260px;
+  }
+  p,
+  div {
+    margin: 0;
+  }
+  .kept {
+    white-space: pre;
+  }
+  .kept-inline {
+    display: inline;
+    white-space: pre;
+  }
+  .single {
+    display: inline;
+    white-space: nowrap;
+  }
+  .single-block {
+    white-space: nowrap;
+  }
+</style>
+
+<p class="kept">  two spaces, then a newline
+and a second line</p>
+
+<p>an inline that <span class="kept-inline">keeps
+its newlines</span> inside a normal paragraph</p>
+
+<p>a paragraph with <span class="single">a run that will not break however long it gets</span> after it</p>
+
+<p class="single-block">a whole block that refuses to break anywhere at all, ever</p>
+
+<p>
+  <span class="single">   leading and trailing spaces collapse even here   </span>
+</p>
+
