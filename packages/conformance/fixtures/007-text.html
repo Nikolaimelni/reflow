@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>line breaking and line height</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  p {
+    margin: 0 0 10px;
+  }
+  .narrow {
+    width: 120px;
+  }
+  .tall {
+    line-height: 2;
+  }
+  .fixed {
+    line-height: 30px;
+  }
+  .big {
+    font-size: 28px;
+  }
+  .centred {
+    text-align: center;
+  }
+  .righted {
+    text-align: right;
+  }
+  .kept {
+    white-space: pre;
+    font-family: monospace;
+  }
+  .single {
+    white-space: nowrap;
+  }
+</style>
+<p>One short line.</p>
+<p class="narrow">
+  A paragraph that has to break across several lines because the box is not wide enough for
+  it.
+</p>
+<p class="tall">Line height as a multiple of the font size, over two lines of text here.</p>
+<p class="fixed">Line height fixed in pixels, also wrapping onto more than one line of text.</p>
+<p class="big">Bigger type wraps sooner.</p>
+<p class="centred">Centred text on two separate lines of its own.</p>
+<p class="righted">Right aligned text on two separate lines of its own.</p>
+<p class="kept">  spaces kept
+and a newline</p>
+<p class="single">This line refuses to break no matter how long it gets.</p>

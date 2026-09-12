@@ -20,7 +20,8 @@ export type LayoutEvent =
   | { t: 'measure:start'; box: BoxId; constraint: Constraint }
   | { t: 'size:resolved'; box: BoxId; fragment: Fragment; reason: string }
   | { t: 'margin:collapsed'; boxes: BoxId[]; from: number[]; to: number }
-  | { t: 'child:positioned'; box: BoxId; parent: BoxId; rect: Rect };
+  | { t: 'child:positioned'; box: BoxId; parent: BoxId; rect: Rect }
+  | { t: 'line:broken'; box: BoxId; at: number; width: number };
 
 export type Frame = ReadonlyMap<BoxId, Fragment>;
 

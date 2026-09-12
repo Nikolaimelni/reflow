@@ -27,17 +27,18 @@ test.describe('computed styles against Chromium', () => {
       await page.goto(pathToFileURL(join(fixturesDir, fixture)).href);
       const extracted = await page.evaluate(extractPage, COMPARED_PROPERTIES);
 
-      const nodes = buildTree(extracted.elements);
+      const nodes = buildTree(extracted.nodes);
       const root = nodes[0];
       expect(root, 'fixture has no elements').toBeDefined();
-      if (root === undefined) return;
+      if (root === undefined || root.kind !== 'element') return;
 
       const styles = computeStyles(root, extracted.css);
       const mismatches: string[] = [];
 
-      extracted.elements.forEach((element, index) => {
+      extracted.nodes.forEach((element, index) => {
+        if (element.kind !== 'element') return;
         const node = nodes[index];
-        const style = node === undefined ? undefined : styles.get(node);
+        const style = node?.kind === 'element' ? styles.get(node) : undefined;
         if (style === undefined) return;
 
         for (const comparison of compareElement(style, element.computed)) {

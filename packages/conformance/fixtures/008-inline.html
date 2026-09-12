@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>inline boxes, mixed content and anonymous blocks</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 260px;
+  }
+  p,
+  div {
+    margin: 0;
+  }
+  .host {
+    line-height: 20px;
+  }
+  .loud {
+    font-size: 24px;
+  }
+  .box {
+    display: inline-block;
+    width: 40px;
+    height: 30px;
+  }
+  .mixed > div {
+    height: 12px;
+  }
+</style>
+<p class="host">
+  text with a <span class="loud">taller span</span> inside it, which should push the line
+  down.
+</p>
+<p class="host">
+  nested <span>outer <em>inner emphasis</em> after</span> end of it all here.
+</p>
+<p class="host">before <span class="box"></span> after the inline block</p>
+<div class="mixed">
+  loose text before a block
+  <div>a real block</div>
+  and loose text after it
+</div>

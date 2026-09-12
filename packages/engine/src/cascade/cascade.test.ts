@@ -120,6 +120,39 @@ describe('computed lengths', () => {
   });
 });
 
+describe('the monospace default font size', () => {
+  it('is 13px while nothing has declared a size', () => {
+    const node = element('pre');
+    expect(styles(node, 'pre { font-family: monospace }')(node).fontSize).toBe(13);
+  });
+
+  it('needs the family to be the bare generic', () => {
+    const node = element('pre');
+    const css = 'pre { font-family: monospace, Arial }';
+    expect(styles(node, css)(node).fontSize).toBe(16);
+  });
+
+  it('gives way to an inherited size that someone did declare', () => {
+    const child = element('pre');
+    const root = element('html', {}, [child]);
+    const css = 'html { font-size: 16px } pre { font-family: monospace }';
+    expect(styles(root, css)(child).fontSize).toBe(16);
+  });
+
+  it('comes back for an explicit medium', () => {
+    const child = element('pre');
+    const root = element('html', {}, [child]);
+    const css = 'html { font-size: 20px } pre { font-family: monospace; font-size: medium }';
+    expect(styles(root, css)(child).fontSize).toBe(13);
+  });
+
+  it('is what a relative size resolves against', () => {
+    const node = element('pre');
+    const css = 'pre { font-family: monospace; font-size: 2em }';
+    expect(styles(node, css)(node).fontSize).toBe(26);
+  });
+});
+
 describe('shorthands', () => {
   it.each([
     ['margin: 1px', [1, 1, 1, 1]],

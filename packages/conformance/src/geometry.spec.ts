@@ -12,19 +12,14 @@ import {
   walkBoxes,
 } from '@reflow/engine';
 import { buildTree, COMPARED_PROPERTIES } from './compare.js';
-import { extractPage } from './extract.js';
+import { extractPage, measureInPage } from './extract.js';
+import { measurementRequests, tableMeasurer } from './measurer.js';
 
 /**
  * Chromium lays out in sixty-fourths of a pixel, so chasing an exact match on fractional
  * values is a waste of an evening. Half a pixel is the line.
  */
 const TOLERANCE = 0.5;
-
-/**
- * The share of box edges that currently match. It only goes up. Inline layout does not
- * exist yet, so every box holding text reads zero height here and drags the figure down.
- */
-const FLOOR = 92;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(here, '..', 'fixtures');
@@ -41,26 +36,28 @@ test.describe('geometry against Chromium', () => {
       await page.goto(pathToFileURL(join(fixturesDir, fixture)).href);
       const extracted = await page.evaluate(extractPage, COMPARED_PROPERTIES);
 
-      const nodes = buildTree(extracted.elements);
+      const nodes = buildTree(extracted.nodes);
       const root = nodes[0];
-      if (root === undefined) throw new Error(`${fixture} has no elements`);
+      if (root === undefined || root.kind !== 'element') throw new Error(`${fixture} is empty`);
 
       const boxTree = buildBoxTree(root, computeStyles(root, extracted.css));
       if (boxTree === null) throw new Error(`${fixture} generated no boxes`);
 
-      const layout = layoutDocument(boxTree, extracted.viewport);
+      const measurements = await page.evaluate(measureInPage, measurementRequests(boxTree));
+      const layout = layoutDocument(boxTree, extracted.viewport, tableMeasurer(measurements));
       const byElement = new Map<ElementNode, BoxId>();
       walkBoxes(boxTree, (box: Box) => {
-        if (box.kind === 'block' && box.element !== null) byElement.set(box.element, box.id);
+        if (box.kind !== 'text' && box.element !== null) byElement.set(box.element, box.id);
       });
 
       let matched = 0;
       let compared = 0;
       const misses: string[] = [];
 
-      extracted.elements.forEach((element, index) => {
+      extracted.nodes.forEach((element, index) => {
+        if (element.kind !== 'element') return;
         const node = nodes[index];
-        const id = node === undefined ? undefined : byElement.get(node);
+        const id = node?.kind === 'element' ? byElement.get(node) : undefined;
         const fragment = id === undefined ? undefined : layout.fragments.get(id);
         if (fragment === undefined) return;
 
@@ -78,10 +75,11 @@ test.describe('geometry against Chromium', () => {
 
       results.set(fixture, { matched, compared, misses });
       expect(compared, 'nothing was compared').toBeGreaterThan(0);
+      expect(misses).toEqual([]);
     });
   }
 
-  test('does not regress', () => {
+  test('writes the report', () => {
     const compared = [...results.values()].reduce((sum, one) => sum + one.compared, 0);
     const matched = [...results.values()].reduce((sum, one) => sum + one.matched, 0);
     const percent = compared === 0 ? 0 : Math.round((matched / compared) * 1000) / 10;
@@ -107,8 +105,6 @@ test.describe('geometry against Chromium', () => {
       )}\n`,
     );
 
-    expect(percent, `geometry fell below the recorded floor of ${FLOOR}%`).toBeGreaterThanOrEqual(
-      FLOOR,
-    );
+    expect(percent).toBe(100);
   });
 });

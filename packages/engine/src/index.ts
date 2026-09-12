@@ -78,12 +78,23 @@ export {
   zeroEdges,
 } from './geometry.js';
 export { type LayoutResult, layoutDocument, type Viewport } from './layout/block.js';
+export { type AtomicSize, layoutInlineContent } from './layout/inline.js';
 export {
   type CollapsedMargin,
   mergeMargins,
   resolveMargin,
   withMargin,
 } from './layout/margins.js';
+export {
+  type FontMetrics,
+  type FontSpec,
+  fixedAdvanceMeasurer,
+  fontOf,
+  type Segment,
+  segmentText,
+  type TextMeasurer,
+  usedLineHeight,
+} from './layout/text.js';
 export { usedBorderWidths } from './layout/used.js';
 export {
   applyEvent,

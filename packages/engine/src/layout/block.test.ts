@@ -5,6 +5,7 @@ import { computeStyles } from '../cascade/cascade.js';
 import { type DomNode, type ElementNode, element } from '../dom/node.js';
 import { type Fragment, frameAt, replay } from '../trace/events.js';
 import { layoutDocument, type Viewport } from './block.js';
+import { fixedAdvanceMeasurer } from './text.js';
 
 const VIEWPORT: Viewport = { width: 400, height: 300 };
 
@@ -13,7 +14,7 @@ function page(css: string, children: DomNode[], viewport = VIEWPORT) {
   const boxTree = buildBoxTree(root, computeStyles(root, css));
   if (boxTree === null) throw new Error('the root generated no box');
 
-  const result = layoutDocument(boxTree, viewport);
+  const result = layoutDocument(boxTree, viewport, fixedAdvanceMeasurer());
   const byElement = new Map<ElementNode, BoxId>();
   walkBoxes(boxTree, (box: Box) => {
     if (box.kind === 'block' && box.element !== null) byElement.set(box.element, box.id);

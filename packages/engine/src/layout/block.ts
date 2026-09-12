@@ -1,7 +1,9 @@
-import { type BlockBox, type Box, type BoxId, isBlock } from '../boxtree/box.js';
+import { type BlockBox, type Box, type BoxId, type InlineBox, isBlock } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
 import type { Edges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
+import { type AtomicSize, layoutInlineContent } from './inline.js';
+import { intrinsicWidths, shrinkToFit } from './intrinsic.js';
 import {
   type CollapsedMargin,
   mergeMargins,
@@ -9,6 +11,7 @@ import {
   resolveMargin,
   withMargin,
 } from './margins.js';
+import type { TextMeasurer } from './text.js';
 import {
   clampSize,
   usedBorderWidths,
@@ -35,6 +38,7 @@ type ContainingBlock = {
 type Context = {
   fragments: Map<BoxId, Fragment>;
   trace: LayoutEvent[];
+  measurer: TextMeasurer;
 };
 
 type BlockResult = {
@@ -43,6 +47,8 @@ type BlockResult = {
   /** What is left adjoining the bottom edge and may still collapse with what follows. */
   marginBottom: CollapsedMargin;
   collapsedThrough: boolean;
+  /** Last line box baseline, measured from the border-box top, for an atomic inline. */
+  baseline: number | null;
 };
 
 type Horizontal = {
@@ -52,15 +58,19 @@ type Horizontal = {
   reason: string;
 };
 
-export function layoutDocument(root: BlockBox, viewport: Viewport): LayoutResult {
-  const context: Context = { fragments: new Map(), trace: [] };
+export function layoutDocument(
+  root: BlockBox,
+  viewport: Viewport,
+  measurer: TextMeasurer,
+): LayoutResult {
+  const context: Context = { fragments: new Map(), trace: [], measurer };
   const containing: ContainingBlock = { x: 0, width: viewport.width, height: viewport.height };
 
   // The root's margins never collapse with anything, so its own top margin is all there is.
   const top = usedMargin(root.style.marginTop, viewport.width) ?? 0;
   layoutBlock(root, containing, top, context, true);
 
-  return context;
+  return { fragments: context.fragments, trace: context.trace };
 }
 
 /**
@@ -147,6 +157,7 @@ function layoutBlock(
     height: fragment.rect.height,
     marginBottom: bottomEscapes ? mergeMargins(ownBottom, flow.trailing) : ownBottom,
     collapsedThrough: !isRoot && collapsesThrough(box, containing.width),
+    baseline: flow.baseline === null ? null : border.top + padding.top + flow.baseline,
   };
 }
 
@@ -155,6 +166,8 @@ type FlowResult = {
   height: number;
   /** Margins still adjoining the bottom of the content, not yet committed to the height. */
   trailing: CollapsedMargin;
+  /** Last baseline found among the children, measured from the content top. */
+  baseline: number | null;
 };
 
 function layoutChildren(
@@ -169,15 +182,29 @@ function layoutChildren(
   const blocks = box.children.filter(isBlock);
 
   if (blocks.length === 0) {
-    // TODO: inline layout, week three. Until text can be measured a block holding only
-    // inline content has no height, so any fixture with a paragraph in it reads zero here.
-    return { height: 0, trailing: NO_MARGIN };
+    if (box.children.length === 0) return { height: 0, trailing: NO_MARGIN, baseline: null };
+
+    const inline = layoutInlineContent({
+      container: box,
+      containerStyle: box.style,
+      contentX: containing.x,
+      contentTop,
+      available: containing.width,
+      measurer: context.measurer,
+      fragments: context.fragments,
+      trace: context.trace,
+      layoutAtomic: (child, available) => measureAtomic(child, available, context),
+      placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing.width, context),
+    });
+
+    return { height: inline.height, trailing: NO_MARGIN, baseline: inline.lastBaseline };
   }
 
   const collapseIntoTop = !isRoot && canCollapseTop(box.style, padding, border);
   let height = 0;
   let pending = NO_MARGIN;
   let placed = false;
+  let baseline: number | null = null;
 
   for (const child of blocks) {
     if (!placed && collapseIntoTop) {
@@ -210,9 +237,11 @@ function layoutChildren(
     height = childTop + result.height - contentTop;
     pending = result.marginBottom;
     placed = true;
+
+    if (result.baseline !== null) baseline = childTop - contentTop + result.baseline;
   }
 
-  return { height, trailing: pending };
+  return { height, trailing: pending, baseline };
 }
 
 function collapseWithTrace(
@@ -411,4 +440,51 @@ function inFlowChildren(box: BlockBox): Box[] {
 
 function isWhitespaceText(box: Box): boolean {
   return box.kind === 'text' && box.text.trim() === '';
+}
+
+/**
+ * An inline-block lays its own children out as blocks, so it goes through the block path in
+ * a throwaway context first just to find out how big it is.
+ */
+function measureAtomic(box: InlineBox, available: number, context: Context): AtomicSize {
+  const scratch: Context = { fragments: new Map(), trace: [], measurer: context.measurer };
+  const width = atomicWidth(box, available, context);
+  const result = layoutBlock(asBlock(box), { x: 0, width, height: null }, 0, scratch);
+  const fragment = scratch.fragments.get(box.id);
+
+  // An inline-block that clips its overflow hides its baseline with it, so it aligns on its
+  // bottom margin edge instead. Otherwise the last line inside it is what lines up outside.
+  const baseline = box.style.overflow === 'visible' ? result.baseline : null;
+
+  return { width: fragment?.rect.width ?? 0, height: result.height, baseline };
+}
+
+function placeAtomic(
+  box: InlineBox,
+  x: number,
+  y: number,
+  available: number,
+  context: Context,
+): void {
+  const width = atomicWidth(box, available, context);
+  layoutBlock(asBlock(box), { x, width, height: null }, y, context);
+}
+
+/**
+ * An inline-block with an auto width shrinks to fit. Handing the block path a containing
+ * block of exactly that width gets the same answer, because an auto width fills it.
+ */
+function atomicWidth(box: InlineBox, available: number, context: Context): number {
+  if (box.style.width.kind !== 'auto') return available;
+  return shrinkToFit(intrinsicWidths(asBlock(box), context.measurer), available);
+}
+
+function asBlock(box: InlineBox): BlockBox {
+  return {
+    kind: 'block',
+    id: box.id,
+    element: box.element,
+    style: box.style,
+    children: box.children,
+  };
 }

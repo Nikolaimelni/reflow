@@ -1,11 +1,12 @@
 import {
   type ComputedStyle,
-  type ElementNode,
+  type DomNode,
   element,
   type Margin,
+  text,
   usedBorderWidths,
 } from '@reflow/engine';
-import type { ExtractedElement } from './extract.js';
+import type { ExtractedNode } from './extract.js';
 
 export type Comparison = {
   property: string;
@@ -70,22 +71,26 @@ for (const side of SIDES) {
 
 export const COMPARED_PROPERTIES = Object.keys(FORMATTERS);
 
-export function buildTree(elements: readonly ExtractedElement[]): ElementNode[] {
-  const nodes = elements.map((extracted) =>
-    element(extracted.tag, {
-      ...(extracted.id === null ? {} : { id: extracted.id }),
-      classes: extracted.classes,
-      attributes: extracted.attributes,
-    }),
+export function buildTree(extracted: readonly ExtractedNode[]): DomNode[] {
+  const nodes: DomNode[] = extracted.map((node) =>
+    node.kind === 'element'
+      ? element(node.tag, {
+          ...(node.id === null ? {} : { id: node.id }),
+          classes: node.classes,
+          attributes: node.attributes,
+        })
+      : text(node.text),
   );
 
-  elements.forEach((extracted, index) => {
-    if (extracted.parent === null) return;
-    const node = nodes[index];
-    const parent = nodes[extracted.parent];
-    if (node === undefined || parent === undefined) return;
-    node.parent = parent;
-    parent.children.push(node);
+  extracted.forEach((node, index) => {
+    if (node.kind === 'element' && node.parent === null) return;
+
+    const child = nodes[index];
+    const parent = nodes[node.parent ?? -1];
+    if (child === undefined || parent === undefined || parent.kind !== 'element') return;
+
+    child.parent = parent;
+    parent.children.push(child);
   });
 
   return nodes;

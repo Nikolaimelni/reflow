@@ -22,6 +22,13 @@ import { USER_AGENT_CSS } from './ua.js';
 
 export type StyleMap = Map<ElementNode, ComputedStyle>;
 
+/**
+ * Chromium's default font size is 13px when the family is exactly `monospace`, and 16px
+ * otherwise. `monospace, Arial` gets 16, and so does `"Courier New", monospace`: the list has
+ * to be the bare generic. This is why a `<pre>` looks smaller than the text around it.
+ */
+const MONOSPACE_DEFAULT = 13;
+
 type Origin = 'user-agent' | 'author';
 
 type Candidate = {
@@ -52,16 +59,27 @@ export function computeStyles(root: ElementNode, authorCss: string): StyleMap {
   const styles: StyleMap = new Map();
 
   // rem on the root element's own font-size refers to the initial value, not to itself.
-  const rootStyle = computeFor(root, null, declarations, properties.fontSize.initial);
-  styles.set(root, rootStyle);
+  const rootComputed = computeFor(root, null, false, declarations, properties.fontSize.initial);
+  styles.set(root, rootComputed.style);
 
-  const walk = (node: ElementNode, parent: ComputedStyle) => {
-    const style = computeFor(node, parent, declarations, rootStyle.fontSize);
-    styles.set(node, style);
-    for (const child of elementChildren(node)) walk(child, style);
+  const walk = (node: ElementNode, parent: ComputedStyle, fontSizeSpecified: boolean) => {
+    const computed = computeFor(
+      node,
+      parent,
+      fontSizeSpecified,
+      declarations,
+      rootComputed.style.fontSize,
+    );
+    styles.set(node, computed.style);
+    for (const child of elementChildren(node)) {
+      walk(child, computed.style, computed.fontSizeSpecified);
+    }
   };
 
-  for (const child of elementChildren(root)) walk(child, rootStyle);
+  for (const child of elementChildren(root)) {
+    walk(child, rootComputed.style, rootComputed.fontSizeSpecified);
+  }
+
   return styles;
 }
 
@@ -106,9 +124,10 @@ function toLonghands(declaration: Declaration): { property: PropertyName; value:
 function computeFor(
   node: ElementNode,
   parent: ComputedStyle | null,
+  parentSpecifiedFontSize: boolean,
   declarations: readonly MatchableDeclaration[],
   rootFontSize: number,
-): ComputedStyle {
+) {
   const winners = new Map<PropertyName, Candidate>();
 
   const offer = (candidate: Candidate) => {
@@ -144,20 +163,71 @@ function computeFor(
   // observed complete.
   const style = {} as ComputedStyle;
 
-  // font-size resolves first: every other em length on this element is relative to it.
-  const parentFontSize = parent?.fontSize ?? properties.fontSize.initial;
-  style.fontSize = resolve('fontSize', winners.get('fontSize'), parent, {
-    fontSize: parentFontSize,
-    rootFontSize,
-  });
+  // The family comes first because the default font size depends on it, and font-size comes
+  // second because every other em length on this element is relative to it.
+  const base: ComputeContext = { fontSize: 0, rootFontSize };
+  style.fontFamily = resolve('fontFamily', winners.get('fontFamily'), parent, base);
 
-  const context: ComputeContext = { fontSize: style.fontSize, rootFontSize };
+  const fontSize = resolveFontSize(
+    winners.get('fontSize'),
+    style.fontFamily,
+    parent,
+    parentSpecifiedFontSize,
+    rootFontSize,
+  );
+  style.fontSize = fontSize.size;
+
+  const context: ComputeContext = { fontSize: fontSize.size, rootFontSize };
   for (const name of propertyNames) {
-    if (name === 'fontSize') continue;
+    if (name === 'fontSize' || name === 'fontFamily') continue;
     assign(style, name, winners.get(name), parent, context);
   }
 
-  return style;
+  return { style, fontSizeSpecified: fontSize.specified };
+}
+
+/**
+ * Until something declares a font size, each element resolves the default for its own family
+ * rather than inheriting a length. Once a declaration appears anywhere up the chain, ordinary
+ * inheritance takes over.
+ */
+function resolveFontSize(
+  candidate: Candidate | undefined,
+  family: readonly string[],
+  parent: ComputedStyle | null,
+  parentSpecified: boolean,
+  rootFontSize: number,
+): { size: number; specified: boolean } {
+  const initial =
+    family.length === 1 && family[0] === 'monospace'
+      ? MONOSPACE_DEFAULT
+      : properties.fontSize.initial;
+  const inherited = parentSpecified ? (parent?.fontSize ?? initial) : initial;
+
+  if (candidate === undefined) return { size: inherited, specified: parentSpecified };
+
+  const context: ComputeContext = { fontSize: inherited, rootFontSize };
+
+  switch (globalKeyword(candidate.value)) {
+    case 'inherit':
+    case 'unset':
+      return { size: inherited, specified: true };
+    case 'initial':
+      return { size: initial, specified: true };
+    default:
+      break;
+  }
+
+  if (isMedium(candidate.value)) return { size: initial, specified: true };
+
+  const parsed = properties.fontSize.parse(candidate.value, context);
+  return { size: parsed ?? inherited, specified: true };
+}
+
+function isMedium(value: readonly Token[]): boolean {
+  const meaningful = value.filter((token) => token.type !== 'whitespace');
+  const token = meaningful.length === 1 ? meaningful[0] : undefined;
+  return token?.type === 'ident' && token.value.toLowerCase() === 'medium';
 }
 
 function assign<K extends PropertyName>(

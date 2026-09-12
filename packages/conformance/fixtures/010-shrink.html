@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>shrink to fit on inline blocks</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  p {
+    margin: 0 0 6px;
+  }
+  .ib {
+    display: inline-block;
+  }
+  .capped {
+    display: inline-block;
+    max-width: 60px;
+  }
+  .padded {
+    display: inline-block;
+    padding: 4px;
+    border: 2px solid;
+  }
+  .floor {
+    display: inline-block;
+    min-width: 200px;
+  }
+</style>
+<p><span class="ib">short</span></p>
+<p><span class="ib">a much longer run of words that will not fit on a single line in this box</span></p>
+<p><span class="capped">narrow words here</span></p>
+<p><span class="padded">padded box</span></p>
+<p><span class="floor">wide floor</span></p>
+<p>text <span class="ib">middle</span> text</p>
