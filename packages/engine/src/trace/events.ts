@@ -41,6 +41,11 @@ export function replay(trace: readonly LayoutEvent[]): Map<BoxId, Fragment> {
   return frame;
 }
 
+/**
+ * The frame after `cursor` events. `applyEvent` would give the same answer folded over a
+ * prefix, but it copies the map every step, and a player scrubbing at sixty frames a second
+ * cannot afford that.
+ */
 export function frameAt(trace: readonly LayoutEvent[], cursor: number): Frame {
-  return trace.slice(0, cursor).reduce(applyEvent, EMPTY_FRAME);
+  return replay(trace.slice(0, Math.max(0, cursor)));
 }

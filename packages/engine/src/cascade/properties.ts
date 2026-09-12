@@ -1,4 +1,5 @@
 import type { Token } from '../css/tokenize.js';
+import { BLACK, type Colour, parseColour, TRANSPARENT } from './colour.js';
 import {
   AUTO,
   type Inset,
@@ -33,6 +34,7 @@ export type JustifyContent =
   | 'space-around'
   | 'space-evenly';
 export type AlignItems = 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'baseline';
+export type Visibility = 'visible' | 'hidden';
 
 export type ComputedStyle = {
   display: Display;
@@ -88,6 +90,12 @@ export type ComputedStyle = {
   flexGrow: number;
   flexShrink: number;
   flexBasis: Size;
+
+  /** None of these four reach layout, which is the point of having them. */
+  color: Colour;
+  backgroundColor: Colour;
+  visibility: Visibility;
+  opacity: number;
 };
 
 export type PropertyName = keyof ComputedStyle;
@@ -96,7 +104,19 @@ export type ComputeContext = {
   /** Font size of the element itself, or of the parent while font-size is being computed. */
   fontSize: number;
   rootFontSize: number;
+  devicePixelRatio: number;
 };
+
+/**
+ * A browser rounds a border down to whole device pixels, and never down to nothing. On a
+ * 1.25 display a 2px border is used as 1.6px and a 1px border as 0.8px, which is why a
+ * bordered box measures shorter there than the arithmetic says. It shows up in
+ * `getComputedStyle`, so this is a used value decision rather than a painting one.
+ */
+export function snapToDevicePixels(width: number, devicePixelRatio: number): number {
+  if (width <= 0) return 0;
+  return Math.max(1, Math.floor(width * devicePixelRatio)) / devicePixelRatio;
+}
 
 export type PropertyDefinition<T> = {
   cssName: string;
@@ -168,12 +188,15 @@ const maxSize: PropertyDefinition<MaxSize>['parse'] = (value, context) =>
 
 /** `thin`, `medium` and `thick` are the only keywords, and browsers agree on these pixels. */
 const borderWidth: PropertyDefinition<Px>['parse'] = (value, context) => {
+  const snap = (width: number) => px(snapToDevicePixels(width, context.devicePixelRatio));
+
   const named = keyword('thin', 'medium', 'thick')(value);
-  if (named === 'thin') return px(1);
-  if (named === 'medium') return px(3);
-  if (named === 'thick') return px(5);
+  if (named === 'thin') return snap(1);
+  if (named === 'medium') return snap(3);
+  if (named === 'thick') return snap(5);
+
   const length = nonNegative(lengthPercentage(value, context));
-  return length !== null && length.kind === 'px' ? length : null;
+  return length !== null && length.kind === 'px' ? snap(length.value) : null;
 };
 
 const borderStyle = keyword('none', 'solid', 'dashed', 'dotted');
@@ -221,6 +244,13 @@ const fontWeight: PropertyDefinition<number>['parse'] = (value) => {
   const token = single(value);
   if (token?.type !== 'number') return null;
   return token.value >= 1 && token.value <= 1000 ? token.value : null;
+};
+
+const opacity: PropertyDefinition<number>['parse'] = (value) => {
+  const token = single(value);
+  if (token?.type === 'percentage') return Math.min(Math.max(0, token.value / 100), 1);
+  if (token?.type !== 'number') return null;
+  return Math.min(Math.max(0, token.value), 1);
 };
 
 const flexFactor: PropertyDefinition<number>['parse'] = (value) => {
@@ -353,6 +383,16 @@ export const properties: PropertyTable = {
   flexGrow: own('flex-grow', 0, flexFactor),
   flexShrink: own('flex-shrink', 1, flexFactor),
   flexBasis: own('flex-basis', AUTO, size),
+
+  color: { cssName: 'color', initial: BLACK, inherited: true, parse: parseColour },
+  backgroundColor: own('background-color', TRANSPARENT, parseColour),
+  visibility: {
+    cssName: 'visibility',
+    initial: 'visible',
+    inherited: true,
+    parse: keyword('visible', 'hidden'),
+  },
+  opacity: own('opacity', 1, opacity),
 };
 
 // why: Object.entries and Object.keys widen the key to string. The table above is annotated
@@ -366,6 +406,10 @@ const byCssName = new Map<string, PropertyName>(
 
 export function propertyByCssName(cssName: string): PropertyName | undefined {
   return byCssName.get(cssName);
+}
+
+export function cssNameOf(property: PropertyName): string {
+  return properties[property].cssName;
 }
 
 export const propertyNames = Object.keys(properties) as PropertyName[];

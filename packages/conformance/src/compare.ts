@@ -2,6 +2,7 @@ import {
   type ComputedStyle,
   type DomNode,
   element,
+  formatColour,
   type Margin,
   text,
   usedBorderWidths,
@@ -39,6 +40,10 @@ const FORMATTERS: Record<string, Formatter> = {
   'font-style': (style) => style.fontStyle,
   'line-height': (style) => lineHeight(style),
   'z-index': (style) => (style.zIndex.kind === 'auto' ? 'auto' : String(style.zIndex.value)),
+  color: (style) => formatColour(style.color),
+  'background-color': (style) => formatColour(style.backgroundColor),
+  visibility: (style) => style.visibility,
+  opacity: (style) => String(style.opacity),
 };
 
 const MARGIN = {

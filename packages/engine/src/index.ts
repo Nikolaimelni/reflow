@@ -12,16 +12,30 @@ export {
 export { buildBoxTree } from './boxtree/build.js';
 export { computeStyles, type StyleMap } from './cascade/cascade.js';
 export {
+  BLACK,
+  type Colour,
+  formatColour,
+  parseColour,
+  TRANSPARENT,
+  toCss,
+} from './cascade/colour.js';
+export {
+  type AlignItems,
   type BorderStyle,
   type BoxSizing,
   type ComputedStyle,
+  cssNameOf,
   type Display,
+  type FlexDirection,
   initialStyle,
+  type JustifyContent,
   type Overflow,
   type Position,
   type PropertyName,
   propertyByCssName,
+  snapToDevicePixels,
   type TextAlign,
+  type Visibility,
   type WhiteSpace,
 } from './cascade/properties.js';
 export {
@@ -123,6 +137,12 @@ export {
   type PaintItem,
   type StackingContext,
 } from './paint/display-list.js';
+export {
+  type DirtyResult,
+  dirtyBoxes,
+  INVALIDATION,
+  type Invalidation,
+} from './paint/invalidation.js';
 export {
   applyEvent,
   type Constraint,

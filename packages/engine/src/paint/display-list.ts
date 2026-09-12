@@ -5,6 +5,8 @@ import type { Fragment } from '../trace/events.js';
 
 export type PaintItem = {
   box: BoxId;
+  /** `visibility: hidden` keeps a box's space but takes it out of painting and hit testing. */
+  visible: boolean;
   /** Position in the flat list, which is the order a painter would draw in. */
   order: number;
   /** The stacking context this box paints inside. */
@@ -27,7 +29,8 @@ export type DisplayList = {
 
 type Bucket = {
   negative: { z: number; box: Box }[];
-  blocks: Box[];
+  /** `own` marks a box that paints in the block step but as one unit of its own. */
+  blocks: { box: Box; own: boolean }[];
   inlines: Box[];
   /** Positioned, but with no z-index of its own, so it paints on top of the plain content. */
   level: Box[];
@@ -54,12 +57,17 @@ export function buildDisplayList(root: BlockBox): DisplayList {
   return state;
 }
 
+/**
+ * A positioned box with a z-index makes one, and so does anything the compositor has to hand
+ * separately, which in this subset means `opacity` below one.
+ */
 export function formsStackingContext(style: ComputedStyle): boolean {
+  if (style.opacity < 1) return true;
   return style.position !== 'static' && style.zIndex.kind === 'integer';
 }
 
 function paint(box: Box, state: State, context: BoxId, depth: number): void {
-  state.items.push({ box: box.id, order: state.items.length, context, depth });
+  push(box, state, context, depth);
   if (box.kind === 'text') return;
 
   const bucket: Bucket = { negative: [], blocks: [], inlines: [], level: [], positive: [] };
@@ -68,11 +76,12 @@ function paint(box: Box, state: State, context: BoxId, depth: number): void {
   for (const entry of [...bucket.negative].sort((a, b) => a.z - b.z)) {
     descend(entry.box, state, context, depth);
   }
-  for (const child of bucket.blocks) {
-    state.items.push({ box: child.id, order: state.items.length, context, depth });
+  for (const entry of bucket.blocks) {
+    if (entry.own) descend(entry.box, state, context, depth);
+    else push(entry.box, state, context, depth);
   }
   for (const child of bucket.inlines) {
-    state.items.push({ box: child.id, order: state.items.length, context, depth });
+    push(child, state, context, depth);
   }
   for (const child of bucket.level) {
     descend(child, state, context, depth);
@@ -80,6 +89,16 @@ function paint(box: Box, state: State, context: BoxId, depth: number): void {
   for (const entry of [...bucket.positive].sort((a, b) => a.z - b.z)) {
     descend(entry.box, state, context, depth);
   }
+}
+
+function push(box: Box, state: State, context: BoxId, depth: number): void {
+  state.items.push({
+    box: box.id,
+    visible: box.style.visibility === 'visible',
+    order: state.items.length,
+    context,
+    depth,
+  });
 }
 
 /**
@@ -109,6 +128,14 @@ function collect(children: readonly Box[], bucket: Bucket): void {
       continue;
     }
 
+    if (child.style.opacity < 1 && child.style.position === 'static') {
+      // Transparent but not positioned. It keeps its place among the plain content, and it
+      // paints as one unit, because the compositor needs the whole subtree before it can
+      // fade it.
+      bucket.blocks.push({ box: child, own: true });
+      continue;
+    }
+
     if (child.style.position !== 'static') {
       const zIndex = child.style.zIndex;
       if (zIndex.kind === 'integer' && zIndex.value < 0) {
@@ -124,7 +151,7 @@ function collect(children: readonly Box[], bucket: Bucket): void {
     if (child.kind === 'inline') {
       bucket.inlines.push(child);
     } else {
-      bucket.blocks.push(child);
+      bucket.blocks.push({ box: child, own: false });
     }
 
     collect(child.children, bucket);
@@ -149,7 +176,7 @@ export function hitTest(
 ): BoxId | null {
   for (let i = list.items.length - 1; i >= 0; i--) {
     const item = list.items[i];
-    if (item === undefined || !accept(item.box)) continue;
+    if (item === undefined || !item.visible || !accept(item.box)) continue;
 
     const fragment = geometry.fragments.get(item.box);
     const rects = geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]);

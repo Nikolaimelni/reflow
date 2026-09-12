@@ -50,7 +50,11 @@ function userAgentSheet(): StyleRule[] {
   return userAgentRules;
 }
 
-export function computeStyles(root: ElementNode, authorCss: string): StyleMap {
+export function computeStyles(
+  root: ElementNode,
+  authorCss: string,
+  devicePixelRatio = 1,
+): StyleMap {
   const declarations = [
     ...flatten(userAgentSheet(), 'user-agent', 0),
     ...flatten(parseStylesheet(authorCss), 'author', 1_000_000),
@@ -59,7 +63,14 @@ export function computeStyles(root: ElementNode, authorCss: string): StyleMap {
   const styles: StyleMap = new Map();
 
   // rem on the root element's own font-size refers to the initial value, not to itself.
-  const rootComputed = computeFor(root, null, false, declarations, properties.fontSize.initial);
+  const rootComputed = computeFor(
+    root,
+    null,
+    false,
+    declarations,
+    properties.fontSize.initial,
+    devicePixelRatio,
+  );
   styles.set(root, rootComputed.style);
 
   const walk = (node: ElementNode, parent: ComputedStyle, fontSizeSpecified: boolean) => {
@@ -69,6 +80,7 @@ export function computeStyles(root: ElementNode, authorCss: string): StyleMap {
       fontSizeSpecified,
       declarations,
       rootComputed.style.fontSize,
+      devicePixelRatio,
     );
     styles.set(node, computed.style);
     for (const child of elementChildren(node)) {
@@ -127,6 +139,7 @@ function computeFor(
   parentSpecifiedFontSize: boolean,
   declarations: readonly MatchableDeclaration[],
   rootFontSize: number,
+  devicePixelRatio: number,
 ) {
   const winners = new Map<PropertyName, Candidate>();
 
@@ -165,7 +178,7 @@ function computeFor(
 
   // The family comes first because the default font size depends on it, and font-size comes
   // second because every other em length on this element is relative to it.
-  const base: ComputeContext = { fontSize: 0, rootFontSize };
+  const base: ComputeContext = { fontSize: 0, rootFontSize, devicePixelRatio };
   style.fontFamily = resolve('fontFamily', winners.get('fontFamily'), parent, base);
 
   const fontSize = resolveFontSize(
@@ -174,10 +187,11 @@ function computeFor(
     parent,
     parentSpecifiedFontSize,
     rootFontSize,
+    devicePixelRatio,
   );
   style.fontSize = fontSize.size;
 
-  const context: ComputeContext = { fontSize: fontSize.size, rootFontSize };
+  const context: ComputeContext = { fontSize: fontSize.size, rootFontSize, devicePixelRatio };
   for (const name of propertyNames) {
     if (name === 'fontSize' || name === 'fontFamily') continue;
     assign(style, name, winners.get(name), parent, context);
@@ -197,6 +211,7 @@ function resolveFontSize(
   parent: ComputedStyle | null,
   parentSpecified: boolean,
   rootFontSize: number,
+  devicePixelRatio: number,
 ): { size: number; specified: boolean } {
   const initial =
     family.length === 1 && family[0] === 'monospace'
@@ -206,7 +221,7 @@ function resolveFontSize(
 
   if (candidate === undefined) return { size: inherited, specified: parentSpecified };
 
-  const context: ComputeContext = { fontSize: inherited, rootFontSize };
+  const context: ComputeContext = { fontSize: inherited, rootFontSize, devicePixelRatio };
 
   switch (globalKeyword(candidate.value)) {
     case 'inherit':

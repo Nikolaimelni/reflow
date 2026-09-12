@@ -120,6 +120,45 @@ describe('computed lengths', () => {
   });
 });
 
+describe('border widths on a fractional device pixel ratio', () => {
+  const widthOf = (declared: string, ratio: number) => {
+    const node = element('div');
+    const style = computeStyles(node, `div { border: ${declared} solid }`, ratio).get(node);
+    if (style === undefined) throw new Error('node was never styled');
+    return style.borderTopWidth.value;
+  };
+
+  it.each([
+    ['0.5px', 0.8],
+    ['1px', 0.8],
+    ['1.5px', 0.8],
+    ['2px', 1.6],
+    ['2.4px', 2.4],
+    ['3px', 2.4],
+    ['4px', 4],
+    ['5px', 4.8],
+    ['7px', 6.4],
+  ])('uses %s as %spx at 1.25, the way a browser does', (declared, expected) => {
+    expect(widthOf(declared, 1.25)).toBeCloseTo(expected, 6);
+  });
+
+  it('leaves everything alone at one device pixel per css pixel', () => {
+    expect(widthOf('2px', 1)).toBe(2);
+    expect(widthOf('7px', 1)).toBe(7);
+  });
+
+  it('never rounds a border away to nothing', () => {
+    expect(widthOf('0.1px', 1.25)).toBeCloseTo(0.8, 6);
+    expect(widthOf('0.1px', 2)).toBeCloseTo(0.5, 6);
+  });
+
+  it('snaps the keywords too', () => {
+    const node = element('div');
+    const style = computeStyles(node, 'div { border: thick solid }', 1.25).get(node);
+    expect(style?.borderTopWidth.value).toBeCloseTo(4.8, 6);
+  });
+});
+
 describe('the monospace default font size', () => {
   it('is 13px while nothing has declared a size', () => {
     const node = element('pre');

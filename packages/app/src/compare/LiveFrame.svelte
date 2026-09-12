@@ -1,0 +1,198 @@
+<script lang="ts">
+  import type { BoxId, ElementNode } from '@reflow/engine';
+  import { compareRects } from './divergence.js';
+  import type { Session } from '../engine-run/session.svelte.js';
+
+  const { session }: { session: Session } = $props();
+
+/**
+   * Half a CSS pixel is the line the conformance harness draws, because Chromium lays out in
+   * sixty-fourths of a pixel and it runs at one device pixel per CSS pixel.
+   *
+   * A real screen is not so tidy. At 1.25 the browser snaps each border to whole device
+   * pixels, so `border: 2px` is painted 1.6px wide, and a box with a border on both sides
+   * comes out 0.8px shorter than the engine says. Two device pixels is the honest line here,
+   * and the epsilon is there because 41.6 minus 40.8 is not 0.8 in binary.
+   */
+  const tolerance = $derived(Math.max(0.5, 2 / window.devicePixelRatio) + 1e-6);
+
+  const SKIP = new Set(['head', 'style', 'script', 'link', 'meta', 'title', 'base']);
+
+  let frame: HTMLIFrameElement | undefined = $state();
+
+  /**
+   * The iframe's scrollbar eats into the content width, so the initial containing block
+   * inside it is narrower than the element. Widening the element by that much gives the
+   * browser exactly the viewport the engine was told about.
+   */
+  let gutter = $state(0);
+
+  const document_ = $derived(
+    `<!doctype html><html><head><meta charset="utf-8"><style>${session.source.css}</style></head><body>${session.source.html}</body></html>`,
+  );
+
+  /**
+   * The browser lays the same source out in an iframe and the two sets of rectangles are
+   * compared element by element. Both trees came out of the same parser, so walking them in
+   * document order lines them up without needing ids.
+   */
+  function compare(): void {
+    const host = frame?.contentDocument;
+    if (host === undefined || host === null || session.result.status !== 'ok') return;
+
+    const measured = (frame?.clientWidth ?? 0) - host.documentElement.clientWidth;
+    if (measured >= 0 && measured < 40 && measured !== gutter) {
+      gutter = measured;
+      return;
+    }
+
+    const theirs = collectElements(host.documentElement);
+    const ours = collectNodes(session.result.root);
+    const diverging = new Map<BoxId, string>();
+
+    for (let i = 0; i < Math.min(theirs.length, ours.length); i++) {
+      const element = theirs[i];
+      const node = ours[i];
+      if (element === undefined || node === undefined) continue;
+
+      const id = session.result.boxOf.get(node);
+      const fragment = id === undefined ? undefined : session.result.layout.fragments.get(id);
+      if (id === undefined || fragment === undefined) continue;
+
+      const divergence = compareRects(
+        `<${element.tagName.toLowerCase()}>`,
+        fragment.rect,
+        element.getBoundingClientRect(),
+      );
+
+      if (divergence !== null) diverging.set(id, divergence);
+    }
+
+    session.diverging = diverging;
+  }
+
+  function collectElements(root: Element): Element[] {
+    const found: Element[] = [];
+
+    const walk = (node: Element) => {
+      if (SKIP.has(node.tagName.toLowerCase())) return;
+      found.push(node);
+      for (const child of Array.from(node.children)) walk(child);
+    };
+
+    walk(root);
+    return found;
+  }
+
+  function collectNodes(root: ElementNode): ElementNode[] {
+    const found: ElementNode[] = [];
+
+    const walk = (node: ElementNode) => {
+      found.push(node);
+      for (const child of node.children) {
+        if (child.kind === 'element') walk(child);
+      }
+    };
+
+    walk(root);
+    return found;
+  }
+
+  $effect(() => {
+    // New source, or a freshly measured gutter, and the comparison runs again. Without the
+    // gutter here the first pass measures a narrower iframe than the engine was given and
+    // the list sits there stale.
+    void document_;
+    void gutter;
+
+    const handle = requestAnimationFrame(compare);
+    return () => {
+      cancelAnimationFrame(handle);
+    };
+  });
+</script>
+
+<div class="live">
+  <div class="head">
+    <span class="title">the browser, same source</span>
+    <span class="verdict" class:apart={session.diverging.size > 0}>
+      {#if session.diverging.size === 0}
+        every box agrees
+      {:else}
+        {session.diverging.size}
+        {session.diverging.size === 1 ? 'box disagrees' : 'boxes disagree'}
+      {/if}
+    </span>
+  </div>
+
+  {#if session.diverging.size > 0}
+    <ul class="apart-list">
+      {#each [...session.diverging] as [id, detail] (id)}
+        <li>{detail}</li>
+      {/each}
+    </ul>
+  {/if}
+
+  <iframe
+    bind:this={frame}
+    title="the same source laid out by the browser"
+    srcdoc={document_}
+    width={session.viewport.width + gutter}
+    onload={compare}
+  ></iframe>
+</div>
+
+<style>
+  .live {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .title {
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .verdict {
+    color: var(--ok);
+  }
+
+  .verdict.apart {
+    color: var(--accent);
+  }
+
+  .apart-list {
+    margin: 0;
+    padding: 7px 10px;
+    list-style: none;
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--accent);
+    max-height: 130px;
+    overflow: auto;
+  }
+
+  iframe {
+    border: none;
+    background: #fff;
+    flex: 1;
+    min-height: 240px;
+  }
+</style>

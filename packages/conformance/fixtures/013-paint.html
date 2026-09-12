@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>colours, visibility and opacity</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 360px;
+    color: #333;
+  }
+  div {
+    height: 24px;
+  }
+  .named {
+    background-color: teal;
+    color: white;
+  }
+  .short-hex {
+    background-color: #4a8;
+  }
+  .long-hex {
+    background-color: #1b3f5c;
+  }
+  .alpha-hex {
+    background-color: #1b3f5c80;
+  }
+  .commas {
+    background-color: rgb(200, 30, 90);
+  }
+  .spaces {
+    background-color: rgb(20 180 90);
+  }
+  .with-alpha {
+    background-color: rgba(20, 180, 90, 0.35);
+  }
+  .see-through {
+    opacity: 0.4;
+  }
+  .quarter {
+    opacity: 25%;
+  }
+  .gone {
+    visibility: hidden;
+  }
+  .inherits-colour {
+    color: inherit;
+  }
+  .clear {
+    background-color: transparent;
+  }
+</style>
+<div class="named">named</div>
+<div class="short-hex"></div>
+<div class="long-hex"></div>
+<div class="alpha-hex"></div>
+<div class="commas"></div>
+<div class="spaces"></div>
+<div class="with-alpha"></div>
+<div class="see-through">fading</div>
+<div class="quarter"></div>
+<div class="gone">hidden but still here</div>
+<div class="inherits-colour">inherits</div>
+<div class="clear"></div>
