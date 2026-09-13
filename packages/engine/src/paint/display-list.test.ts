@@ -47,6 +47,22 @@ describe('buildDisplayList', () => {
     expect(order('', [host]).painted).toEqual(['html', 'host', 'anon', 'block', '"loose"']);
   });
 
+  it('paints an inline-block with its own contents rather than with the blocks around it', () => {
+    const host = element('div', { classes: ['host'] }, [
+      element('div', { classes: ['shrunk'] }, [element('div', { classes: ['inner'] })]),
+      element('div', { classes: ['after'] }),
+    ]);
+
+    expect(order('.shrunk { display: inline-block }', [host]).painted).toEqual([
+      'html',
+      'host',
+      'anon',
+      'after',
+      'shrunk',
+      'inner',
+    ]);
+  });
+
   it('lifts a positioned box above its later siblings', () => {
     const lifted = element('div', { classes: ['lifted'] });
     const after = element('div', { classes: ['after'] });

@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>an inline box that wraps covers its lines, not the rectangle around them</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 240px;
+  }
+  p {
+    margin: 0 0 10px;
+  }
+  .padded {
+    display: inline;
+    padding: 3px 8px;
+    border: 2px solid;
+    background-color: #dce6f5;
+  }
+  .plain {
+    display: inline;
+    background-color: #f0e2c8;
+  }
+  .tail {
+    display: inline;
+    padding: 0 14px;
+    background-color: #d9ecd9;
+  }
+</style>
+
+<p>
+  one <span class="padded">a padded inline long enough to run past the end of the first line and
+  onto the next</span> two
+</p>
+
+<p>
+  <span class="plain">the first line of this one ends early</span> and the rest of the paragraph
+  follows it, so the gap on the right of the first line belongs to the paragraph
+</p>
+
+<p>short <span class="tail">and the last word wraps</span></p>

@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a formatting context root keeps its children's margins to itself</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 220px;
+  }
+  div {
+    margin: 0;
+  }
+  .plain .inner {
+    margin-top: 20px;
+  }
+  .shrunk {
+    display: inline-block;
+    background-color: #e6eefc;
+  }
+  .shrunk .inner {
+    width: 40px;
+    margin-top: 20px;
+  }
+  .lifted {
+    display: inline-block;
+    background-color: #fcefe6;
+  }
+  .lifted .inner {
+    width: 40px;
+    margin-top: -12px;
+  }
+  .clips {
+    overflow: hidden;
+    background-color: #eaf5ea;
+  }
+  .clips .inner {
+    margin-top: 20px;
+  }
+  .rule {
+    height: 4px;
+    background-color: #444;
+  }
+</style>
+
+<div class="plain">
+  <div class="inner rule"></div>
+</div>
+
+<div class="shrunk">
+  <div class="inner rule"></div>
+</div>
+
+<div class="lifted">
+  <div class="inner rule"></div>
+</div>
+
+<div class="clips">
+  <div class="inner rule"></div>
+</div>

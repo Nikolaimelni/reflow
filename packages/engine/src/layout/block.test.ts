@@ -123,6 +123,14 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).height).toBe(50);
   });
 
+  it('keeps a child margin inside an inline-block', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const holder = element('div', { classes: ['holder'] }, [inner]);
+    const css = '.holder { display: inline-block } .inner { margin-top: 20px; height: 10px }';
+
+    expect(page(css, [holder]).rectOf(inner).y).toBe(20);
+  });
+
   it('stops collapsing at a border', () => {
     const inner = element('div', { classes: ['inner'] });
     const outer = element('div', { classes: ['outer'] }, [inner]);

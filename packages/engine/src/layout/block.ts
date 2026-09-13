@@ -423,8 +423,14 @@ function describeWidth(style: ComputedStyle, specified: number | null, clamped: 
   return `width ${specified}px from the style`;
 }
 
+/** A root of its own formatting context keeps its children's margins to itself. */
 function establishesBfc(style: ComputedStyle): boolean {
-  return style.overflow !== 'visible' || style.display === 'flex';
+  return (
+    style.overflow !== 'visible' ||
+    style.display === 'flex' ||
+    style.display === 'inline-block' ||
+    style.position === 'absolute'
+  );
 }
 
 /** Nothing may sit between two margins for them to touch: no border, no padding. */

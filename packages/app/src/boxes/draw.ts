@@ -37,16 +37,7 @@ export function draw(context: CanvasRenderingContext2D, scene: Scene, view: View
     if (fragment !== undefined) drawBox(context, fragment);
   }
 
-  // Light enough that the box model underneath still reads, outlined so the spread is
-  // countable rather than one big smear.
-  for (const [id, ring] of scene.dirty) {
-    if (ring > scene.wave) continue;
-    const fragment = scene.frame.get(id);
-    if (fragment === undefined) continue;
-
-    fill(context, fragment.rect, PALETTE.dirty, 0.2);
-    outline(context, fragment.rect, PALETTE.dirty, 1 / view.scale);
-  }
+  drawDirty(context, scene, view);
 
   if (scene.selected !== null) {
     const fragment = scene.frame.get(scene.selected);
@@ -64,6 +55,34 @@ export function draw(context: CanvasRenderingContext2D, scene: Scene, view: View
       outline(context, fragment.rect, PALETTE.highlight, 1.5 / view.scale);
       label(context, fragment.rect, scene.labels.get(scene.highlight) ?? '', view.scale);
     }
+  }
+}
+
+/**
+ * The dirty set nests: html holds body holds everything the change touched. One wash per box
+ * stacks fourteen of them into an opaque smear, so the wash goes on as a single union fill and
+ * the ripple outwards is left to the outlines, a shade fainter each ring.
+ */
+function drawDirty(context: CanvasRenderingContext2D, scene: Scene, view: View): void {
+  const revealed = [...scene.dirty]
+    .filter(([, ring]) => ring <= scene.wave)
+    .flatMap(([id, ring]) => {
+      const fragment = scene.frame.get(id);
+      return fragment === undefined ? [] : [{ rect: fragment.rect, ring }];
+    });
+
+  if (revealed.length === 0) return;
+
+  const union = new Path2D();
+  for (const { rect } of revealed) union.rect(rect.x, rect.y, rect.width, rect.height);
+
+  context.globalAlpha = 0.2;
+  context.fillStyle = PALETTE.dirty;
+  context.fill(union);
+  context.globalAlpha = 1;
+
+  for (const { rect, ring } of revealed) {
+    outline(context, rect, PALETTE.dirty, 1.5 / view.scale, Math.max(0.35, 1 - ring * 0.15));
   }
 }
 
@@ -96,8 +115,9 @@ function drawGrid(context: CanvasRenderingContext2D, scene: Scene, view: View): 
 }
 
 /**
- * Outside in: margin, border, padding, content. Each one is filled faintly so the nesting
- * reads as depth rather than as four separate rectangles.
+ * Outside in: margin, border, padding, content. Each of the first three is drawn as a band
+ * rather than a filled rectangle, because filling them stacks four alphas on top of each
+ * other and every box comes out the same olive colour.
  */
 function drawBox(context: CanvasRenderingContext2D, fragment: Fragment): void {
   const border = fragment.rect;
@@ -105,10 +125,30 @@ function drawBox(context: CanvasRenderingContext2D, fragment: Fragment): void {
   const padding = shrink(border, fragment.border);
   const content = shrink(padding, fragment.padding);
 
-  fill(context, margin, PALETTE.margin, 0.1);
-  fill(context, border, PALETTE.border, 0.22);
-  fill(context, padding, PALETTE.padding, 0.22);
-  fill(context, content, PALETTE.content, 0.3);
+  band(context, margin, border, PALETTE.margin, 0.28);
+  band(context, border, padding, PALETTE.border, 0.5);
+  band(context, padding, content, PALETTE.padding, 0.42);
+  fill(context, content, PALETTE.content, 0.32);
+}
+
+/** The area between two rectangles, punched out with an even-odd fill. */
+function band(
+  context: CanvasRenderingContext2D,
+  outer: Rect,
+  inner: Rect,
+  colour: string,
+  alpha: number,
+): void {
+  if (outer.width <= 0 || outer.height <= 0) return;
+  if (outer.width === inner.width && outer.height === inner.height) return;
+
+  context.globalAlpha = alpha;
+  context.fillStyle = colour;
+  context.beginPath();
+  context.rect(outer.x, outer.y, outer.width, outer.height);
+  context.rect(inner.x, inner.y, inner.width, inner.height);
+  context.fill('evenodd');
+  context.globalAlpha = 1;
 }
 
 function fill(context: CanvasRenderingContext2D, rect: Rect, colour: string, alpha: number): void {
@@ -124,10 +164,13 @@ function outline(
   rect: Rect,
   colour: string,
   width: number,
+  alpha = 1,
 ): void {
+  context.globalAlpha = alpha;
   context.strokeStyle = colour;
   context.lineWidth = width;
   context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  context.globalAlpha = 1;
 }
 
 function label(context: CanvasRenderingContext2D, rect: Rect, text: string, scale: number): void {

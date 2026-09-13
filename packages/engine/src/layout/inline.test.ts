@@ -143,6 +143,17 @@ describe('inline boxes', () => {
     expect(rect.y).toBe(0);
   });
 
+  it('does not pad the union of a span that wraps', () => {
+    const span = element('span', { classes: ['padded'] }, [text('one two three')]);
+    const p = element('p', {}, [text('start '), span]);
+    const css = 'p { margin: 0 } .padded { padding: 0 9px }';
+    const rect = page(css, [p], 80).rectOf(span);
+
+    // The padding is at the start of the first line and the end of the last, so it cannot
+    // reach the left edge, where the second line begins without it.
+    expect(rect.x).toBe(0);
+  });
+
   it('lays an inline-block out as a block and sits it on the baseline', () => {
     const inner = element('div', { classes: ['inner'] });
     const box = element('span', { classes: ['ib'] }, [inner]);

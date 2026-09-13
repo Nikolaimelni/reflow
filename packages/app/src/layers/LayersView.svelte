@@ -7,6 +7,9 @@
   /** Distance between planes, in the same pixels the page is measured in. */
   const GAP = 90;
 
+  /** Room for the label chip hanging off the top left corner of each plane. */
+  const LABEL = 26;
+
   /**
    * A thousand planes of CSS 3D will put the compositor on the floor, so the view stops and
    * says so rather than quietly getting slower.
@@ -47,14 +50,6 @@
 
     const root = session.result.layout.fragments.get(session.result.boxTree.id);
     return { width: session.viewport.width, height: Math.max(120, root?.rect.height ?? 0) };
-  });
-
-  /** Enough room for the tilted stack of planes, with a margin so nothing clips. */
-  const scale = $derived.by(() => {
-    if (width === 0) return 1;
-    const across = width / (page.width * 1.5);
-    const down = height / (page.height * 0.9 + 260);
-    return Math.max(0.12, Math.min(1, across, down));
   });
 
   const built = $derived.by(() => {
@@ -102,6 +97,42 @@
       shown,
       total: result.display.items.length,
     };
+  });
+
+  /**
+   * The stack is rotated before it is scaled, so fitting it to the stage means projecting its
+   * corners first. A fudge factor on the page width was wrong at every angle except the one I
+   * happened to be looking at. Perspective is left out: it can only magnify by the depth over
+   * the perspective distance, which the margin below covers.
+   */
+  const footprint = $derived.by(() => {
+    const half = { x: page.width / 2 + LABEL, y: page.height / 2 + LABEL };
+    const far = ((built.planes.length - 1) * GAP) / 2;
+    const p = (pitch * Math.PI) / 180;
+    const s = (spin * Math.PI) / 180;
+
+    let across = 0;
+    let down = 0;
+
+    for (const x of [-half.x, half.x]) {
+      for (const y of [-half.y, half.y]) {
+        for (const z of [-far, far]) {
+          across = Math.max(across, Math.abs(x * Math.cos(s) - y * Math.sin(s)));
+          const turned = x * Math.sin(s) + y * Math.cos(s);
+          down = Math.max(down, Math.abs(turned * Math.cos(p) + z * Math.sin(p)));
+        }
+      }
+    }
+
+    return { across: across * 2, down: down * 2 };
+  });
+
+  const scale = $derived.by(() => {
+    if (width === 0 || footprint.across === 0) return 1;
+    const margin = 28;
+    const across = (width - margin) / footprint.across;
+    const down = (height - margin) / footprint.down;
+    return Math.max(0.1, Math.min(1.6, across, down));
   });
 
   $effect(() => {
@@ -157,7 +188,7 @@
     >
       {#each built.planes as plane (plane.context)}
         <div class="plane" style:transform={flat ? 'none' : `translateZ(${plane.depth * GAP}px)`}>
-          <span class="plane-label">
+          <span class="plane-label" style:left={flat ? '0' : `${plane.depth * 18}px`}>
             {plane.label}
             {plane.zIndex === 'auto' ? '' : `z-index ${plane.zIndex}`}
           </span>
@@ -185,6 +216,7 @@
 <style>
   .layers {
     display: flex;
+    flex: 1;
     flex-direction: column;
     min-height: 0;
     border: 1px solid var(--rule);
@@ -213,6 +245,7 @@
   }
 
   .stage {
+    position: relative;
     flex: 1;
     min-height: 420px;
     overflow: hidden;
@@ -269,12 +302,15 @@
 
   .plane-label {
     position: absolute;
-    top: -17px;
+    top: -19px;
     left: 0;
+    padding: 1px 5px;
+    background: rgb(255 255 255 / 0.9);
+    outline: 1px solid var(--rule);
     white-space: nowrap;
     font-family: var(--mono);
     font-size: 10px;
-    color: var(--ink-3);
+    color: var(--ink-2);
   }
 
   .box {

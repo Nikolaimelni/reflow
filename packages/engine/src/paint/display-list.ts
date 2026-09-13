@@ -34,9 +34,10 @@ type Entry = { box: Box; clip: BoxId | null };
 
 type Bucket = {
   negative: (Entry & { z: number })[];
-  /** `own` marks a box that paints in the block step but as one unit of its own. */
+  /** `own` marks a box that paints in its step as one unit rather than handing its
+   * descendants to the buckets around it. */
   blocks: (Entry & { own: boolean })[];
-  inlines: Entry[];
+  inlines: (Entry & { own: boolean })[];
   /** Positioned, but with no z-index of its own, so it paints on top of the plain content. */
   level: Entry[];
   positive: (Entry & { z: number })[];
@@ -90,7 +91,8 @@ function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxI
     else push(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of bucket.inlines) {
-    push(entry.box, state, context, depth, entry.clip);
+    if (entry.own) descend(entry.box, state, context, depth, entry.clip);
+    else push(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of bucket.level) {
     descend(entry.box, state, context, depth, entry.clip);
@@ -134,7 +136,7 @@ function descend(box: Box, state: State, context: BoxId, depth: number, clip: Bo
 function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
   for (const child of children) {
     if (child.kind === 'text') {
-      bucket.inlines.push({ box: child, clip });
+      bucket.inlines.push({ box: child, own: false, clip });
       continue;
     }
 
@@ -159,7 +161,12 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
     }
 
     if (child.kind === 'inline') {
-      bucket.inlines.push({ box: child, clip });
+      // An atomic inline paints as one piece at the inline step. Handing its blocks to the
+      // bucket above would paint them before it, which is to say underneath its own
+      // background, and a pointer over them would find the atomic instead.
+      const atomic = child.style.display !== 'inline';
+      bucket.inlines.push({ box: child, own: atomic, clip });
+      if (atomic) continue;
     } else {
       bucket.blocks.push({ box: child, own: false, clip });
     }

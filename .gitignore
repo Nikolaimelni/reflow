@@ -11,13 +11,9 @@ CLAUDE.local.md
 .mcp.json
 AGENTS.md
 report/
-
-# What the generator turned up on the last run. A case worth keeping gets a name and a
-# note, and is committed; these are working files.
-fixtures/found/gen-*
 test-results/
 playwright-report/
 
 # What the generator turned up on the last run. A case worth keeping gets a name and a
 # note, and is committed; these are working files.
-fixtures/found/gen-*
+**/fixtures/found/gen-*

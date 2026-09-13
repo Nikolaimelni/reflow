@@ -69,6 +69,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   let y = input.contentTop;
   let lastBaseline: number | null = null;
   const extents = new Map<BoxId, Extent>();
+  const perLine = new Map<BoxId, Extent[]>();
 
   lines.forEach((line, index) => {
     input.trace.push({
@@ -80,6 +81,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 
     const offset = alignmentOffset(input.containerStyle, input.available, line.width);
     lastBaseline = y + line.baseline - input.contentTop;
+    const onThisLine = new Map<BoxId, Extent>();
 
     for (const placed of line.items) {
       const piece = placed.piece;
@@ -106,7 +108,16 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         grow(extents, piece.box, rect);
       }
 
-      for (const ancestor of piece.ancestors) grow(extents, ancestor, rect);
+      for (const ancestor of piece.ancestors) {
+        grow(extents, ancestor, rect);
+        grow(onThisLine, ancestor, rect);
+      }
+    }
+
+    for (const [box, extent] of onThisLine) {
+      const seen = perLine.get(box);
+      if (seen === undefined) perLine.set(box, [extent]);
+      else seen.push(extent);
     }
 
     y += line.height;
@@ -114,13 +125,26 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 
   for (const [box, extent] of extents) {
     const surround = surrounds.get(box);
-    const fragment = toFragment(box, extent, surround);
+    const onLines = perLine.get(box);
+
+    // An inline box that wraps is its lines, not the rectangle around them. Its own padding
+    // sits at the start of the first line and the end of the last, so growing the union by it
+    // puts the box's left edge somewhere it never reaches, and a pointer in the gap beside a
+    // short line finds the inline when it is over the block.
+    const rects =
+      surround === undefined || onLines === undefined
+        ? [toRect(extent)]
+        : onLines.map((line, index) =>
+            padded(line, surround, index === 0, index === onLines.length - 1),
+          );
+
+    const fragment = toFragment(box, union(rects), surround);
 
     input.fragments.set(box, fragment);
 
-    // The padding of an inline box is part of it as far as a pointer is concerned, so the
-    // whole border box joins the pieces the hit test walks.
-    if (surround !== undefined) record(input.pieces, box, fragment.rect);
+    if (surround !== undefined) {
+      for (const rect of rects) record(input.pieces, box, rect);
+    }
 
     input.trace.push({
       t: 'size:resolved',
@@ -136,40 +160,51 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   return { height: y - input.contentTop, lastBaseline };
 }
 
-/**
- * Padding and border on an inline box grow its border box without touching the line height,
- * which is why a padded `<span>` spills over the text above and below it.
- */
-function toFragment(box: BoxId, extent: Extent, surround: Surround | undefined): Fragment {
-  if (surround === undefined) {
-    return {
-      box,
-      rect: {
-        x: extent.left,
-        y: extent.top,
-        width: extent.right - extent.left,
-        height: extent.bottom - extent.top,
-      },
-      margin: zeroEdges,
-      border: zeroEdges,
-      padding: zeroEdges,
-    };
-  }
-
-  const { border, padding } = surround;
-
+function toFragment(box: BoxId, rect: Rect, surround: Surround | undefined): Fragment {
   return {
     box,
-    rect: {
-      x: extent.left - border.left - padding.left,
-      y: extent.top - border.top - padding.top,
-      width: extent.right - extent.left + border.left + padding.left + border.right + padding.right,
-      height:
-        extent.bottom - extent.top + border.top + padding.top + border.bottom + padding.bottom,
-    },
-    margin: surround.margin,
-    border,
-    padding,
+    rect,
+    margin: surround?.margin ?? zeroEdges,
+    border: surround?.border ?? zeroEdges,
+    padding: surround?.padding ?? zeroEdges,
+  };
+}
+
+function toRect(extent: Extent): Rect {
+  return {
+    x: extent.left,
+    y: extent.top,
+    width: extent.right - extent.left,
+    height: extent.bottom - extent.top,
+  };
+}
+
+function union(rects: readonly Rect[]): Rect {
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Padding and border on an inline box grow it without touching the line height, which is why a
+ * padded `<span>` spills over the text above and below it. Vertically that happens on every
+ * line, horizontally only where the box starts and ends.
+ */
+function padded(extent: Extent, surround: Surround, first: boolean, last: boolean): Rect {
+  const { border, padding } = surround;
+  const left = first ? border.left + padding.left : 0;
+  const right = last ? border.right + padding.right : 0;
+  const top = border.top + padding.top;
+  const bottom = border.bottom + padding.bottom;
+
+  return {
+    x: extent.left - left,
+    y: extent.top - top,
+    width: extent.right - extent.left + left + right,
+    height: extent.bottom - extent.top + top + bottom,
   };
 }
 
@@ -379,7 +414,6 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   let pending: Piece | null = null;
   /** An inline box's own edges do not count: a space after one is still a leading space. */
   let content = false;
-
   const flush = (force = false) => {
     if (current.length === 0 && !force) return;
     lines.push({ items: current, width, ...verticalMetrics(current, input, force) });
