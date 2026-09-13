@@ -7,7 +7,14 @@ import {
   propertyNames,
 } from '../cascade/properties.js';
 import type { DomNode, ElementNode } from '../dom/node.js';
-import { type BlockBox, type Box, type IdSource, idSource, isBlock } from './box.js';
+import {
+  type BlockBox,
+  type Box,
+  type IdSource,
+  idSource,
+  isBlock,
+  isCollapsibleWhitespace,
+} from './box.js';
 
 export function buildBoxTree(root: ElementNode, styles: StyleMap): BlockBox | null {
   const ids = idSource();
@@ -84,7 +91,7 @@ function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): 
   let run: Box[] = [];
 
   const flush = () => {
-    if (run.length > 0 && !run.every(isWhitespace)) {
+    if (run.length > 0 && !run.every(isCollapsibleWhitespace)) {
       items.push({
         kind: 'block',
         id: ids(),
@@ -161,7 +168,7 @@ function organise(children: Box[], parentStyle: ComputedStyle, ids: IdSource): B
   let run: Box[] = [];
 
   const flush = () => {
-    if (run.length > 0 && !run.every(isWhitespace)) {
+    if (run.length > 0 && !run.every(isCollapsibleWhitespace)) {
       organised.push({
         kind: 'block',
         id: ids(),
@@ -184,11 +191,6 @@ function organise(children: Box[], parentStyle: ComputedStyle, ids: IdSource): B
 
   flush();
   return organised;
-}
-
-/** Under `pre` a run of whitespace is content, and it gets an anonymous box like any other. */
-function isWhitespace(box: Box): boolean {
-  return box.kind === 'text' && box.text.trim() === '' && box.style.whiteSpace !== 'pre';
 }
 
 /** An anonymous box inherits what is inheritable and takes the initial value for the rest. */

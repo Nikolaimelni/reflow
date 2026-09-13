@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>an inline box's own edges take room on the line</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  div,
+  p {
+    margin: 0;
+  }
+  .wide {
+    display: inline;
+    margin: 46px;
+    background-color: #dce6f5;
+  }
+  .padded {
+    display: inline;
+    padding-right: 40px;
+    border-right: 6px solid;
+    background-color: #f5e6dc;
+  }
+  .crossing {
+    display: inline;
+    background-color: #f0e2f0;
+  }
+  .after {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    background-color: #444;
+  }
+  .held {
+    display: inline;
+    padding-right: 30px;
+    white-space: nowrap;
+    background-color: #e6f0e6;
+  }
+</style>
+
+<div class="wide">
+  one one one
+</div>
+
+<p>start <span class="padded">and the closing padding has to fit </span>after</p>
+
+<p>start <span class="held">a run that will not break </span>after</p>
+
+<div class="crossing">
+  one
+</div>
+<div class="after"></div>

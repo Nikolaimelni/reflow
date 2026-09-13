@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type Box, type BoxId, walkBoxes } from '../boxtree/box.js';
 import { buildBoxTree } from '../boxtree/build.js';
 import { computeStyles } from '../cascade/cascade.js';
-import { type DomNode, type ElementNode, element } from '../dom/node.js';
+import { type DomNode, type ElementNode, element, text } from '../dom/node.js';
 import { type Fragment, frameAt, replay } from '../trace/events.js';
 import { layoutDocument, type Viewport } from './block.js';
 import { fixedAdvanceMeasurer } from './text.js';
@@ -121,6 +121,17 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).y).toBe(30);
     expect(rectOf(inner).y).toBe(30);
     expect(rectOf(outer).height).toBe(50);
+  });
+
+  it('keeps a preserved whitespace box between two blocks', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const outer = element('div', { classes: ['kept'] }, [text('\n  '), inner, text('\n')]);
+    const css = '.kept { white-space: pre } .inner { height: 10px }';
+    const { rectOf } = page(css, [outer]);
+
+    // Two lines above it and one below, at the stub measurer's sixteen pixels a line.
+    expect(rectOf(inner).y).toBe(32);
+    expect(rectOf(outer).height).toBe(58);
   });
 
   it('keeps a child margin inside an inline-block', () => {

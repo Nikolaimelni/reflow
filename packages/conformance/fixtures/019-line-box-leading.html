@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>the leading in a line box, and who sets the ascent</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  p {
+    margin: 0;
+    border-bottom: 1px solid;
+  }
+  .tall,
+  .short {
+    display: inline-block;
+    width: 10px;
+    background-color: #dce6f5;
+  }
+  .tall {
+    height: 24px;
+  }
+  .short {
+    height: 8px;
+  }
+  .fit {
+    display: inline-block;
+    padding: 4%;
+  }
+  .sunk {
+    display: inline-block;
+    width: 18px;
+    height: 12px;
+    margin-bottom: 9px;
+    background-color: #f5e6dc;
+  }
+</style>
+
+<p><span class="tall"></span>x</p>
+<p><span class="short"></span>x</p>
+<p style="line-height: 17px"><span class="tall"></span>x</p>
+<p style="line-height: 17px"><span class="short"></span>x</p>
+<p style="line-height: 19px"><span class="tall"></span>x</p>
+<p style="line-height: 19px"><span class="short"></span>x</p>
+<p style="line-height: 20.8px"><span class="tall"></span>x</p>
+<p style="line-height: 24px"><span class="tall"></span>x</p>
+<p style="line-height: 24px"><span class="short"></span>x</p>
+
+<p>before <span class="fit"></span> after an empty inline block</p>
+<p>before <span class="sunk"></span> after one with a bottom margin</p>

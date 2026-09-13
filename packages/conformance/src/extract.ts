@@ -21,7 +21,7 @@ export type ExtractedNode = ExtractedElement | ExtractedText;
 
 export type ExtractedPage = {
   css: string;
-  viewport: { width: number; height: number };
+  viewport: { width: number; height: number; devicePixelRatio: number };
   nodes: ExtractedNode[];
 };
 
@@ -78,7 +78,11 @@ export function extractPage(propertyNames: string[]): ExtractedPage {
 
   return {
     css,
-    viewport: { width: document.documentElement.clientWidth, height: window.innerHeight },
+    viewport: {
+      width: document.documentElement.clientWidth,
+      height: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio,
+    },
     nodes,
   };
 }

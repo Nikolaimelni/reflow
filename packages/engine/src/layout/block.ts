@@ -1,4 +1,11 @@
-import { type BlockBox, type Box, type BoxId, type InlineBox, isBlock } from '../boxtree/box.js';
+import {
+  type BlockBox,
+  type Box,
+  type BoxId,
+  type InlineBox,
+  isBlock,
+  isCollapsibleWhitespace,
+} from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
@@ -25,7 +32,12 @@ import {
   usedSize,
 } from './used.js';
 
-export type Viewport = { width: number; height: number };
+export type Viewport = {
+  width: number;
+  height: number;
+  /** The screen the layout is for. Blink snaps parts of a line box to it, so the engine does. */
+  devicePixelRatio?: number;
+};
 
 export type LayoutResult = {
   fragments: Map<BoxId, Fragment>;
@@ -46,6 +58,7 @@ type Context = {
   pieces: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   measurer: TextMeasurer;
+  devicePixelRatio: number;
   /** The initial containing block, which is what an absolute box falls back to. */
   icb: Rect;
 };
@@ -100,6 +113,7 @@ export function layoutDocument(
     trace: [],
     measurer,
     icb,
+    devicePixelRatio: viewport.devicePixelRatio ?? 1,
   };
   const containing: ContainingBlock = { x: 0, width: viewport.width, height: viewport.height };
 
@@ -262,6 +276,7 @@ function layoutChildren(
       contentTop,
       available: containing.width,
       measurer: context.measurer,
+      devicePixelRatio: context.devicePixelRatio,
       fragments: context.fragments,
       pieces: context.pieces,
       trace: context.trace,
@@ -515,12 +530,8 @@ function collapsesThrough(box: BlockBox, containingWidth: number): boolean {
 
 function inFlowChildren(box: BlockBox): Box[] {
   return box.children.filter(
-    (child) => !isWhitespaceText(child) && child.style.position !== 'absolute',
+    (child) => !isCollapsibleWhitespace(child) && child.style.position !== 'absolute',
   );
-}
-
-function isWhitespaceText(box: Box): boolean {
-  return box.kind === 'text' && box.text.trim() === '';
 }
 
 /**

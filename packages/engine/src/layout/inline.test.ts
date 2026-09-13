@@ -143,6 +143,51 @@ describe('inline boxes', () => {
     expect(rect.y).toBe(0);
   });
 
+  it('breaks so that the closing margin fits on the line', () => {
+    const span = element('span', { classes: ['wide'] }, [text(' one one one ')]);
+    const p = element('p', {}, [span]);
+    const css = 'p { margin: 0 } .wide { margin: 0 50px }';
+    const { rectOf, lines } = page(css, [p], 180);
+
+    // 50 + "one one" + 50 is 156, and the third word would take it past 180.
+    expect(lines).toHaveLength(2);
+    expect(rectOf(span)).toMatchObject({ x: 0, width: 106 });
+  });
+
+  it('keeps the first space of a run that crosses a box boundary', () => {
+    const span = element('span', { classes: ['crossing'] }, [text('ab ')]);
+    const p = element('p', {}, [span, text(' cd')]);
+
+    // One space between them, and it belongs to the span, so the span is wide enough for it.
+    expect(page('p { margin: 0 }', [p]).rectOf(span)).toMatchObject({ x: 0, width: 24 });
+  });
+
+  it('settles a nowrap space inside the box, in front of its padding', () => {
+    const span = element('span', { classes: ['held'] }, [text('ab ')]);
+    const p = element('p', {}, [text('x '), span, text('cd')]);
+    const css = 'p { margin: 0 } .held { padding-right: 30px; white-space: nowrap }';
+
+    expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 16, width: 54 });
+  });
+
+  it('covers a line it puts nothing on', () => {
+    const span = element('span', { classes: ['kept'] }, [text('\n  one\n')]);
+    const p = element('p', {}, [span]);
+    const css = 'p { margin: 0 } .kept { border: 1px solid; white-space: pre }';
+    const rect = page(css, [p]).rectOf(span);
+
+    // Three lines of sixteen, plus a border above the first and below the last.
+    expect({ y: rect.y, height: rect.height }).toEqual({ y: -1, height: 50 });
+  });
+
+  it('leaves a space in front of an inline box outside it', () => {
+    const span = element('span', { classes: ['marked'] });
+    const p = element('p', {}, [text('before '), span, text('after')]);
+
+    // "before" is 48 wide under the stub measurer and the space is 8.
+    expect(page('p { margin: 0 }', [p]).rectOf(span).x).toBe(56);
+  });
+
   it('does not pad the union of a span that wraps', () => {
     const span = element('span', { classes: ['padded'] }, [text('one two three')]);
     const p = element('p', {}, [text('start '), span]);
@@ -152,6 +197,18 @@ describe('inline boxes', () => {
     // The padding is at the start of the first line and the end of the last, so it cannot
     // reach the left edge, where the second line begins without it.
     expect(rect.x).toBe(0);
+  });
+
+  it('floors the half leading and lets the descent take the rest', () => {
+    const box = element('span', { classes: ['tall'] });
+    const p = element('p', {}, [box, text('x')]);
+    const css = 'p { margin: 0 } .tall { display: inline-block; width: 10px; height: 24px }';
+
+    // The stub font is 12.8 up and 3.2 down in a 16px line, so there is no leading to split
+    // and the box adds its 24 to the 3.2 below the baseline. At line-height 19 the half
+    // leading is 1.5, floored to 1, and the descent keeps the other half pixel: 24 + 5.2.
+    expect(page(css, [p]).rectOf(p).height).toBe(27.2);
+    expect(page(`${css} p { line-height: 19px }`, [p]).rectOf(p).height).toBe(29.2);
   });
 
   it('lays an inline-block out as a block and sits it on the baseline', () => {

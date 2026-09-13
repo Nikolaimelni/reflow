@@ -49,7 +49,7 @@ export function run(html: string, css: string, viewport: Viewport, devicePixelRa
     const boxTree = buildBoxTree(root, computeStyles(root, css, devicePixelRatio));
     if (boxTree === null) return { status: 'empty' };
 
-    const layout = layoutDocument(boxTree, viewport, measurer);
+    const layout = layoutDocument(boxTree, { ...viewport, devicePixelRatio }, measurer);
     const display = buildDisplayList(boxTree);
 
     const labels = new Map<BoxId, string>();

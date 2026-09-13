@@ -3,7 +3,14 @@ import type { ComputedStyle } from '../cascade/properties.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { relativeOffset } from './position.js';
-import { fontOf, segmentText, type TextMeasurer, usedLineHeight, wraps } from './text.js';
+import {
+  type FontMetrics,
+  fontOf,
+  segmentText,
+  type TextMeasurer,
+  usedLineHeight,
+  wraps,
+} from './text.js';
 import { usedBorderWidths, usedMargin, usedPadding } from './used.js';
 
 export type AtomicSize = {
@@ -26,6 +33,7 @@ export type InlineInput = {
   contentTop: number;
   available: number;
   measurer: TextMeasurer;
+  devicePixelRatio: number;
   fragments: Map<BoxId, Fragment>;
   /** One rect per line a box appears on, which is what a pointer is tested against. */
   pieces: Map<BoxId, Rect[]>;
@@ -85,10 +93,30 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 
     for (const placed of line.items) {
       const piece = placed.piece;
-      if (isEdge(piece.kind)) continue;
-
       const metrics = input.measurer.metrics(fontOf(piece.style));
       const above = piece.kind === 'atomic' ? baselineOf(piece) : metrics.ascent;
+
+      // An inline box reaches a line it puts nothing on. `pre` text that starts with a
+      // newline leaves the opening edge alone above the first word, and the box has to cover
+      // that line. A zero height line is the exception: an empty `<span>` sits on one, and
+      // the browser gives it no rectangle at all rather than one the height of the font.
+      if (isEdge(piece.kind)) {
+        if (line.height === 0) continue;
+
+        const at = input.contentX + offset + placed.x + piece.offset.dx;
+        const rect = {
+          x: piece.kind === 'edge-start' ? at + piece.width : at,
+          y: y + line.baseline - metrics.ascent + piece.offset.dy,
+          width: 0,
+          height: metrics.ascent + metrics.descent,
+        };
+
+        for (const ancestor of piece.ancestors) {
+          grow(extents, ancestor, rect);
+          grow(onThisLine, ancestor, rect);
+        }
+        continue;
+      }
 
       const rect = {
         x: input.contentX + offset + placed.x + piece.offset.dx,
@@ -97,7 +125,10 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         height: piece.height,
       };
 
-      record(input.pieces, piece.box, rect);
+      // An atomic inline takes its room in the line as a margin box, which is the rect the
+      // boxes around it are built from. Its own fragment is the border box, and that is what
+      // a pointer has to land on, so it does not record a piece of its own.
+      if (piece.source === null) record(input.pieces, piece.box, rect);
       for (const ancestor of piece.ancestors) record(input.pieces, ancestor, rect);
 
       if (piece.source !== null) {
@@ -206,6 +237,18 @@ function padded(extent: Extent, surround: Surround, first: boolean, last: boolea
     width: extent.right - extent.left + left + right,
     height: extent.bottom - extent.top + top + bottom,
   };
+}
+
+/**
+ * Half the leading goes above the text and half below, except that Blink floors the top half
+ * to a whole device pixel and lets the bottom half take what is left. On a line of plain text
+ * the two halves add back up to the line height and nothing shows. It shows the moment
+ * something else sets the ascent, such as an inline-block sitting on its bottom margin edge,
+ * and then the line is half a pixel taller than even division makes it.
+ */
+function halfLeading(lineHeight: number, metrics: FontMetrics, ratio: number): number {
+  const leading = (lineHeight - (metrics.ascent + metrics.descent)) / 2;
+  return Math.floor(leading * ratio) / ratio;
 }
 
 function isEdge(kind: PieceKind): boolean {
@@ -339,7 +382,8 @@ type Chunk = { pieces: Piece[]; width: number; content: boolean };
 type Entry =
   | { kind: 'chunk'; chunk: Chunk }
   /** A space that collapses. Whether it may also break depends on its own white-space. */
-  | { kind: 'space'; space: Piece }
+  /** `inside` marks a space that an inline box closes over, so it belongs within that box. */
+  | { kind: 'space'; space: Piece; inside: boolean }
   | { kind: 'newline' };
 
 /**
@@ -355,6 +399,8 @@ function intoEntries(items: readonly Item[]): Entry[] {
   let content = false;
   /** A collapsible space inside a chunk: it survives only if more content follows it. */
   let held: Piece | null = null;
+  /** Where that space belongs, which is in front of any closing edge that came after it. */
+  let heldAt = 0;
 
   const close = () => {
     held = null;
@@ -367,9 +413,11 @@ function intoEntries(items: readonly Item[]): Entry[] {
 
   const add = (piece: Piece) => {
     // An inline box's own edge does not settle a space that is hanging behind it, or the
-    // trailing space of a `nowrap` run would survive to the end of the line.
+    // trailing space of a `nowrap` run would survive to the end of the line. When something
+    // else does settle it, it goes back to where it was: inside the box, in front of the
+    // closing padding rather than beyond it.
     if (held !== null && !isEdge(piece.kind)) {
-      pieces.push(held);
+      pieces.splice(heldAt, 0, held);
       width += held.width;
       held = null;
     }
@@ -378,28 +426,46 @@ function intoEntries(items: readonly Item[]): Entry[] {
     if (!isEdge(piece.kind)) content = true;
   };
 
-  for (const item of items) {
+  items.forEach((item) => {
     if (item.kind === 'newline') {
       close();
       entries.push({ kind: 'newline' });
-      continue;
+      return;
     }
 
     if (item.kind === 'space' && wraps(item.style.whiteSpace)) {
       close();
-      entries.push({ kind: 'space', space: item });
-      continue;
+      entries.push({ kind: 'space', space: item, inside: false });
+      return;
+    }
+
+    // The closing edge of an inline box belongs to the content in front of it, even when a
+    // space has already ended that chunk: the space hangs over the end of the line and the
+    // margin and border do not, so their width has to fit beside the last word.
+    if (item.kind === 'edge-end' && pieces.length === 0 && held === null) {
+      const space = entries.at(-1);
+      const previous = entries.at(-2);
+
+      if (space?.kind === 'space' && previous?.kind === 'chunk') {
+        previous.chunk.pieces.push(item);
+        previous.chunk.width += item.width;
+        space.inside = true;
+        return;
+      }
     }
 
     if (item.kind === 'space' && item.style.whiteSpace === 'nowrap') {
       // Collapses like any other space, but it is not a place the line may break, so it
       // stays inside the chunk rather than ending it.
-      if (content) held = item;
-      continue;
+      if (content) {
+        held = item;
+        heldAt = pieces.length;
+      }
+      return;
     }
 
     add(item);
-  }
+  });
 
   close();
   return entries;
@@ -411,7 +477,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
 
   let current: Placed[] = [];
   let width = 0;
-  let pending: Piece | null = null;
+  let pending: { piece: Piece; inside: boolean } | null = null;
   /** An inline box's own edges do not count: a space after one is still a leading space. */
   let content = false;
   const flush = (force = false) => {
@@ -422,8 +488,33 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     content = false;
   };
 
+  /**
+   * A collapsible space only hangs when the line ends on it. When something follows, it is
+   * drawn where it belongs, and for a space an inline box closes over that is inside the box,
+   * in front of the closing edge already laid down beside the word before it.
+   */
+  const settle = (space: Piece, inside: boolean) => {
+    let at = current.length;
+    if (inside) while (at > 0 && isEdge(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
+
+    current.splice(at, 0, { piece: space, x: current[at]?.x ?? width });
+    for (let i = at + 1; i < current.length; i++) {
+      const placed = current[i];
+      if (placed !== undefined) placed.x += space.width;
+    }
+    width += space.width;
+  };
+
   const place = (chunk: Chunk) => {
     for (const piece of chunk.pieces) {
+      // A space in front of an inline box is outside it, so it goes down first and the box
+      // starts after it. A space in front of a closing edge is inside the box and stays
+      // hanging, which is what keeps `<em> one </em>` from measuring wider than its word.
+      if (piece.kind === 'edge-start' && pending !== null) {
+        settle(pending.piece, false);
+        pending = null;
+      }
+
       current.push({ piece, x: width });
       width += piece.width;
     }
@@ -438,8 +529,10 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     if (entry.kind === 'space') {
-      // A space at the start of a line disappears, and a run of them counts once.
-      if (content) pending = entry.space;
+      // A space at the start of a line disappears, and a run of them counts once: the first
+      // one, which matters when the run crosses an element boundary, because that is the box
+      // the space is drawn inside.
+      if (content && pending === null) pending = { piece: entry.space, inside: entry.inside };
       continue;
     }
 
@@ -451,8 +544,8 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
       continue;
     }
 
-    const gap = pending?.width ?? 0;
-    const breakable = pending !== null && wraps(pending.style.whiteSpace);
+    const gap = pending?.piece.width ?? 0;
+    const breakable = pending !== null && wraps(pending.piece.style.whiteSpace);
 
     if (content && breakable && width + gap + entry.chunk.width > input.available) {
       // The pending space is dropped with the break, which is why a wrapped line does not
@@ -464,8 +557,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     if (pending !== null) {
-      current.push({ piece: pending, x: width });
-      width += gap;
+      settle(pending.piece, pending.inside);
       pending = null;
     }
 
@@ -473,8 +565,8 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   }
 
   if (preserve && pending !== null) {
-    current.push({ piece: pending, x: width });
-    width += pending.width;
+    current.push({ piece: pending.piece, x: width });
+    width += pending.piece.width;
   }
 
   flush();
@@ -508,7 +600,7 @@ function verticalMetrics(
 
   const strut = input.measurer.metrics(fontOf(input.containerStyle));
   const strutHeight = usedLineHeight(input.containerStyle, strut);
-  const strutLeading = (strutHeight - (strut.ascent + strut.descent)) / 2;
+  const strutLeading = halfLeading(strutHeight, strut, input.devicePixelRatio);
 
   let above = strutLeading + strut.ascent;
   let below = strutHeight - above;
@@ -525,8 +617,7 @@ function verticalMetrics(
 
     const metrics = input.measurer.metrics(fontOf(piece.style));
     const lineHeight = usedLineHeight(piece.style, metrics);
-    const leading = (lineHeight - (metrics.ascent + metrics.descent)) / 2;
-    const ascent = leading + metrics.ascent;
+    const ascent = halfLeading(lineHeight, metrics, input.devicePixelRatio) + metrics.ascent;
 
     above = Math.max(above, ascent);
     below = Math.max(below, lineHeight - ascent);

@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>preserved whitespace either side of a block</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 260px;
+  }
+  div {
+    margin: 0;
+  }
+  .kept {
+    white-space: pre;
+  }
+  .inner {
+    height: 10px;
+    border: 1px solid;
+    background-color: #dce6f5;
+  }
+  .plain .inner {
+    background-color: #f5e6dc;
+  }
+</style>
+
+<div class="kept">
+  <div class="inner"></div>
+</div>
+
+<div class="plain">
+  <div class="inner"></div>
+</div>
+
+<div class="kept">one
+  <div class="inner"></div>
+two</div>
