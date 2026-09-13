@@ -19,11 +19,12 @@
   const initial = untrack(() => value);
 
   let host: HTMLDivElement | undefined = $state();
+  let view: EditorView | undefined;
 
   $effect(() => {
     if (host === undefined) return;
 
-    const view = new EditorView({
+    view = new EditorView({
       parent: host,
       state: EditorState.create({
         doc: initial,
@@ -38,8 +39,19 @@
     });
 
     return () => {
-      view.destroy();
+      view?.destroy();
+      view = undefined;
     };
+  });
+
+  // A permalink is decoded after the first paint, so the text can change under an editor that
+  // is already up. Anything the editor typed itself is already equal and does not come back.
+  $effect(() => {
+    const next = value;
+    const current = view;
+    if (current === undefined || current.state.doc.toString() === next) return;
+
+    current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: next } });
   });
 </script>
 
