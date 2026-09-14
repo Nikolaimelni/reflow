@@ -81,6 +81,8 @@ type BlockInput = {
   top: number;
   absolutes: Deferred[];
   isRoot: boolean;
+  /** What this box's own percentage edges resolve against, when it is not the given width. */
+  basis?: number;
   override: Override | null;
 };
 
@@ -139,7 +141,9 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   });
 
   const border = usedBorderWidths(style);
-  const padding = usedPadding(style, containing.width);
+  // Percentages on the box's own edges go against its containing block, which is not the
+  // same width the box ended up with when it was measured for a shrink to fit.
+  const padding = usedPadding(style, input.basis ?? containing.width);
   const down = border.top + border.bottom + padding.top + padding.bottom;
   const horizontal =
     override === null
@@ -699,7 +703,7 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
   );
   const horizontal = width === wide.size ? wide : acrossAxis(width);
 
-  const fromContent = measureAbsolute(box, horizontal.size, context);
+  const fromContent = measureAbsolute(box, horizontal.size, containing.width, context);
 
   const downAxis = (size: number | null) =>
     solveAbsoluteAxis({
@@ -749,10 +753,15 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
 }
 
 /** A throwaway pass just to find out how tall the content comes out at that width. */
-function measureAbsolute(box: BlockBox, contentWidth: number, context: Context): number {
+function measureAbsolute(
+  box: BlockBox,
+  contentWidth: number,
+  basis: number,
+  context: Context,
+): number {
   const scratch: Context = { ...context, fragments: new Map(), pieces: new Map(), trace: [] };
   const border = usedBorderWidths(box.style);
-  const padding = usedPadding(box.style, contentWidth);
+  const padding = usedPadding(box.style, basis);
 
   const result = layoutBlock(
     {
@@ -761,6 +770,7 @@ function measureAbsolute(box: BlockBox, contentWidth: number, context: Context):
       top: 0,
       absolutes: [],
       isRoot: false,
+      basis,
       override: { x: 0, contentWidth, contentHeight: null, margin: zeroEdges },
     },
     scratch,

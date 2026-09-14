@@ -30,6 +30,15 @@ function page(css: string, children: DomNode[], width = 400) {
 }
 
 describe('position relative', () => {
+  it('resolves its own percentage padding against the containing block', () => {
+    const box = element('div', { classes: ['empty'] });
+    const css =
+      '.empty { position: absolute; box-sizing: border-box; min-height: 2px; padding: 1% }';
+
+    // One per cent of 400, twice, and the min-height is already inside that border box.
+    expect(page(css, [box])(box).height).toBe(8);
+  });
+
   it('shifts the box and leaves its space behind', () => {
     const moved = element('div', { classes: ['moved'] });
     const after = element('div', { classes: ['after'] });

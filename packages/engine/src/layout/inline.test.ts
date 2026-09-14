@@ -154,6 +154,17 @@ describe('inline boxes', () => {
     expect(rectOf(span)).toMatchObject({ x: 0, width: 106 });
   });
 
+  it('gives a space at the end of a line no room at all', () => {
+    const box = element('span', { classes: ['atomic'] });
+    const empty = element('span', { classes: ['late'] });
+    const p = element('p', {}, [box, text(' '), empty]);
+    const css = 'p { margin: 0 } .atomic { display: inline-block; width: 20px; height: 8px }';
+
+    // The space is the last thing on the line, so it hangs, and the empty span behind it
+    // falls back to where the space began rather than sitting a space further along.
+    expect(page(css, [p]).rectOf(empty).x).toBe(20);
+  });
+
   it('keeps the first space of a run that crosses a box boundary', () => {
     const span = element('span', { classes: ['crossing'] }, [text('ab ')]);
     const p = element('p', {}, [span, text(' cd')]);

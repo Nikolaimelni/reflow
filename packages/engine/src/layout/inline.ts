@@ -382,8 +382,7 @@ type Chunk = { pieces: Piece[]; width: number; content: boolean };
 type Entry =
   | { kind: 'chunk'; chunk: Chunk }
   /** A space that collapses. Whether it may also break depends on its own white-space. */
-  /** `inside` marks a space that an inline box closes over, so it belongs within that box. */
-  | { kind: 'space'; space: Piece; inside: boolean }
+  | { kind: 'space'; space: Piece }
   | { kind: 'newline' };
 
 /**
@@ -435,23 +434,8 @@ function intoEntries(items: readonly Item[]): Entry[] {
 
     if (item.kind === 'space' && wraps(item.style.whiteSpace)) {
       close();
-      entries.push({ kind: 'space', space: item, inside: false });
+      entries.push({ kind: 'space', space: item });
       return;
-    }
-
-    // The closing edge of an inline box belongs to the content in front of it, even when a
-    // space has already ended that chunk: the space hangs over the end of the line and the
-    // margin and border do not, so their width has to fit beside the last word.
-    if (item.kind === 'edge-end' && pieces.length === 0 && held === null) {
-      const space = entries.at(-1);
-      const previous = entries.at(-2);
-
-      if (space?.kind === 'space' && previous?.kind === 'chunk') {
-        previous.chunk.pieces.push(item);
-        previous.chunk.width += item.width;
-        space.inside = true;
-        return;
-      }
     }
 
     if (item.kind === 'space' && item.style.whiteSpace === 'nowrap') {
@@ -473,100 +457,103 @@ function intoEntries(items: readonly Item[]): Entry[] {
 
 function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   const lines: Line[] = [];
-  const preserve = input.containerStyle.whiteSpace === 'pre';
 
   let current: Placed[] = [];
   let width = 0;
-  let pending: { piece: Piece; inside: boolean } | null = null;
   /** An inline box's own edges do not count: a space after one is still a leading space. */
   let content = false;
+
+  /** The index of a collapsible space at the end of the line, past any closing edges. */
+  const hanging = (): number => {
+    let at = current.length;
+    while (at > 0 && isEdge(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
+
+    const last = at > 0 ? current[at - 1] : undefined;
+    const space = last?.piece;
+    return space !== undefined && space.kind === 'space' && wraps(space.style.whiteSpace)
+      ? at - 1
+      : -1;
+  };
+
   const flush = (force = false) => {
+    // A line never ends on a collapsible space: it hangs over the edge and takes no room, so
+    // it comes off along with the width it lent to any closing edge behind it.
+    const at = hanging();
+    const space = at < 0 ? undefined : current.splice(at, 1)[0]?.piece;
+
+    if (space !== undefined) {
+      for (const placed of current.slice(at)) placed.x -= space.width;
+      width -= space.width;
+    }
+
     if (current.length === 0 && !force) return;
+
     lines.push({ items: current, width, ...verticalMetrics(current, input, force) });
     current = [];
     width = 0;
     content = false;
   };
 
-  /**
-   * A collapsible space only hangs when the line ends on it. When something follows, it is
-   * drawn where it belongs, and for a space an inline box closes over that is inside the box,
-   * in front of the closing edge already laid down beside the word before it.
-   */
-  const settle = (space: Piece, inside: boolean) => {
-    let at = current.length;
-    if (inside) while (at > 0 && isEdge(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
-
-    current.splice(at, 0, { piece: space, x: current[at]?.x ?? width });
-    for (let i = at + 1; i < current.length; i++) {
-      const placed = current[i];
-      if (placed !== undefined) placed.x += space.width;
-    }
-    width += space.width;
-  };
-
   const place = (chunk: Chunk) => {
     for (const piece of chunk.pieces) {
-      // A space in front of an inline box is outside it, so it goes down first and the box
-      // starts after it. A space in front of a closing edge is inside the box and stays
-      // hanging, which is what keeps `<em> one </em>` from measuring wider than its word.
-      if (piece.kind === 'edge-start' && pending !== null) {
-        settle(pending.piece, false);
-        pending = null;
-      }
-
       current.push({ piece, x: width });
       width += piece.width;
     }
     if (chunk.content) content = true;
   };
 
+  /** A space the line can be cut at, which needs something other than edges behind it. */
+  const opportunity = (): number => {
+    for (let at = current.length - 1; at >= 0; at--) {
+      const piece = current[at]?.piece;
+      if (piece === undefined || piece.kind !== 'space' || !wraps(piece.style.whiteSpace)) continue;
+      if (current.slice(at + 1).some(({ piece: behind }) => !isEdge(behind.kind))) return at;
+    }
+    return -1;
+  };
+
+  /**
+   * Back to the last space and start again there. A closing edge that follows it stays put:
+   * the box it ends has its content on this line, so its margin and border belong here too,
+   * which is also what makes them count against the width before the break.
+   */
+  const rewind = () => {
+    const at = opportunity();
+    if (at < 0) return;
+
+    let keep = at;
+    while (current[keep + 1]?.piece.kind === 'edge-end') keep++;
+
+    const carried = current.splice(keep + 1);
+    width = carried[0]?.x ?? width;
+    flush();
+
+    const base = carried[0]?.x ?? 0;
+    for (const placed of carried) {
+      current.push({ piece: placed.piece, x: placed.x - base });
+      width = placed.x - base + placed.piece.width;
+      if (!isEdge(placed.piece.kind) && placed.piece.kind !== 'space') content = true;
+    }
+  };
+
   for (const entry of intoEntries(items)) {
     if (entry.kind === 'newline') {
-      pending = null;
       flush(true);
       continue;
     }
 
     if (entry.kind === 'space') {
-      // A space at the start of a line disappears, and a run of them counts once: the first
-      // one, which matters when the run crosses an element boundary, because that is the box
-      // the space is drawn inside.
-      if (content && pending === null) pending = { piece: entry.space, inside: entry.inside };
+      // A space at the start of a line disappears, and a run of them counts once: the first,
+      // which decides whose box it is drawn in when the run crosses a boundary.
+      if (!content || hanging() >= 0) continue;
+
+      current.push({ piece: entry.space, x: width });
+      width += entry.space.width;
       continue;
-    }
-
-    if (!entry.chunk.content) {
-      // Nothing but an inline box's own edges. It takes its room without settling a space
-      // that is hanging at the end of the line, which is what keeps `<em> one </em>` from
-      // measuring a space wider than its word.
-      place(entry.chunk);
-      continue;
-    }
-
-    const gap = pending?.piece.width ?? 0;
-    const breakable = pending !== null && wraps(pending.piece.style.whiteSpace);
-
-    if (content && breakable && width + gap + entry.chunk.width > input.available) {
-      // The pending space is dropped with the break, which is why a wrapped line does not
-      // start with a gap.
-      pending = null;
-      flush();
-      place(entry.chunk);
-      continue;
-    }
-
-    if (pending !== null) {
-      settle(pending.piece, pending.inside);
-      pending = null;
     }
 
     place(entry.chunk);
-  }
-
-  if (preserve && pending !== null) {
-    current.push({ piece: pending.piece, x: width });
-    width += pending.piece.width;
+    if (width > input.available) rewind();
   }
 
   flush();
