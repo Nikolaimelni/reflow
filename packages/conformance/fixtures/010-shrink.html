@@ -26,6 +26,17 @@
     display: inline-block;
     min-width: 200px;
   }
+  .holds-an-absolute {
+    position: absolute;
+    top: 240px;
+    border: 1px solid;
+  }
+  .out-of-flow {
+    position: absolute;
+    width: 90px;
+    height: 8px;
+    background-color: #d8c8a8;
+  }
 </style>
 <p><span class="ib">short</span></p>
 <p><span class="ib">a much longer run of words that will not fit on a single line in this box</span></p>
@@ -33,3 +44,4 @@
 <p><span class="padded">padded box</span></p>
 <p><span class="floor">wide floor</span></p>
 <p>text <span class="ib">middle</span> text</p>
+<div class="holds-an-absolute"><div class="out-of-flow"></div></div>

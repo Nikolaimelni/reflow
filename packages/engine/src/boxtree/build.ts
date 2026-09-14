@@ -162,7 +162,11 @@ function buildChildBox(
  * dropped instead, which is why `<div><p>a</p>\n<p>b</p></div>` has two children and not five.
  */
 function organise(children: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
-  if (!children.some(isBlock)) return children;
+  // An out of flow box is not part of the flow it sits in, so it does not split the inline
+  // content around it. It keeps its place in the line, which is where its static position
+  // comes from.
+  const splits = (child: Box) => isBlock(child) && child.style.position !== 'absolute';
+  if (!children.some(splits)) return children;
 
   const organised: Box[] = [];
   let run: Box[] = [];
@@ -181,7 +185,7 @@ function organise(children: Box[], parentStyle: ComputedStyle, ids: IdSource): B
   };
 
   for (const child of children) {
-    if (isBlock(child)) {
+    if (splits(child)) {
       flush();
       organised.push(child);
     } else {

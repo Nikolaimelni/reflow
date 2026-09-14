@@ -70,6 +70,29 @@
     width: 40px;
     height: 8px;
   }
+  .card,
+  .plain-card {
+    display: inline-block;
+    border: 1px solid;
+  }
+  .card {
+    position: relative;
+  }
+  .badge {
+    position: absolute;
+    width: 30px;
+    height: 6px;
+    background-color: #d8c8a8;
+  }
+  .kept {
+    white-space: pre;
+  }
+  .block-badge {
+    position: absolute;
+    width: 20px;
+    height: 6px;
+    background-color: #a8c8d8;
+  }
 </style>
 <div class="moved"></div>
 <div class="pulled"></div>
@@ -85,3 +108,9 @@
 <div>after</div>
 <div class="staticky"></div>
 <div>last</div>
+<p>a <span class="card">card<span class="badge"></span></span> in a line</p>
+<p>a <span class="plain-card">card<span class="badge"></span></span> in a line</p>
+<p>a line <div class="block-badge"></div></p>
+<div class="kept">
+  <div class="block-badge"></div>
+</div>

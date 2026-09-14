@@ -268,7 +268,11 @@ function layoutChildren(
   isRoot: boolean,
   absolutes: Deferred[],
 ): FlowResult {
-  const blocks = box.children.filter(isBlock);
+  // An out of flow child is not part of this flow. The box tree keeps it among the inline
+  // content, which is where it picks up the static position it would have had.
+  const blocks = box.children.filter(
+    (child): child is BlockBox => isBlock(child) && child.style.position !== 'absolute',
+  );
 
   if (blocks.length === 0) {
     if (box.children.length === 0) return { height: 0, trailing: NO_MARGIN, baseline: null };
@@ -285,7 +289,8 @@ function layoutChildren(
       pieces: context.pieces,
       trace: context.trace,
       layoutAtomic: (child, available) => measureAtomic(child, available, context),
-      placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing.width, context),
+      placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing.width, context, absolutes),
+      defer: (child, x, y) => absolutes.push({ box: child, staticX: x, staticY: y }),
     });
 
     return { height: inline.height, trailing: NO_MARGIN, baseline: inline.lastBaseline };
@@ -298,15 +303,6 @@ function layoutChildren(
   let baseline: number | null = null;
 
   for (const child of blocks) {
-    if (child.style.position === 'absolute') {
-      absolutes.push({
-        box: child,
-        staticX: containing.x,
-        staticY: contentTop + height + resolveMargin(pending),
-      });
-      continue;
-    }
-
     if (!placed && collapseIntoTop) {
       // Already folded into this box's own top margin, so it must not push the child down.
       pending = NO_MARGIN;
@@ -529,7 +525,32 @@ function collapsesThrough(box: BlockBox, containingWidth: number): boolean {
   if ((usedSize(box.style.minHeight, null) ?? 0) > 0) return false;
 
   const inner = resolveHorizontal(box.style, containingWidth, border, padding).contentWidth;
-  return inFlowChildren(box).every((child) => isBlock(child) && collapsesThrough(child, inner));
+  return inFlowChildren(box).every((child) =>
+    isBlock(child) ? collapsesThrough(child, inner) : !makesALine(child, inner),
+  );
+}
+
+/**
+ * Whether an inline child puts anything on a line. An empty `<span>` does not, and a box that
+ * holds nothing else is as empty as one with no children at all, which is what lets a margin
+ * collapse straight through the anonymous block around it.
+ */
+function makesALine(box: Box, containingWidth: number): boolean {
+  if (box.kind === 'text') return !isCollapsibleWhitespace(box);
+  if (isBlock(box) || box.style.display !== 'inline') return true;
+
+  const border = usedBorderWidths(box.style);
+  const padding = usedPadding(box.style, containingWidth);
+  const margin = {
+    left: usedMargin(box.style.marginLeft, containingWidth) ?? 0,
+    right: usedMargin(box.style.marginRight, containingWidth) ?? 0,
+  };
+
+  if (border.left + border.right + padding.left + padding.right + margin.left + margin.right > 0) {
+    return true;
+  }
+
+  return box.children.some((child) => makesALine(child, containingWidth));
 }
 
 function inFlowChildren(box: BlockBox): Box[] {
@@ -594,6 +615,7 @@ function placeAtomic(
   y: number,
   available: number,
   context: Context,
+  absolutes: Deferred[],
 ): void {
   const margin = atomicMargin(box, available);
   const contentWidth = atomicContentWidth(box, available, context);
@@ -604,7 +626,9 @@ function placeAtomic(
       box: asBlock(box),
       containing: { x, width: available, height: null },
       top: y + margin.top,
-      absolutes: [],
+      // An inline-block that is not itself positioned is not a containing block, so anything
+      // out of flow inside it belongs to whoever is holding the list here.
+      absolutes,
       isRoot: false,
       override: {
         x: x + margin.left,
@@ -888,6 +912,9 @@ function itemMetrics(
         top: 0,
         absolutes: [],
         isRoot: false,
+        // Measured at the width the item was given, but its own percentage edges still go
+        // against the container, the same as they will when it is really laid out.
+        basis: containing.width,
         override: { x: 0, contentWidth: width, contentHeight: null, margin: zeroEdges },
       },
       scratch,
@@ -920,7 +947,28 @@ function itemMetrics(
   );
 
   const crossStyle = isRow ? style.height : style.width;
-  const crossSize = usedSize(crossStyle, isRow ? containing.height : containing.width);
+
+  // A size given on the cross axis is still a size, so the min and max on that axis bite the
+  // same way they do on a block. Without this a flex item takes `height: 0` at its word.
+  const crossBasis = isRow ? containing.height : containing.width;
+  const crossSurround = isRow ? down : across;
+  const givenCross = toContentBox(style.boxSizing, usedSize(crossStyle, crossBasis), crossSurround);
+  const crossSize =
+    givenCross === null
+      ? null
+      : clampSize(
+          givenCross,
+          toContentBox(
+            style.boxSizing,
+            usedSize(isRow ? style.minHeight : style.minWidth, crossBasis),
+            crossSurround,
+          ),
+          toContentBox(
+            style.boxSizing,
+            usedMaxSize(isRow ? style.maxHeight : style.maxWidth, crossBasis),
+            crossSurround,
+          ),
+        );
 
   return {
     input: {

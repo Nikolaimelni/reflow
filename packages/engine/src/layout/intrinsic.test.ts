@@ -19,6 +19,14 @@ function widths(css: string, children: DomNode[]) {
 }
 
 describe('intrinsicWidths', () => {
+  it('leaves an out of flow child out of the width', () => {
+    const wide = element('div', { classes: ['gone'] });
+    const box = element('div', {}, [text('ab'), wide]);
+    const css = '.gone { position: absolute; width: 90px }';
+
+    expect(widths(css, [box])).toMatchObject({ min: 16, max: 16 });
+  });
+
   it('takes the minimum from the longest word and the maximum from the whole run', () => {
     const p = element('p', {}, [text('aa bbbb cc')]);
     // "bbbb" is 32, and the whole thing is 8+4+16+4+8 wide with its two spaces

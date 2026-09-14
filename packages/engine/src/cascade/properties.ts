@@ -38,6 +38,12 @@ export type Visibility = 'visible' | 'hidden';
 
 export type ComputedStyle = {
   display: Display;
+  /**
+   * What `display` would be if the box were in the flow. An out of flow box is blockified,
+   * and its static position is measured from where the box it used to be would have gone, so
+   * the one it used to be has to survive somewhere.
+   */
+  staticDisplay: Display;
   position: Position;
   boxSizing: BoxSizing;
   overflow: Overflow;
@@ -98,7 +104,7 @@ export type ComputedStyle = {
   opacity: number;
 };
 
-export type PropertyName = keyof ComputedStyle;
+export type PropertyName = Exclude<keyof ComputedStyle, 'staticDisplay'>;
 
 export type ComputeContext = {
   /** Font size of the element itself, or of the parent while font-size is being computed. */
@@ -416,6 +422,9 @@ export const propertyNames = Object.keys(properties) as PropertyName[];
 
 // why: same widening as above. Writing this object out by hand would be thirty lines that
 // drift from the table.
-export const initialStyle: ComputedStyle = Object.fromEntries(
-  Object.entries(properties).map(([name, definition]) => [name, definition.initial]),
-) as ComputedStyle;
+export const initialStyle: ComputedStyle = {
+  ...(Object.fromEntries(
+    Object.entries(properties).map(([name, definition]) => [name, definition.initial]),
+  ) as Omit<ComputedStyle, 'staticDisplay'>),
+  staticDisplay: 'inline',
+};

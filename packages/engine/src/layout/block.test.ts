@@ -123,6 +123,36 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).height).toBe(50);
   });
 
+  it('measures a flex item with the container as the percentage basis', () => {
+    const cell = element('div', { classes: ['cell'] }, [text('ab')]);
+    const row = element('div', { classes: ['row'] }, [cell]);
+    const css = '.row { display: flex; width: 200px } .cell { padding: 1% }';
+
+    // Two per cent of the row, not of the sixteen pixels the item shrank to.
+    expect(page(css, [row]).rectOf(row).height).toBe(20);
+  });
+
+  it('clamps a flex item cross size the way a block is clamped', () => {
+    const cell = element('div', { classes: ['flat'] });
+    const row = element('div', { classes: ['row'] }, [cell]);
+    const css = '.row { display: flex } .flat { width: 20px; height: 0; min-height: 6px }';
+
+    expect(page(css, [row]).rectOf(cell).height).toBe(6);
+  });
+
+  it('collapses a margin through an inline that puts nothing on a line', () => {
+    const css = '.after { margin-top: 18px; height: 10px } .marked { padding-left: 4px }';
+    const build = (span: ElementNode) =>
+      element('div', {}, [span, element('div', { classes: ['after'] })]);
+
+    const bare = build(element('span', {}));
+    const padded = build(element('span', { classes: ['marked'] }));
+
+    // The padded one is drawn, so it makes a line, and the line stops the margin escaping.
+    expect(page(css, [bare]).rectOf(bare)).toMatchObject({ y: 18, height: 10 });
+    expect(page(css, [padded]).rectOf(padded)).toMatchObject({ y: 0, height: 44 });
+  });
+
   it('keeps a preserved whitespace box between two blocks', () => {
     const inner = element('div', { classes: ['inner'] });
     const outer = element('div', { classes: ['kept'] }, [text('\n  '), inner, text('\n')]);

@@ -13,6 +13,16 @@ function styles(root: ElementNode, css: string) {
   };
 }
 
+describe('out of flow', () => {
+  it('blockifies an absolutely positioned inline', () => {
+    const span = element('span', { classes: ['out'] });
+    const root = element('html', {}, [element('body', {}, [span])]);
+    const style = styles(root, '.out { position: absolute }')(span);
+
+    expect(style.display).toBe('block');
+  });
+});
+
 describe('the user agent sheet', () => {
   it('turns a div into a block and a span into an inline', () => {
     const span = element('span');

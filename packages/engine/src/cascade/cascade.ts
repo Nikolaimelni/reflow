@@ -197,6 +197,17 @@ function computeFor(
     assign(style, name, winners.get(name), parent, context);
   }
 
+  style.staticDisplay = style.display;
+
+  // An out of flow box is block level whatever the author asked for, and the browser says so
+  // too: `getComputedStyle` on an absolutely positioned span reports block, not inline.
+  if (
+    style.position === 'absolute' &&
+    (style.display === 'inline' || style.display === 'inline-block')
+  ) {
+    style.display = 'block';
+  }
+
   return { style, fontSizeSpecified: fontSize.specified };
 }
 

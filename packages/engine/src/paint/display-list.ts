@@ -149,14 +149,7 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
     }
 
     if (child.style.position !== 'static') {
-      const zIndex = child.style.zIndex;
-      if (zIndex.kind === 'integer' && zIndex.value < 0) {
-        bucket.negative.push({ z: zIndex.value, box: child, clip });
-      } else if (zIndex.kind === 'integer' && zIndex.value > 0) {
-        bucket.positive.push({ z: zIndex.value, box: child, clip });
-      } else {
-        bucket.level.push({ box: child, clip });
-      }
+      positioned(child, bucket, clip);
       continue;
     }
 
@@ -166,7 +159,12 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
       // background, and a pointer over them would find the atomic instead.
       const atomic = child.style.display !== 'inline';
       bucket.inlines.push({ box: child, own: atomic, clip });
-      if (atomic) continue;
+      if (atomic) {
+        // It paints as one piece, but a positioned descendant is not part of that piece: it
+        // belongs to the stacking context, over the top of everything in the line.
+        escapes(child.children, bucket, clip);
+        continue;
+      }
     } else {
       bucket.blocks.push({ box: child, own: false, clip });
     }
@@ -174,6 +172,27 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
     // A box that clips its overflow clips its descendants, whether or not it happens to be
     // the root of a stacking context.
     collect(child.children, bucket, child.style.overflow === 'visible' ? clip : child.id);
+  }
+}
+
+function positioned(box: Box, bucket: Bucket, clip: BoxId | null): void {
+  const zIndex = box.style.zIndex;
+
+  if (zIndex.kind === 'integer' && zIndex.value < 0) {
+    bucket.negative.push({ z: zIndex.value, box, clip });
+  } else if (zIndex.kind === 'integer' && zIndex.value > 0) {
+    bucket.positive.push({ z: zIndex.value, box, clip });
+  } else {
+    bucket.level.push({ box, clip });
+  }
+}
+
+/** What comes out of a box that paints as one piece: its positioned descendants, and nothing else. */
+function escapes(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
+  for (const child of children) {
+    if (child.kind === 'text') continue;
+    if (child.style.position === 'static') escapes(child.children, bucket, clip);
+    else positioned(child, bucket, clip);
   }
 }
 

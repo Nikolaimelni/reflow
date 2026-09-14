@@ -1,4 +1,4 @@
-import type { BlockBox, Box, BoxId, InlineBox } from '../boxtree/box.js';
+import { type BlockBox, type Box, type BoxId, type InlineBox, isBlock } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
@@ -40,11 +40,13 @@ export type InlineInput = {
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
+  /** Hands an out of flow box back with the static position it had in the line. */
+  defer: (box: BlockBox, x: number, y: number) => void;
 };
 
 type Offset = { dx: number; dy: number };
 
-type PieceKind = 'glyphs' | 'space' | 'atomic' | 'edge-start' | 'edge-end';
+type PieceKind = 'glyphs' | 'space' | 'atomic' | 'edge-start' | 'edge-end' | 'out-of-flow';
 
 type Piece = {
   /** An edge takes room in the line for one side of an inline box's padding and border. */
@@ -71,7 +73,15 @@ type Surround = { margin: Edges; border: Edges; padding: Edges; offset: Offset }
 
 export function layoutInlineContent(input: InlineInput): InlineResult {
   const surrounds = new Map<BoxId, Surround>();
-  const items = collect(input.container.children, [], { dx: 0, dy: 0 }, input, surrounds);
+  const outOfFlow = new Map<BoxId, BlockBox>();
+  const items = collect(
+    input.container.children,
+    [],
+    { dx: 0, dy: 0 },
+    input,
+    surrounds,
+    outOfFlow,
+  );
   const lines = breakIntoLines(items, input);
 
   let y = input.contentTop;
@@ -100,6 +110,24 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       // newline leaves the opening edge alone above the first word, and the box has to cover
       // that line. A zero height line is the exception: an empty `<span>` sits on one, and
       // the browser gives it no rectangle at all rather than one the height of the font.
+      // Out of the flow, so it takes no room and paints nowhere near here. All the line owes
+      // it is the place it would have had: where it sits in the line if it would have been
+      // inline, and the start of the next line down if it would have been a block, because
+      // that is where a block among this text would have gone.
+      if (piece.kind === 'out-of-flow') {
+        const deferred = outOfFlow.get(piece.box);
+        const inline = piece.style.staticDisplay !== 'block';
+
+        if (deferred !== undefined) {
+          input.defer(
+            deferred,
+            inline ? input.contentX + offset + placed.x + piece.offset.dx : input.contentX,
+            inline ? y : y + line.height,
+          );
+        }
+        continue;
+      }
+
       if (isEdge(piece.kind)) {
         if (line.height === 0) continue;
 
@@ -251,6 +279,11 @@ function halfLeading(lineHeight: number, metrics: FontMetrics, ratio: number): n
   return Math.floor(leading * ratio) / ratio;
 }
 
+/** A piece that is not content of its own: an inline box's edge, or a box out of the flow. */
+function isMarker(kind: PieceKind): boolean {
+  return kind !== 'glyphs' && kind !== 'space' && kind !== 'atomic';
+}
+
 function isEdge(kind: PieceKind): boolean {
   return kind === 'edge-start' || kind === 'edge-end';
 }
@@ -285,6 +318,7 @@ function collect(
   offset: Offset,
   input: InlineInput,
   surrounds: Map<BoxId, Surround>,
+  outOfFlow: Map<BoxId, BlockBox>,
 ): Item[] {
   const items: Item[] = [];
 
@@ -334,10 +368,28 @@ function collect(
       items.push(
         edge('edge-start', surround.margin.left + surround.border.left + surround.padding.left),
       );
-      items.push(...collect(child.children, inside, surround.offset, input, surrounds));
+      items.push(...collect(child.children, inside, surround.offset, input, surrounds, outOfFlow));
       items.push(
         edge('edge-end', surround.padding.right + surround.border.right + surround.margin.right),
       );
+      continue;
+    }
+
+    if (isBlock(child)) {
+      if (child.style.position !== 'absolute') continue;
+
+      outOfFlow.set(child.id, child);
+      items.push({
+        kind: 'out-of-flow',
+        box: child.id,
+        source: null,
+        width: 0,
+        height: 0,
+        baseline: null,
+        style: child.style,
+        ancestors,
+        offset,
+      });
       continue;
     }
 
@@ -415,14 +467,14 @@ function intoEntries(items: readonly Item[]): Entry[] {
     // trailing space of a `nowrap` run would survive to the end of the line. When something
     // else does settle it, it goes back to where it was: inside the box, in front of the
     // closing padding rather than beyond it.
-    if (held !== null && !isEdge(piece.kind)) {
+    if (held !== null && !isMarker(piece.kind)) {
       pieces.splice(heldAt, 0, held);
       width += held.width;
       held = null;
     }
     pieces.push(piece);
     width += piece.width;
-    if (!isEdge(piece.kind)) content = true;
+    if (!isMarker(piece.kind)) content = true;
   };
 
   items.forEach((item) => {
@@ -466,7 +518,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   /** The index of a collapsible space at the end of the line, past any closing edges. */
   const hanging = (): number => {
     let at = current.length;
-    while (at > 0 && isEdge(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
+    while (at > 0 && isMarker(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
 
     const last = at > 0 ? current[at - 1] : undefined;
     const space = last?.piece;
@@ -507,7 +559,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     for (let at = current.length - 1; at >= 0; at--) {
       const piece = current[at]?.piece;
       if (piece === undefined || piece.kind !== 'space' || !wraps(piece.style.whiteSpace)) continue;
-      if (current.slice(at + 1).some(({ piece: behind }) => !isEdge(behind.kind))) return at;
+      if (current.slice(at + 1).some(({ piece: behind }) => !isMarker(behind.kind))) return at;
     }
     return -1;
   };
@@ -532,7 +584,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     for (const placed of carried) {
       current.push({ piece: placed.piece, x: placed.x - base });
       width = placed.x - base + placed.piece.width;
-      if (!isEdge(placed.piece.kind) && placed.piece.kind !== 'space') content = true;
+      if (!isMarker(placed.piece.kind) && placed.piece.kind !== 'space') content = true;
     }
   };
 
@@ -578,7 +630,7 @@ function verticalMetrics(
   const substantial =
     forced ||
     items.some(({ piece }) =>
-      isEdge(piece.kind)
+      isMarker(piece.kind)
         ? piece.width !== 0
         : piece.kind !== 'space' || piece.style.whiteSpace === 'pre',
     );

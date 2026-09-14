@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
@@ -69,6 +69,12 @@ test('generated documents agree with Chromium', async ({ page }) => {
     const again = await checkDocument(page, rendered.html, rendered.css, TOLERANCE);
 
     mkdirSync(foundDir, { recursive: true });
+
+    // Only the newest find is kept. The ones with names were triaged by hand and stay; a
+    // `gen-` file is this run's lead, and yesterday's is either fixed or already a fixture.
+    for (const name of readdirSync(foundDir)) {
+      if (name.startsWith('gen-')) rmSync(join(foundDir, name));
+    }
     const path = join(foundDir, `gen-${String(result.seed)}.html`);
 
     writeFileSync(path, rendered.document);

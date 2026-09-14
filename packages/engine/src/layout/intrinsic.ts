@@ -63,7 +63,12 @@ function outerIntrinsic(box: Box, measurer: TextMeasurer): Intrinsic {
 function contentIntrinsic(box: Box, measurer: TextMeasurer): Intrinsic {
   if (box.kind === 'text') return inlineIntrinsic([box], measurer, true);
 
-  const blocks = box.children.filter(isBlock);
+  // An absolutely positioned child is out of the flow, so it takes no part in how wide its
+  // parent wants to be.
+  const children = box.children.filter(
+    (child) => child.kind === 'text' || child.style.position !== 'absolute',
+  );
+  const blocks = children.filter(isBlock);
 
   if (blocks.length > 0) {
     let min = 0;
@@ -76,7 +81,7 @@ function contentIntrinsic(box: Box, measurer: TextMeasurer): Intrinsic {
     return { min, max };
   }
 
-  return inlineIntrinsic(box.children, measurer, wraps(box.style.whiteSpace));
+  return inlineIntrinsic(children, measurer, wraps(box.style.whiteSpace));
 }
 
 function inlineIntrinsic(

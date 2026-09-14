@@ -30,6 +30,29 @@ function page(css: string, children: DomNode[], width = 400) {
 }
 
 describe('position relative', () => {
+  it('takes the static position from the display the box would have had', () => {
+    const bare = element('div', { classes: ['out'] });
+    const line = element('p', {}, [text('ab'), bare]);
+    const css = 'p { margin: 0 } .out { position: absolute; width: 5px; height: 5px }';
+
+    // A div among the text would have been a block on the next line down, not beside it.
+    expect(page(css, [line])(bare)).toMatchObject({ x: 0, y: 16 });
+  });
+
+  it('keeps an out of flow box in the line it was written in', () => {
+    const badge = element('span', { classes: ['badge'] });
+    const card = element('span', { classes: ['card'] }, [text('ab'), badge]);
+    const line = element('p', {}, [text('x '), card]);
+    const css =
+      'p { margin: 0 } .card { display: inline-block } .badge { position: absolute; width: 5px; height: 5px }';
+    const rectOf = page(css, [line]);
+
+    // The card starts after "x ", and the badge takes its static position from inside it
+    // without widening it or pushing anything down.
+    expect(rectOf(card)).toMatchObject({ x: 16, width: 16 });
+    expect(rectOf(badge)).toMatchObject({ x: 32, width: 5 });
+  });
+
   it('resolves its own percentage padding against the containing block', () => {
     const box = element('div', { classes: ['empty'] });
     const css =

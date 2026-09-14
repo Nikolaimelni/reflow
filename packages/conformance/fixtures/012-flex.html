@@ -87,6 +87,22 @@
   .column > div {
     width: 40px;
   }
+  .flattened {
+    width: 20px;
+    height: 0;
+    min-height: 6px;
+    background-color: #d8c8a8;
+  }
+  .narrowed {
+    width: 0;
+    min-width: 8px;
+    height: 10px;
+    background-color: #a8c8d8;
+  }
+  .percent-padded {
+    padding: 1%;
+    background-color: #c8d8a8;
+  }
 </style>
 
 <div class="row"><div class="fixed"></div><div class="grows"></div></div>
@@ -104,3 +120,6 @@
 <div class="row tall centred"><div class="fixed"></div></div>
 <div class="row padded"><div class="fixed"></div><div class="grows"></div></div>
 <div class="column"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row"><div class="flattened"></div><div class="fixed"></div></div>
+<div class="column"><div class="narrowed"></div></div>
+<div class="row"><div class="percent-padded">one</div></div>
