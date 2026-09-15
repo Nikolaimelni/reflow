@@ -37,6 +37,21 @@ describe('position relative', () => {
 
     // A div among the text would have been a block on the next line down, not beside it.
     expect(page(css, [line])(bare)).toMatchObject({ x: 0, y: 16 });
+
+    // With nothing in front of it, that block would have been the first thing in the box.
+    const first = element('div', { classes: ['out'] });
+    expect(page(css, [element('p', {}, [first, text('ab')])])(first)).toMatchObject({ y: 0 });
+
+    // An empty span with a padding is still something in front of it.
+    const after = element('div', { classes: ['out'] });
+    const padded = element('span', { classes: ['pad'] });
+    const held = element('p', {}, [padded, after]);
+    expect(page(`${css} .pad { padding: 2px }`, [held])(after)).toMatchObject({ y: 16 });
+
+    // A flex box is block level in flow, so it goes under the line like any other block.
+    const flexed = element('span', { classes: ['out', 'flexed'] });
+    const holding = element('p', {}, [text('ab'), flexed]);
+    expect(page(`${css} .flexed { display: flex }`, [holding])(flexed)).toMatchObject({ y: 16 });
   });
 
   it('keeps an out of flow box in the line it was written in', () => {

@@ -165,6 +165,15 @@ describe('inline boxes', () => {
     expect(page(css, [p]).rectOf(empty).x).toBe(20);
   });
 
+  it('keeps the first space of a nowrap run that crosses a box boundary', () => {
+    const span = element('span', { classes: ['inner'] }, [text(' cd')]);
+    const p = element('p', { classes: ['held'] }, [text('ab '), span]);
+    const css = 'p { margin: 0 } .held { white-space: nowrap }';
+
+    // One space between them, on the outside, so the span starts after it.
+    expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 24, width: 16 });
+  });
+
   it('keeps the first space of a run that crosses a box boundary', () => {
     const span = element('span', { classes: ['crossing'] }, [text('ab ')]);
     const p = element('p', {}, [span, text(' cd')]);
@@ -191,13 +200,35 @@ describe('inline boxes', () => {
   });
 
   it('covers a line it puts nothing on', () => {
+    const box = element('div', { classes: ['kept'] }, [text('\n  one\n')]);
+    const p = element('p', {}, [box]);
+    const css = 'p { margin: 0 } .kept { display: inline; border: 1px solid; white-space: pre }';
+    const rect = page(css, [p]).rectOf(box);
+
+    // Three lines of sixteen, plus a border above the first and below the last.
+    expect({ y: rect.y, height: rect.height }).toEqual({ y: -1, height: 50 });
+  });
+
+  it('does not give a box a line for a closing edge with nothing on it', () => {
+    const first = element('div', { classes: ['kept'] }, [text('\n  one\n')]);
+    const second = element('div', { classes: ['plain'] }, [text('two')]);
+    const p = element('p', {}, [first, second]);
+    const css =
+      'p { margin: 0 } .kept { display: inline; white-space: pre } .plain { display: inline }';
+
+    // The first box ends on the line the second one starts, but it puts nothing there.
+    expect(page(css, [p]).rectOf(first)).toMatchObject({ y: 16, height: 16 });
+  });
+
+  it('drops the newline at the end of a tag that is inline to begin with', () => {
     const span = element('span', { classes: ['kept'] }, [text('\n  one\n')]);
     const p = element('p', {}, [span]);
     const css = 'p { margin: 0 } .kept { border: 1px solid; white-space: pre }';
     const rect = page(css, [p]).rectOf(span);
 
-    // Three lines of sixteen, plus a border above the first and below the last.
-    expect({ y: rect.y, height: rect.height }).toEqual({ y: -1, height: 50 });
+    // The same content in a span is two lines, not three, which is Chromium's answer and not
+    // one the spec explains.
+    expect({ y: rect.y, height: rect.height }).toEqual({ y: -1, height: 34 });
   });
 
   it('leaves a space in front of an inline box outside it', () => {

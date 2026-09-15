@@ -36,6 +36,10 @@
     white-space: pre;
     background-color: #e2e8f3;
   }
+  .plain {
+    display: inline;
+    background-color: #e8f3e2;
+  }
 </style>
 
 <p>
@@ -56,4 +60,15 @@
 
 <div class="bare">
   the same without a border, so the empty lines are not the box
+</div>
+
+<p><span class="kept">
+  a span rather than a div, and the newline in front of the closing tag is not a line
+</span></p>
+
+<div class="bare">
+  a closing edge with no border
+</div>
+<div class="plain">
+  is not a line of its own
 </div>

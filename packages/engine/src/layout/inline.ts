@@ -1,5 +1,6 @@
 import { type BlockBox, type Box, type BoxId, type InlineBox, isBlock } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
+import { blockByDefault } from '../cascade/ua.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { relativeOffset } from './position.js';
@@ -102,6 +103,9 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     const offset = alignmentOffset(input.containerStyle, input.available, line.width);
     lastBaseline = y + line.baseline - input.contentTop;
     const onThisLine = new Map<BoxId, Extent>();
+    const whole = opensAndCloses(line);
+    /** Whether anything on this line has been laid down yet, which an out of flow box asks. */
+    let behind = false;
 
     for (const placed of line.items) {
       const piece = placed.piece;
@@ -109,31 +113,34 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       const above = piece.kind === 'atomic' ? baselineOf(piece) : metrics.ascent;
 
       // Out of the flow, so it takes no room and paints nowhere near here. All the line owes
-      // it is the place it would have had: where it sits in the line if it would have been
-      // inline, and the start of the next line down if it would have been a block, because
-      // that is where a block among this text would have gone.
+      // it is the place it would have had. An inline one would have sat where it is written.
+      // A block one would have cut the line in two and gone under whatever came before it,
+      // which is the next line down, or the top of this one when nothing came before it.
       if (piece.kind === 'out-of-flow') {
         const deferred = outOfFlow.get(piece.box);
-        const inline = piece.style.staticDisplay !== 'block';
+        const still = piece.style.staticDisplay;
+        const inline = still === 'inline' || still === 'inline-block';
 
         if (deferred !== undefined) {
           input.defer(
             deferred,
             inline ? input.contentX + offset + placed.x + piece.offset.dx : input.contentX,
-            inline ? y : y + line.height,
+            inline || !behind ? y : y + line.height,
           );
         }
         continue;
       }
 
-      // An inline box reaches a line it puts nothing on, but only if it has something to
-      // put there. `pre` text that starts with a newline leaves the opening border alone on
-      // the line above the first word, and that border is a box. Take the border away and
-      // there is nothing to draw: the browser gives the box no rectangle on that line, the
-      // same as it gives an empty `<span>` none on a line of no height.
+      // An inline box reaches a line it puts nothing on, but only if it has something to put
+      // there. `pre` text that starts with a newline leaves the opening border alone on the
+      // line above the first word, and that border is a box. Take the border away and there
+      // is nothing left but a boundary, and a boundary alone is not a rectangle: the whole of
+      // an empty `<span>` sitting on a line is, which is the same box seen from both ends.
       if (isEdge(piece.kind)) {
+        // A padding or a border took room even if the box around it drew nothing else.
+        if (piece.width > 0) behind = true;
         if (line.height === 0) continue;
-        if (piece.width === 0 && !carries(line)) continue;
+        if (piece.width === 0 && !whole.has(piece.box)) continue;
 
         const at = input.contentX + offset + placed.x + piece.offset.dx;
         const rect = {
@@ -149,6 +156,8 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         }
         continue;
       }
+
+      behind = true;
 
       const rect = {
         x: input.contentX + offset + placed.x + piece.offset.dx,
@@ -293,9 +302,17 @@ function isMarker(kind: PieceKind): boolean {
   return kind !== 'glyphs' && kind !== 'space' && kind !== 'atomic';
 }
 
-/** Whether anything on the line draws: glyphs, or a box taking its place among them. */
-function carries(line: Line): boolean {
-  return line.items.some(({ piece }) => piece.kind === 'glyphs' || piece.kind === 'atomic');
+/** The inline boxes that both begin and end on this line, which is all of an empty one. */
+function opensAndCloses(line: Line): Set<BoxId> {
+  const opened = new Set<BoxId>();
+  const both = new Set<BoxId>();
+
+  for (const { piece } of line.items) {
+    if (piece.kind === 'edge-start') opened.add(piece.box);
+    else if (piece.kind === 'edge-end' && opened.has(piece.box)) both.add(piece.box);
+  }
+
+  return both;
 }
 
 function isEdge(kind: PieceKind): boolean {
@@ -382,7 +399,17 @@ function collect(
       items.push(
         edge('edge-start', surround.margin.left + surround.border.left + surround.padding.left),
       );
-      items.push(...collect(child.children, inside, surround.offset, input, surrounds, outOfFlow));
+      const within = collect(child.children, inside, surround.offset, input, surrounds, outOfFlow);
+
+      // Chromium keeps a preserved newline at the end of a `<div>` and drops it at the end of
+      // a `<span>`, whatever their `display` says, and a tag it does not know behaves like the
+      // span. There is no rule in the spec for this: it is measured, and the probe sits in
+      // fixtures/found. Without it a `pre` inline ends up a line taller than the page it is on.
+      if (!blockByDefault(child.element?.tag ?? '') && within.at(-1)?.kind === 'newline') {
+        within.pop();
+      }
+
+      items.push(...within);
       items.push(
         edge('edge-end', surround.padding.right + surround.border.right + surround.margin.right),
       );
@@ -506,8 +533,9 @@ function intoEntries(items: readonly Item[]): Entry[] {
 
     if (item.kind === 'space' && item.style.whiteSpace === 'nowrap') {
       // Collapses like any other space, but it is not a place the line may break, so it
-      // stays inside the chunk rather than ending it.
-      if (content) {
+      // stays inside the chunk rather than ending it. A run of them counts once, and it is
+      // the first that counts: that is the one whose box the space is drawn in.
+      if (content && held === null) {
         held = item;
         heldAt = pieces.length;
       }
@@ -573,7 +601,9 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     for (let at = current.length - 1; at >= 0; at--) {
       const piece = current[at]?.piece;
       if (piece === undefined || piece.kind !== 'space' || !wraps(piece.style.whiteSpace)) continue;
-      if (current.slice(at + 1).some(({ piece: behind }) => !isMarker(behind.kind))) return at;
+      // An out of flow box counts here even though it takes no room: the line it would have
+      // been on is the line its static position comes from, and a full line pushes it down.
+      if (current.slice(at + 1).some(({ piece: behind }) => !isEdge(behind.kind))) return at;
     }
     return -1;
   };

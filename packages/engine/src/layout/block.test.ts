@@ -123,6 +123,27 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).height).toBe(50);
   });
 
+  it('keeps a margin inside a flex item', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const item = element('div', {}, [inner]);
+    const row = element('div', { classes: ['row'] }, [item]);
+    const css = '.row { display: flex } .inner { height: 4px; margin-bottom: 6px }';
+
+    // A flex item is a formatting context of its own, so the margin is paid for inside it.
+    expect(page(css, [row]).rectOf(item).height).toBe(10);
+  });
+
+  it('does not make an item out of whitespace, even preserved whitespace', () => {
+    const row = element('div', { classes: ['row'] }, [
+      text('\n  '),
+      element('div', { classes: ['cell'] }),
+      text('\n'),
+    ]);
+    const css = '.row { display: flex; white-space: pre } .cell { width: 10px; height: 4px }';
+
+    expect(page(css, [row]).rectOf(row).height).toBe(4);
+  });
+
   it('drops a flex item automatic minimum when it clips', () => {
     const css = '.row { display: flex } .item { flex-basis: 0 } .hidden { overflow: hidden }';
     const widthOf = (classes: string[]) => {
@@ -164,6 +185,12 @@ describe('margin collapsing', () => {
     // The padded one is drawn, so it makes a line, and the line stops the margin escaping.
     expect(page(css, [bare]).rectOf(bare)).toMatchObject({ y: 18, height: 10 });
     expect(page(css, [padded]).rectOf(padded)).toMatchObject({ y: 0, height: 44 });
+
+    // A negative margin takes room the same way, so it stops the margin escaping too.
+    const pulled = build(element('span', { classes: ['pulled'] }));
+    expect(page(`${css} .pulled { margin: -12px }`, [pulled]).rectOf(pulled)).toMatchObject({
+      y: 0,
+    });
   });
 
   it('keeps a preserved whitespace box between two blocks', () => {

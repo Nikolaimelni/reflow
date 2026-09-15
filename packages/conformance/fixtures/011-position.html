@@ -87,6 +87,23 @@
   .kept {
     white-space: pre;
   }
+  .nowrap {
+    white-space: nowrap;
+  }
+  .card-badge {
+    display: inline-block;
+    position: absolute;
+    width: 20px;
+    height: 6px;
+    background-color: #a8d8c8;
+  }
+  .flexed {
+    display: flex;
+    position: absolute;
+    width: 24px;
+    height: 6px;
+    background-color: #c8a8d8;
+  }
   .block-badge {
     position: absolute;
     width: 20px;
@@ -111,6 +128,10 @@
 <p>a <span class="card">card<span class="badge"></span></span> in a line</p>
 <p>a <span class="plain-card">card<span class="badge"></span></span> in a line</p>
 <p>a line <div class="block-badge"></div></p>
+<p><div class="block-badge"></div>a line after it</p>
+<p><span class="card"></span><div class="block-badge"></div></p>
+<p>a line <span class="flexed"></span></p>
+<p class="nowrap">a line long enough that nothing else fits beside it at all <span class="card-badge"></span></p>
 <div class="kept">
   <div class="block-badge"></div>
 </div>

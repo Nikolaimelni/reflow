@@ -14,6 +14,7 @@ import {
   idSource,
   isBlock,
   isCollapsibleWhitespace,
+  isWhitespaceText,
 } from './box.js';
 
 export function buildBoxTree(root: ElementNode, styles: StyleMap): BlockBox | null {
@@ -84,14 +85,16 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
 
 /**
  * Every child of a flex container becomes a block-level flex item: an inline box is
- * blockified, and a run of text gets an anonymous block of its own.
+ * blockified, and a run of text gets an anonymous block of its own. A run of nothing but
+ * whitespace is not rendered at all, and `white-space: pre` does not save it: a flex container
+ * has no inline content of its own for the property to preserve anything in.
  */
 function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
   const items: Box[] = [];
   let run: Box[] = [];
 
   const flush = () => {
-    if (run.length > 0 && !run.every(isCollapsibleWhitespace)) {
+    if (run.length > 0 && !run.every(isWhitespaceText)) {
       items.push({
         kind: 'block',
         id: ids(),

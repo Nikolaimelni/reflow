@@ -47,9 +47,14 @@ export function isAnonymous(box: Box): boolean {
   return box.kind === 'block' && box.element === null;
 }
 
+/** Text with nothing in it but whitespace, whether or not that whitespace is preserved. */
+export function isWhitespaceText(box: Box): boolean {
+  return box.kind === 'text' && box.text.trim() === '';
+}
+
 /** Under `pre` a run of whitespace is content. Everywhere else it collapses away to nothing. */
 export function isCollapsibleWhitespace(box: Box): boolean {
-  return box.kind === 'text' && box.text.trim() === '' && box.style.whiteSpace !== 'pre';
+  return isWhitespaceText(box) && box.style.whiteSpace !== 'pre';
 }
 
 export function describeBox(box: Box): string {

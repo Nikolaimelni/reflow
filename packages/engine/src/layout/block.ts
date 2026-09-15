@@ -86,6 +86,11 @@ type BlockInput = {
   isRoot: boolean;
   /** What this box's own percentage edges resolve against, when it is not the given width. */
   basis?: number;
+  /**
+   * A box that is a formatting context root because of where it sits rather than because of
+   * anything in its own style, which is what a flex item is. Nothing inside it collapses out.
+   */
+  independent?: boolean;
   override: Override | null;
 };
 
@@ -198,8 +203,20 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const flow =
     style.display === 'flex'
       ? layoutFlexItems(box, childContaining, contentTop, context, mine)
-      : layoutChildren(box, childContaining, contentTop, border, padding, context, isRoot, mine);
-  const bottomEscapes = !isRoot && canCollapseBottom(style, padding, border, specifiedHeight);
+      : layoutChildren(
+          box,
+          childContaining,
+          contentTop,
+          border,
+          padding,
+          context,
+          isRoot || input.independent === true,
+          mine,
+        );
+  const bottomEscapes =
+    !isRoot &&
+    input.independent !== true &&
+    canCollapseBottom(style, padding, border, specifiedHeight);
 
   // A trailing margin that cannot escape has to be paid for in this box's own height.
   const fromContent = flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing));
@@ -556,9 +573,11 @@ function makesALine(box: Box, containingWidth: number): boolean {
     right: usedMargin(box.style.marginRight, containingWidth) ?? 0,
   };
 
-  if (border.left + border.right + padding.left + padding.right + margin.left + margin.right > 0) {
-    return true;
-  }
+  // The two ends the line builder lays down, and either of them taking room is enough. A
+  // negative margin takes room too: it is not nothing, it is nothing shifted twelve pixels.
+  const start = margin.left + border.left + padding.left;
+  const end = padding.right + border.right + margin.right;
+  if (start !== 0 || end !== 0) return true;
 
   return box.children.some((child) => makesALine(child, containingWidth));
 }
@@ -874,6 +893,8 @@ function layoutFlexItems(
         top: y,
         absolutes,
         isRoot: false,
+        // A flex item is a formatting context of its own, so a margin inside it stays inside.
+        independent: true,
         override: {
           x,
           contentWidth: isRow ? placement.mainSize : placement.crossSize,
@@ -935,6 +956,7 @@ function itemMetrics(
         top: 0,
         absolutes: [],
         isRoot: false,
+        independent: true,
         // Measured at the width the item was given, but its own percentage edges still go
         // against the container, the same as they will when it is really laid out.
         basis: containing.width,
