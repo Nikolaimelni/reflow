@@ -43,6 +43,8 @@ export type LayoutResult = {
   fragments: Map<BoxId, Fragment>;
   /** Per line rects for inline content, where one box can appear in several places. */
   pieces: Map<BoxId, Rect[]>;
+  /** The same, but only for inline boxes, and one rect per line rather than per word. */
+  lines: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
 };
 
@@ -56,6 +58,7 @@ type ContainingBlock = {
 type Context = {
   fragments: Map<BoxId, Fragment>;
   pieces: Map<BoxId, Rect[]>;
+  lines: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   measurer: TextMeasurer;
   devicePixelRatio: number;
@@ -112,6 +115,7 @@ export function layoutDocument(
   const context: Context = {
     fragments: new Map(),
     pieces: new Map(),
+    lines: new Map(),
     trace: [],
     measurer,
     icb,
@@ -123,7 +127,12 @@ export function layoutDocument(
   const top = usedMargin(root.style.marginTop, viewport.width) ?? 0;
   layoutBlock({ box: root, containing, top, absolutes: [], isRoot: true, override: null }, context);
 
-  return { fragments: context.fragments, pieces: context.pieces, trace: context.trace };
+  return {
+    fragments: context.fragments,
+    pieces: context.pieces,
+    lines: context.lines,
+    trace: context.trace,
+  };
 }
 
 /**
@@ -287,6 +296,7 @@ function layoutChildren(
       devicePixelRatio: context.devicePixelRatio,
       fragments: context.fragments,
       pieces: context.pieces,
+      lines: context.lines,
       trace: context.trace,
       layoutAtomic: (child, available) => measureAtomic(child, available, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing.width, context, absolutes),
@@ -564,7 +574,13 @@ function inFlowChildren(box: BlockBox): Box[] {
  * a throwaway context first just to find out how big it is.
  */
 function measureAtomic(box: InlineBox, available: number, context: Context): AtomicSize {
-  const scratch: Context = { ...context, fragments: new Map(), pieces: new Map(), trace: [] };
+  const scratch: Context = {
+    ...context,
+    fragments: new Map(),
+    pieces: new Map(),
+    lines: new Map(),
+    trace: [],
+  };
   const margin = atomicMargin(box, available);
   const contentWidth = atomicContentWidth(box, available, context);
 
@@ -783,7 +799,13 @@ function measureAbsolute(
   basis: number,
   context: Context,
 ): number {
-  const scratch: Context = { ...context, fragments: new Map(), pieces: new Map(), trace: [] };
+  const scratch: Context = {
+    ...context,
+    fragments: new Map(),
+    pieces: new Map(),
+    lines: new Map(),
+    trace: [],
+  };
   const border = usedBorderWidths(box.style);
   const padding = usedPadding(box.style, basis);
 
@@ -903,6 +925,7 @@ function itemMetrics(
       ...context,
       fragments: new Map(),
       pieces: new Map(),
+      lines: new Map(),
       trace: [],
     };
     const result = layoutBlock(
@@ -934,9 +957,10 @@ function itemMetrics(
   const basis = fromBasis ?? specified ?? (isRow ? intrinsic.max : measure(containing.width).cross);
 
   // min-width and min-height are auto on a flex item, and auto means min-content: that is
-  // what stops flex-shrink from squeezing a word in half.
+  // what stops flex-shrink from squeezing a word in half. Unless the item clips what runs
+  // over, in which case there is nothing to protect and the floor goes back to zero.
   const minStyle = isRow ? style.minWidth : style.minHeight;
-  const automatic = isRow ? intrinsic.min : 0;
+  const automatic = isRow && style.overflow === 'visible' ? intrinsic.min : 0;
   const along = isRow ? across : down;
   const basis_ = isRow ? containing.width : containing.height;
   const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;

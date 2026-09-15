@@ -103,6 +103,14 @@
     padding: 1%;
     background-color: #c8d8a8;
   }
+  .clips,
+  .keeps {
+    flex-basis: 0;
+    background-color: #d8a8c8;
+  }
+  .clips {
+    overflow: hidden;
+  }
 </style>
 
 <div class="row"><div class="fixed"></div><div class="grows"></div></div>
@@ -123,3 +131,5 @@
 <div class="row"><div class="flattened"></div><div class="fixed"></div></div>
 <div class="column"><div class="narrowed"></div></div>
 <div class="row"><div class="percent-padded">one</div></div>
+<div class="row"><div class="clips">one</div><div class="fixed"></div></div>
+<div class="row"><div class="keeps">one</div><div class="fixed"></div></div>

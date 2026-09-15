@@ -181,6 +181,15 @@ describe('inline boxes', () => {
     expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 16, width: 54 });
   });
 
+  it('leaves an empty line alone when it has no edge to put there', () => {
+    const span = element('span', { classes: ['bare'] }, [text('\n  one\n')]);
+    const p = element('p', {}, [span]);
+    const rect = page('p { margin: 0 } .bare { white-space: pre }', [p]).rectOf(span);
+
+    // Three lines in the block, one of them with the word on it, and that is the box.
+    expect({ y: rect.y, height: rect.height }).toEqual({ y: 16, height: 16 });
+  });
+
   it('covers a line it puts nothing on', () => {
     const span = element('span', { classes: ['kept'] }, [text('\n  one\n')]);
     const p = element('p', {}, [span]);

@@ -123,6 +123,19 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).height).toBe(50);
   });
 
+  it('drops a flex item automatic minimum when it clips', () => {
+    const css = '.row { display: flex } .item { flex-basis: 0 } .hidden { overflow: hidden }';
+    const widthOf = (classes: string[]) => {
+      const item = element('div', { classes }, [text('ab')]);
+      const row = element('div', { classes: ['row'] }, [item]);
+      return page(css, [row]).rectOf(item).width;
+    };
+
+    // The word is sixteen wide and holds the item open, unless the item hides what runs over.
+    expect(widthOf(['item'])).toBe(16);
+    expect(widthOf(['item', 'hidden'])).toBe(0);
+  });
+
   it('measures a flex item with the container as the percentage basis', () => {
     const cell = element('div', { classes: ['cell'] }, [text('ab')]);
     const row = element('div', { classes: ['row'] }, [cell]);

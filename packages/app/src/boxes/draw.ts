@@ -5,6 +5,8 @@ export type Scene = {
   /** Boxes in paint order, so overlaps land the way the engine says they should. */
   order: readonly BoxId[];
   frame: ReadonlyMap<BoxId, Fragment>;
+  /** Where an inline box that wraps actually is, one rect per line. */
+  lines: ReadonlyMap<BoxId, readonly Rect[]>;
   labels: ReadonlyMap<BoxId, string>;
   highlight: BoxId | null;
   selected: BoxId | null;
@@ -34,7 +36,19 @@ export function draw(context: CanvasRenderingContext2D, scene: Scene, view: View
 
   for (const id of scene.order) {
     const fragment = scene.frame.get(id);
-    if (fragment !== undefined) drawBox(context, fragment);
+    if (fragment === undefined) continue;
+
+    // An inline box that wraps is not the rectangle around its lines, and drawing it as one
+    // covers the gap beside a short line with a background the browser never paints there.
+    const lines = scene.lines.get(id);
+    if (lines === undefined || lines.length < 2) {
+      drawBox(context, fragment, fragment.rect, true, true);
+      continue;
+    }
+
+    lines.forEach((rect, index) => {
+      drawBox(context, fragment, rect, index === 0, index === lines.length - 1);
+    });
   }
 
   drawDirty(context, scene, view);
@@ -118,15 +132,31 @@ function drawGrid(context: CanvasRenderingContext2D, scene: Scene, view: View): 
  * Outside in: margin, border, padding, content. Each of the first three is drawn as a band
  * rather than a filled rectangle, because filling them stacks four alphas on top of each
  * other and every box comes out the same olive colour.
+ *
+ * `first` and `last` say whether this is where the box starts and where it ends. A box that
+ * wraps has its left edge on the first line only and its right edge on the last, and nothing
+ * down either side of the lines in between.
  */
-function drawBox(context: CanvasRenderingContext2D, fragment: Fragment): void {
-  const border = fragment.rect;
-  const margin = grow(border, fragment.margin);
-  const padding = shrink(border, fragment.border);
-  const content = shrink(padding, fragment.padding);
+function drawBox(
+  context: CanvasRenderingContext2D,
+  fragment: Fragment,
+  rect: Rect,
+  first: boolean,
+  last: boolean,
+): void {
+  const ends = (edges: Fragment['margin']) => ({
+    top: edges.top,
+    bottom: edges.bottom,
+    left: first ? edges.left : 0,
+    right: last ? edges.right : 0,
+  });
 
-  band(context, margin, border, PALETTE.margin, 0.28);
-  band(context, border, padding, PALETTE.border, 0.5);
+  const margin = grow(rect, ends(fragment.margin));
+  const padding = shrink(rect, ends(fragment.border));
+  const content = shrink(padding, ends(fragment.padding));
+
+  band(context, margin, rect, PALETTE.margin, 0.28);
+  band(context, rect, padding, PALETTE.border, 0.5);
   band(context, padding, content, PALETTE.padding, 0.42);
   fill(context, content, PALETTE.content, 0.32);
 }

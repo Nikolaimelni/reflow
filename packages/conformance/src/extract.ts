@@ -99,9 +99,11 @@ export type Measurements = {
  * is what makes the comparison fair, and it sidesteps pinning a font file: both sides end up
  * measuring whatever Chromium actually loaded.
  *
- * Advances and font extents come from canvas. The line box a font produces under
- * `line-height: normal` is a different number again, taller than ascent plus descent by the
- * font's line gap, so that one gets measured directly off a live line box.
+ * Advances come from canvas. The font's extents do not: `fontBoundingBoxAscent` and its
+ * descent are whole numbers whatever the screen is, while Blink lays out with metrics snapped
+ * to device pixels, so on a 1.25 display the two drift apart by up to a pixel. Both the
+ * extents and the line box `line-height: normal` produces are measured off a live line
+ * instead, which is the same answer the browser is using.
  */
 export function measureInPage(requests: MeasureRequest[]): Measurements {
   const canvas = document.createElement('canvas');
@@ -111,29 +113,34 @@ export function measureInPage(requests: MeasureRequest[]): Measurements {
   const widths: Record<string, number> = {};
   const metrics: Measurements['metrics'] = {};
 
-  const normalLineHeight = (font: string): number => {
+  const probe = (font: string) => {
     const host = document.createElement('div');
     // `all: initial` first, or the fixture's own `div { height: 20px }` measures the probe
     // instead of the font. That mistake cost an evening.
     host.style.cssText = `all:initial;display:block;position:absolute;top:-9999px;left:0;white-space:nowrap;font:${font}`;
-    host.textContent = 'x';
 
+    // A box with no height at all sits on the baseline, and the glyphs beside it stand on the
+    // same line, so one line answers all three questions.
+    const onBaseline = document.createElement('span');
+    onBaseline.style.cssText = 'display:inline-block;width:0;height:0';
+    const glyphs = document.createElement('span');
+    glyphs.textContent = 'Hg';
+
+    host.append(onBaseline, glyphs);
     document.body.append(host);
-    const height = host.getBoundingClientRect().height;
+
+    const line = host.getBoundingClientRect();
+    const baseline = onBaseline.getBoundingClientRect().bottom;
+    const extents = glyphs.getBoundingClientRect();
     host.remove();
 
-    return height;
+    const ascent = baseline - extents.top;
+    return { ascent, descent: extents.height - ascent, lineHeight: line.height };
   };
 
   for (const request of requests) {
     context.font = request.font;
-    const sample = context.measureText('Hg');
-
-    metrics[request.font] = {
-      ascent: sample.fontBoundingBoxAscent,
-      descent: sample.fontBoundingBoxDescent,
-      lineHeight: normalLineHeight(request.font),
-    };
+    metrics[request.font] = probe(request.font);
 
     for (const text of request.texts) {
       widths[`${request.font} ${text}`] = context.measureText(text).width;

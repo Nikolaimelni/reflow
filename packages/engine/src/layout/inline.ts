@@ -37,6 +37,8 @@ export type InlineInput = {
   fragments: Map<BoxId, Fragment>;
   /** One rect per line a box appears on, which is what a pointer is tested against. */
   pieces: Map<BoxId, Rect[]>;
+  /** The lines an inline box covers, kept apart so a view can draw the box where it is. */
+  lines: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
@@ -106,10 +108,6 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       const metrics = input.measurer.metrics(fontOf(piece.style));
       const above = piece.kind === 'atomic' ? baselineOf(piece) : metrics.ascent;
 
-      // An inline box reaches a line it puts nothing on. `pre` text that starts with a
-      // newline leaves the opening edge alone above the first word, and the box has to cover
-      // that line. A zero height line is the exception: an empty `<span>` sits on one, and
-      // the browser gives it no rectangle at all rather than one the height of the font.
       // Out of the flow, so it takes no room and paints nowhere near here. All the line owes
       // it is the place it would have had: where it sits in the line if it would have been
       // inline, and the start of the next line down if it would have been a block, because
@@ -128,8 +126,14 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         continue;
       }
 
+      // An inline box reaches a line it puts nothing on, but only if it has something to
+      // put there. `pre` text that starts with a newline leaves the opening border alone on
+      // the line above the first word, and that border is a box. Take the border away and
+      // there is nothing to draw: the browser gives the box no rectangle on that line, the
+      // same as it gives an empty `<span>` none on a line of no height.
       if (isEdge(piece.kind)) {
         if (line.height === 0) continue;
+        if (piece.width === 0 && !carries(line)) continue;
 
         const at = input.contentX + offset + placed.x + piece.offset.dx;
         const rect = {
@@ -155,9 +159,10 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 
       // An atomic inline takes its room in the line as a margin box, which is the rect the
       // boxes around it are built from. Its own fragment is the border box, and that is what
-      // a pointer has to land on, so it does not record a piece of its own.
+      // a pointer has to land on, so it does not record a piece of its own. The inline boxes
+      // around it are not recorded here either: they get one rect per line further down, and
+      // that rect covers this one with the padding this one does not know about.
       if (piece.source === null) record(input.pieces, piece.box, rect);
-      for (const ancestor of piece.ancestors) record(input.pieces, ancestor, rect);
 
       if (piece.source !== null) {
         // Laid out once to measure it and again where the line put it. The second pass is
@@ -165,6 +170,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         input.placeAtomic(piece.source, rect.x, rect.y);
       } else {
         grow(extents, piece.box, rect);
+        grow(onThisLine, piece.box, rect);
       }
 
       for (const ancestor of piece.ancestors) {
@@ -191,16 +197,19 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     // puts the box's left edge somewhere it never reaches, and a pointer in the gap beside a
     // short line finds the inline when it is over the block.
     const rects =
-      surround === undefined || onLines === undefined
+      onLines === undefined
         ? [toRect(extent)]
         : onLines.map((line, index) =>
-            padded(line, surround, index === 0, index === onLines.length - 1),
+            surround === undefined
+              ? toRect(line)
+              : padded(line, surround, index === 0, index === onLines.length - 1),
           );
 
     const fragment = toFragment(box, union(rects), surround);
 
     input.fragments.set(box, fragment);
 
+    input.lines.set(box, rects);
     if (surround !== undefined) {
       for (const rect of rects) record(input.pieces, box, rect);
     }
@@ -282,6 +291,11 @@ function halfLeading(lineHeight: number, metrics: FontMetrics, ratio: number): n
 /** A piece that is not content of its own: an inline box's edge, or a box out of the flow. */
 function isMarker(kind: PieceKind): boolean {
   return kind !== 'glyphs' && kind !== 'space' && kind !== 'atomic';
+}
+
+/** Whether anything on the line draws: glyphs, or a box taking its place among them. */
+function carries(line: Line): boolean {
+  return line.items.some(({ piece }) => piece.kind === 'glyphs' || piece.kind === 'atomic');
 }
 
 function isEdge(kind: PieceKind): boolean {
