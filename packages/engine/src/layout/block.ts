@@ -184,10 +184,25 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const boxTop = top + offset.dy;
   const contentTop = boxTop + border.top + padding.top;
 
-  const specifiedHeight =
+  const minHeight = toContentBox(
+    style.boxSizing,
+    usedSize(style.minHeight, containing.height),
+    down,
+  );
+  const maxHeight = toContentBox(
+    style.boxSizing,
+    usedMaxSize(style.maxHeight, containing.height),
+    down,
+  );
+
+  const given =
     override === null
       ? toContentBox(style.boxSizing, usedSize(style.height, containing.height), down)
       : override.contentHeight;
+
+  // A percentage inside goes against what this box ends up being, not what it asked for, so
+  // the min and max bite before the children are told anything.
+  const specifiedHeight = given === null ? null : clampSize(given, minHeight, maxHeight);
 
   const childContaining: ContainingBlock = {
     x: x + border.left + padding.left,
@@ -222,14 +237,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const fromContent = flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing));
 
   // A used height is never negative, however far a negative margin pulls the content up.
-  const height = Math.max(
-    0,
-    clampSize(
-      specifiedHeight ?? fromContent,
-      toContentBox(style.boxSizing, usedSize(style.minHeight, containing.height), down),
-      toContentBox(style.boxSizing, usedMaxSize(style.maxHeight, containing.height), down),
-    ),
-  );
+  const height = Math.max(0, clampSize(specifiedHeight ?? fromContent, minHeight, maxHeight));
 
   const fragment: Fragment = {
     box: box.id,

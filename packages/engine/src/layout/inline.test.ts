@@ -199,6 +199,20 @@ describe('inline boxes', () => {
     expect({ y: rect.y, height: rect.height }).toEqual({ y: 16, height: 16 });
   });
 
+  it('takes its height from its own font and not from what is inside it', () => {
+    const tall = element('span', { classes: ['tall'] });
+    const holder = element('span', { classes: ['holder'] }, [tall]);
+    const p = element('p', {}, [holder]);
+    const css = 'p { margin: 0 } .tall { display: inline-block; width: 8px; height: 30px }';
+    const { rectOf } = page(css, [p]);
+
+    // The stub font is 12.8 up and 3.2 down, so the holder is 16 tall on the baseline the
+    // inline-block sets at 30, and it is as wide as the box inside it.
+    expect(rectOf(tall).height).toBe(30);
+    expect(rectOf(holder)).toMatchObject({ x: 0, y: 17.2, width: 8 });
+    expect(rectOf(holder).height).toBeCloseTo(16);
+  });
+
   it('covers a line it puts nothing on', () => {
     const box = element('div', { classes: ['kept'] }, [text('\n  one\n')]);
     const p = element('p', {}, [box]);

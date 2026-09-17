@@ -123,6 +123,15 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).height).toBe(50);
   });
 
+  it('resolves a percentage height against the height the box ends up with', () => {
+    const inner = element('div', { classes: ['share'] });
+    const outer = element('div', { classes: ['floored'] }, [inner]);
+    const css = '.floored { height: 0; min-height: 40px } .share { height: 25% }';
+
+    // A quarter of the forty it was clamped to, not of the nothing it asked for.
+    expect(page(css, [outer]).rectOf(inner).height).toBe(10);
+  });
+
   it('keeps a margin inside a flex item', () => {
     const inner = element('div', { classes: ['inner'] });
     const item = element('div', {}, [inner]);

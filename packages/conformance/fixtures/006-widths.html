@@ -44,6 +44,20 @@
   .nested {
     width: 50%;
   }
+  .floored {
+    height: 0;
+    min-height: 40px;
+    background-color: #e8d8c8;
+  }
+  .capped {
+    height: 200px;
+    max-height: 30px;
+    background-color: #d8e8c8;
+  }
+  .share {
+    height: 31%;
+    background-color: #c8d8e8;
+  }
 </style>
 <div class="fill"></div>
 <div class="centred"></div>
@@ -52,3 +66,5 @@
 <div class="content-box"></div>
 <div class="clamped"></div>
 <div class="percent"><div class="nested"></div></div>
+<div class="floored"><div class="share"></div></div>
+<div class="capped"><div class="share"></div></div>

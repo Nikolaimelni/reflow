@@ -59,6 +59,24 @@
     height: 14px;
     border: 1px solid;
   }
+  .holder {
+    display: inline;
+    background-color: #f0e2c8;
+  }
+  .tall-box {
+    display: inline-block;
+    width: 12px;
+    height: 30px;
+    background-color: #dce6f5;
+  }
+  .little {
+    display: inline;
+    font-size: 10px;
+    background-color: #e2f0c8;
+  }
+  .large {
+    font-size: 40px;
+  }
 </style>
 
 <p>before <span class="empty"></span> after an empty inline</p>
@@ -75,3 +93,6 @@
 <div class="wraps-a-block">
   <div class="inner-block"></div>
 </div>
+
+<p><span class="holder"><span class="tall-box"></span></span></p>
+<p><span class="little">a<span class="large">b</span></span></p>

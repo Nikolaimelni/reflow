@@ -72,7 +72,14 @@ type Placed = { piece: Piece; x: number };
 type Line = { items: Placed[]; width: number; height: number; baseline: number };
 
 /** What an inline box adds around its own content, and where it has been shifted to. */
-type Surround = { margin: Edges; border: Edges; padding: Edges; offset: Offset };
+type Surround = {
+  margin: Edges;
+  border: Edges;
+  padding: Edges;
+  offset: Offset;
+  /** The box's own style, which is what its height comes from rather than its children's. */
+  style: ComputedStyle;
+};
 
 export function layoutInlineContent(input: InlineInput): InlineResult {
   const surrounds = new Map<BoxId, Surround>();
@@ -151,8 +158,8 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         };
 
         for (const ancestor of piece.ancestors) {
-          grow(extents, ancestor, rect);
-          grow(onThisLine, ancestor, rect);
+          widen(extents, ancestor, rect);
+          widen(onThisLine, ancestor, rect);
         }
         continue;
       }
@@ -183,9 +190,22 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       }
 
       for (const ancestor of piece.ancestors) {
-        grow(extents, ancestor, rect);
-        grow(onThisLine, ancestor, rect);
+        widen(extents, ancestor, rect);
+        widen(onThisLine, ancestor, rect);
       }
+    }
+
+    // Now that the line has a baseline, every inline box on it gets the height its own font
+    // gives it, sitting on that baseline.
+    for (const [box, extent] of onThisLine) {
+      const surround = surrounds.get(box);
+      if (surround === undefined) continue;
+
+      const metrics = input.measurer.metrics(fontOf(surround.style));
+      const middle = y + line.baseline + surround.offset.dy;
+      extent.top = middle - metrics.ascent;
+      extent.bottom = middle + metrics.descent;
+      grow(extents, box, toRect(extent));
     }
 
     for (const [box, extent] of onThisLine) {
@@ -332,6 +352,21 @@ function record(pieces: Map<BoxId, Rect[]>, box: BoxId, rect: Rect): void {
 
 type Extent = { left: number; top: number; right: number; bottom: number };
 
+/**
+ * An inline box is as tall as its own font says, whatever is inside it: a forty pixel word in
+ * a ten pixel span sticks out of the span rather than stretching it, and so does an
+ * inline-block. So a child widens the box it sits in and never heightens it.
+ */
+function widen(extents: Map<BoxId, Extent>, box: BoxId, rect: Rect): void {
+  const current = extents.get(box);
+  extents.set(box, {
+    left: Math.min(current?.left ?? rect.x, rect.x),
+    top: current?.top ?? Number.POSITIVE_INFINITY,
+    right: Math.max(current?.right ?? rect.x + rect.width, rect.x + rect.width),
+    bottom: current?.bottom ?? Number.NEGATIVE_INFINITY,
+  });
+}
+
 function grow(extents: Map<BoxId, Extent>, box: BoxId, rect: Rect): void {
   const current = extents.get(box);
   const next: Extent = {
@@ -457,6 +492,7 @@ function surroundOf(style: ComputedStyle, available: number, parent: Offset): Su
   const shift = relativeOffset(style, { width: available, height: null });
 
   return {
+    style,
     margin: {
       top: usedMargin(style.marginTop, available) ?? 0,
       right: usedMargin(style.marginRight, available) ?? 0,
