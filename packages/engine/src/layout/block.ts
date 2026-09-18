@@ -9,7 +9,7 @@ import {
 import type { ComputedStyle } from '../cascade/properties.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
-import { type FlexItemInput, solveFlexLine } from './flex.js';
+import { type FlexItemInput, solveFlex } from './flex.js';
 import { type AtomicSize, layoutInlineContent } from './inline.js';
 import { intrinsicContentWidths, shrinkToFit } from './intrinsic.js';
 import {
@@ -863,7 +863,9 @@ function layoutFlexItems(
   context: Context,
   absolutes: Deferred[],
 ): FlowResult {
-  const isRow = box.style.flexDirection === 'row';
+  const direction = box.style.flexDirection;
+  const isRow = direction === 'row' || direction === 'row-reverse';
+  const reverse = direction === 'row-reverse' || direction === 'column-reverse';
   const items: BlockBox[] = [];
 
   for (const child of box.children.filter(isBlock)) {
@@ -876,7 +878,9 @@ function layoutFlexItems(
 
   const metrics = items.map((item) => itemMetrics(item, containing, isRow, context));
 
-  const line = solveFlexLine({
+  const line = solveFlex({
+    reverse,
+    wrap: box.style.flexWrap,
     mainSize: isRow ? containing.width : containing.height,
     crossSize: isRow ? containing.height : containing.width,
     justify: box.style.justifyContent,
@@ -1036,7 +1040,10 @@ function itemMetrics(
         ? down + margin.top + margin.bottom
         : across + margin.left + margin.right,
       marginMainStart: isRow ? margin.left : margin.top,
+      marginMainEnd: isRow ? margin.right : margin.bottom,
       marginCrossStart: isRow ? margin.top : margin.left,
+      marginCrossEnd: isRow ? margin.bottom : margin.right,
+      align: style.alignSelf === 'auto' ? null : style.alignSelf,
       crossSize,
     },
     margin,

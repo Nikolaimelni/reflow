@@ -99,6 +99,32 @@
     height: 10px;
     background-color: #a8c8d8;
   }
+  .back {
+    flex-direction: row-reverse;
+  }
+  .wrapping {
+    flex-wrap: wrap;
+  }
+  .other-way {
+    flex-wrap: wrap-reverse;
+  }
+  .wide-item {
+    width: 120px;
+    height: 14px;
+    background-color: #d8c8e8;
+  }
+  .column.back {
+    flex-direction: column-reverse;
+  }
+  .low {
+    align-self: flex-end;
+  }
+  .middle {
+    align-self: center;
+  }
+  .tallest {
+    align-self: stretch;
+  }
   .percent-padded {
     padding: 1%;
     background-color: #c8d8a8;
@@ -146,4 +172,24 @@
   <div class="fixed"></div>
 </div>
 <div class="row"><div class="item"><div class="sunk">one one</div></div></div>
+<div class="row back"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row back spaced"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="column back"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row tall topped">
+  <div class="fixed"></div>
+  <div class="fixed low"></div>
+  <div class="fixed middle"></div>
+  <div class="grows tallest"></div>
+</div>
+<div class="row wrapping">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping other-way">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping"><div class="wide-item grows"></div><div class="wide-item"></div></div>
 <div class="row"><div class="keeps">one</div><div class="fixed"></div></div>

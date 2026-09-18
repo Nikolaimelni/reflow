@@ -44,6 +44,11 @@ const FORMATTERS: Record<string, Formatter> = {
   'background-color': (style) => formatColour(style.backgroundColor),
   visibility: (style) => style.visibility,
   opacity: (style) => String(style.opacity),
+  'flex-direction': (style) => style.flexDirection,
+  'flex-wrap': (style) => style.flexWrap,
+  'justify-content': (style) => style.justifyContent,
+  'align-items': (style) => style.alignItems,
+  'align-self': (style) => style.alignSelf,
 };
 
 const MARGIN = {

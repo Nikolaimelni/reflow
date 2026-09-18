@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AlignItems, JustifyContent } from '../cascade/properties.js';
-import { type FlexItemInput, type FlexLineInput, solveFlexLine } from './flex.js';
+import { type FlexItemInput, type FlexLineInput, solveFlex } from './flex.js';
 
 function item(overrides: Partial<FlexItemInput> = {}): FlexItemInput {
   return {
@@ -12,8 +12,11 @@ function item(overrides: Partial<FlexItemInput> = {}): FlexItemInput {
     mainSurround: 0,
     crossSurround: 0,
     marginMainStart: 0,
+    marginMainEnd: 0,
     marginCrossStart: 0,
+    marginCrossEnd: 0,
     crossSize: 20,
+    align: null,
     ...overrides,
   };
 }
@@ -24,12 +27,14 @@ function line(overrides: Partial<FlexLineInput> = {}) {
     crossSize: null,
     justify: 'flex-start',
     align: 'stretch',
+    reverse: false,
+    wrap: 'nowrap',
     items: [item(), item()],
     crossOf: () => 0,
     baselineOf: () => null,
     ...overrides,
   };
-  return solveFlexLine(input);
+  return solveFlex(input);
 }
 
 const mains = (result: ReturnType<typeof line>) => result.placements.map((one) => one.mainSize);
@@ -167,5 +172,77 @@ describe('cross axis', () => {
 
     expect(result.placements.map((one) => one.crossStart)).toEqual([17, 0]);
     expect(result.crossSize).toBe(40);
+  });
+});
+
+describe('the other way round', () => {
+  it('packs a reversed line against the end it starts at', () => {
+    const items = [item({ basis: 60 }), item({ basis: 90 })];
+
+    expect(starts(line({ items, reverse: true }))).toEqual([240, 150]);
+  });
+
+  it('turns the whole arrangement around, spacing and all', () => {
+    const items = [item({ basis: 60 }), item({ basis: 90 })];
+    const spread = line({ items, reverse: true, justify: 'space-between' });
+
+    expect(starts(spread)).toEqual([240, 0]);
+  });
+
+  it('keeps a margin on the side it was written on', () => {
+    const items = [item({ basis: 60, mainSurround: 10, marginMainStart: 4, marginMainEnd: 6 })];
+
+    expect(starts(line({ items, reverse: true }))).toEqual([236]);
+  });
+});
+
+describe('align-self', () => {
+  it('lets one item leave the line it is in', () => {
+    const items = [item({ crossSize: 20 }), item({ crossSize: 10, align: 'flex-end' })];
+    const result = line({ items, align: 'flex-start', crossSize: 40 });
+
+    expect(result.placements.map((one) => one.crossStart)).toEqual([0, 30]);
+  });
+
+  it('stretches only the items that asked to', () => {
+    const items = [item({ crossSize: null, align: 'stretch' }), item({ crossSize: null })];
+    const result = line({ items, align: 'flex-start', crossSize: 40, crossOf: () => 10 });
+
+    expect(result.placements.map((one) => one.crossSize)).toEqual([40, 10]);
+  });
+});
+
+describe('wrapping', () => {
+  const box = (basis: number) => item({ basis, crossSize: 10, shrink: 0 });
+
+  it('puts what will not fit on the next line', () => {
+    const items = [box(200), box(200), box(200)];
+    const result = line({ items, mainSize: 450, wrap: 'wrap' });
+
+    expect(starts(result)).toEqual([0, 200, 0]);
+    expect(result.placements.map((one) => one.crossStart)).toEqual([0, 0, 10]);
+    expect(result.crossSize).toBe(20);
+  });
+
+  it('shares the free space within a line and not across them', () => {
+    const items = [item({ basis: 200, crossSize: 10, grow: 1 }), box(200), box(200)];
+    const result = line({ items, mainSize: 450, wrap: 'wrap' });
+
+    // The first line has fifty to give and one taker; the second line is on its own.
+    expect(mains(result)).toEqual([250, 200, 200]);
+  });
+
+  it('stacks the lines the other way round when asked', () => {
+    const items = [box(200), box(200), box(200)];
+    const result = line({ items, mainSize: 450, wrap: 'wrap-reverse' });
+
+    expect(result.placements.map((one) => one.crossStart)).toEqual([10, 10, 0]);
+  });
+
+  it('keeps everything on one line when it must not wrap', () => {
+    const items = [box(200), box(200), box(200)];
+    const result = line({ items, mainSize: 450, wrap: 'nowrap' });
+
+    expect(result.placements.map((one) => one.crossStart)).toEqual([0, 0, 0]);
   });
 });

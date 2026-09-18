@@ -1,4 +1,4 @@
-import type { AlignItems, JustifyContent } from '../cascade/properties.js';
+import type { AlignItems, FlexWrap, JustifyContent } from '../cascade/properties.js';
 
 export type FlexItemInput = {
   grow: number;
@@ -12,9 +12,13 @@ export type FlexItemInput = {
   /** Margin, border and padding along the cross axis. */
   crossSurround: number;
   marginMainStart: number;
+  marginMainEnd: number;
   marginCrossStart: number;
+  marginCrossEnd: number;
   /** Cross content size when the style pins it, null when it is auto. */
   crossSize: number | null;
+  /** What `align-self` says, or null to follow the container. */
+  align: AlignItems | null;
 };
 
 export type FlexLineInput = {
@@ -22,6 +26,9 @@ export type FlexLineInput = {
   mainSize: number | null;
   justify: JustifyContent;
   align: AlignItems;
+  /** The main axis runs the other way, so the first item is laid out at the far end. */
+  reverse: boolean;
+  wrap: FlexWrap;
   /** Cross content size the container pins, null when it comes from the items. */
   crossSize: number | null;
   items: readonly FlexItemInput[];
@@ -47,6 +54,96 @@ export type FlexLineResult = {
 };
 
 /**
+ * Items are cut into lines, each line is solved on its own, and the lines are then stacked
+ * across. A container that will not wrap is the same thing with one line in it.
+ *
+ * Nothing here divides free cross space between the lines: `align-content` is out of the
+ * subset, and its initial value packs them against the start, which is what stacking does.
+ */
+export function solveFlex(input: FlexLineInput): FlexLineResult {
+  const runs = cutIntoLines(input);
+  const placements: FlexPlacement[] = [];
+  let mainSize = 0;
+  let across = 0;
+
+  for (const run of runs) {
+    const line = solveFlexLine({
+      ...input,
+      items: run.map((index) => input.items[index] ?? input.items[0]).filter(present),
+      crossSize: runs.length > 1 ? null : input.crossSize,
+      crossOf: (index, main) => input.crossOf(run[index] ?? 0, main),
+      baselineOf: (index, main) => input.baselineOf(run[index] ?? 0, main),
+    });
+
+    run.forEach((item, index) => {
+      const placement = line.placements[index];
+      if (placement !== undefined) {
+        placements[item] = { ...placement, crossStart: placement.crossStart + across };
+      }
+    });
+
+    mainSize = Math.max(mainSize, line.mainSize);
+    across += line.crossSize;
+  }
+
+  const crossSize = runs.length > 1 ? (input.crossSize ?? across) : across;
+
+  return {
+    placements: input.wrap === 'wrap-reverse' ? turnOver(placements, input, crossSize) : placements,
+    mainSize: input.mainSize ?? mainSize,
+    crossSize,
+  };
+}
+
+function present<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+/** The greedy cut the spec asks for: an item goes on the line unless it no longer fits. */
+function cutIntoLines(input: FlexLineInput): number[][] {
+  if (input.wrap === 'nowrap' || input.mainSize === null) {
+    return [input.items.map((_, index) => index)];
+  }
+
+  const lines: number[][] = [];
+  let current: number[] = [];
+  let used = 0;
+
+  input.items.forEach((item, index) => {
+    const outer = clamp(item.basis, item.minMain, item.maxMain) + item.mainSurround;
+
+    if (current.length > 0 && used + outer > (input.mainSize ?? 0)) {
+      lines.push(current);
+      current = [];
+      used = 0;
+    }
+
+    current.push(index);
+    used += outer;
+  });
+
+  if (current.length > 0) lines.push(current);
+  return lines;
+}
+
+/** `wrap-reverse` turns the cross axis around: the first line is the one furthest across. */
+function turnOver(
+  placements: readonly FlexPlacement[],
+  input: FlexLineInput,
+  crossSize: number,
+): FlexPlacement[] {
+  return placements.map((placement, index) => {
+    const item = input.items[index];
+    if (item === undefined) return placement;
+
+    const outer = placement.crossSize + item.crossSurround;
+    const start = placement.crossStart - item.marginCrossStart;
+
+    return { ...placement, crossStart: crossSize - (start + outer) + item.marginCrossEnd };
+  });
+}
+
+/**
  * One flex line. Sizes resolve first, because nothing can be positioned until the free space
  * is known, and the cross axis resolves last, because stretching depends on the line height
  * which depends on the items that are not stretching.
@@ -62,8 +159,15 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   let cursor = spacing.leading;
 
   input.items.forEach((item, i) => {
-    mainStarts.push(cursor + item.marginMainStart);
-    cursor += (outerMain[i] ?? 0) + spacing.between;
+    // Solved from the start of the main axis whichever way it runs, then turned around, so
+    // that `justify-content: flex-start` packs against the end a reversed line begins at.
+    const outer = outerMain[i] ?? 0;
+    const start = input.reverse
+      ? mainSize - cursor - outer + item.marginMainEnd
+      : cursor + item.marginMainStart;
+
+    mainStarts.push(start);
+    cursor += outer + spacing.between;
   });
 
   const cross = resolveCross(input, mains);
@@ -115,30 +219,52 @@ function shrink(input: FlexLineInput, hypothetical: readonly number[], free: num
   );
 }
 
+/**
+ * Every item is placed by its own `align-self`, falling back to the container's `align-items`.
+ * The ones asking for a baseline share one: the line makes room for the tallest ascent among
+ * them and they all hang from it, while the rest are placed against the line they sit in.
+ */
 function resolveCross(
   input: FlexLineInput,
   mains: readonly number[],
 ): { starts: number[]; sizes: number[]; lineSize: number } {
   const sizes = input.items.map((item, i) => item.crossSize ?? input.crossOf(i, mains[i] ?? 0));
+  // `normal` is what a browser reports when nothing asked for anything, and in a flex
+  // container it means stretch.
+  const aligns = input.items.map((item) => {
+    const asked = item.align ?? input.align;
+    return asked === 'normal' ? 'stretch' : asked;
+  });
+  const ascents = input.items.map((_, i) =>
+    aligns[i] === 'baseline' ? (input.baselineOf(i, mains[i] ?? 0) ?? sizes[i] ?? 0) : 0,
+  );
 
-  if (input.align === 'baseline') return alignBaselines(input, mains, sizes);
+  let above = 0;
+  input.items.forEach((item, i) => {
+    if (aligns[i] === 'baseline') {
+      above = Math.max(above, item.marginCrossStart + (ascents[i] ?? 0));
+    }
+  });
 
+  const hangs = (i: number) => (aligns[i] === 'baseline' ? above - (ascents[i] ?? 0) : 0);
   const natural = Math.max(
     0,
-    ...input.items.map((item, i) => (sizes[i] ?? 0) + item.crossSurround),
+    ...input.items.map((item, i) => hangs(i) + (sizes[i] ?? 0) + item.crossSurround),
   );
   const lineSize = input.crossSize ?? natural;
 
   const starts = input.items.map((item, i) => {
+    if (aligns[i] === 'baseline') return hangs(i);
+
     const stretched =
-      input.align === 'stretch' && item.crossSize === null
+      aligns[i] === 'stretch' && item.crossSize === null
         ? Math.max(0, lineSize - item.crossSurround)
         : (sizes[i] ?? 0);
     sizes[i] = stretched;
 
     const free = lineSize - (stretched + item.crossSurround);
 
-    switch (input.align) {
+    switch (aligns[i]) {
       case 'flex-end':
         return free + item.marginCrossStart;
       case 'center':
@@ -149,28 +275,6 @@ function resolveCross(
   });
 
   return { starts, sizes, lineSize };
-}
-
-function alignBaselines(
-  input: FlexLineInput,
-  mains: readonly number[],
-  sizes: readonly number[],
-): { starts: number[]; sizes: number[]; lineSize: number } {
-  const baselines = input.items.map((_, i) => input.baselineOf(i, mains[i] ?? 0) ?? sizes[i] ?? 0);
-  const above = Math.max(
-    0,
-    ...input.items.map((item, i) => item.marginCrossStart + (baselines[i] ?? 0)),
-  );
-
-  const starts = input.items.map((_, i) => above - (baselines[i] ?? 0));
-  const lineSize =
-    input.crossSize ??
-    Math.max(
-      0,
-      ...input.items.map((item, i) => (starts[i] ?? 0) + (sizes[i] ?? 0) + item.crossSurround),
-    );
-
-  return { starts, sizes: [...sizes], lineSize };
 }
 
 function distribute(

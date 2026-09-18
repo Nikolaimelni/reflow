@@ -59,8 +59,10 @@ export const INVALIDATION: Record<PropertyName, Invalidation> = {
   whiteSpace: 'layout',
 
   flexDirection: 'layout',
+  flexWrap: 'layout',
   justifyContent: 'layout',
   alignItems: 'layout',
+  alignSelf: 'layout',
   flexGrow: 'layout',
   flexShrink: 'layout',
   flexBasis: 'layout',

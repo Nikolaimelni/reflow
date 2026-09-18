@@ -25,15 +25,18 @@ export type BorderStyle = 'none' | 'solid' | 'dashed' | 'dotted';
 export type TextAlign = 'left' | 'right' | 'center';
 export type WhiteSpace = 'normal' | 'pre' | 'nowrap';
 export type FontStyle = 'normal' | 'italic' | 'oblique';
-export type FlexDirection = 'row' | 'column';
+export type FlexDirection = 'row' | 'row-reverse' | 'column' | 'column-reverse';
+export type FlexWrap = 'nowrap' | 'wrap' | 'wrap-reverse';
 export type JustifyContent =
+  | 'normal'
   | 'flex-start'
   | 'flex-end'
   | 'center'
   | 'space-between'
   | 'space-around'
   | 'space-evenly';
-export type AlignItems = 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'baseline';
+export type AlignItems = 'normal' | 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'baseline';
+export type AlignSelf = 'auto' | AlignItems;
 export type Visibility = 'visible' | 'hidden';
 
 export type ComputedStyle = {
@@ -91,8 +94,10 @@ export type ComputedStyle = {
   zIndex: ZIndex;
 
   flexDirection: FlexDirection;
+  flexWrap: FlexWrap;
   justifyContent: JustifyContent;
   alignItems: AlignItems;
+  alignSelf: AlignSelf;
   flexGrow: number;
   flexShrink: number;
   flexBasis: Size;
@@ -375,16 +380,36 @@ export const properties: PropertyTable = {
 
   zIndex: own('z-index', AUTO, zIndex),
 
-  flexDirection: own('flex-direction', 'row', keyword('row', 'column')),
+  flexDirection: own(
+    'flex-direction',
+    'row',
+    keyword('row', 'row-reverse', 'column', 'column-reverse'),
+  ),
+  flexWrap: own('flex-wrap', 'nowrap', keyword('nowrap', 'wrap', 'wrap-reverse')),
+  // The initial value is `normal`, which in a flex container behaves as `flex-start`, and the
+  // same for `align-items` against `stretch`. Chromium reports the new names, so these do too.
   justifyContent: own(
     'justify-content',
-    'flex-start',
-    keyword('flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'),
+    'normal',
+    keyword(
+      'normal',
+      'flex-start',
+      'flex-end',
+      'center',
+      'space-between',
+      'space-around',
+      'space-evenly',
+    ),
   ),
   alignItems: own(
     'align-items',
-    'stretch',
-    keyword('stretch', 'flex-start', 'flex-end', 'center', 'baseline'),
+    'normal',
+    keyword('normal', 'stretch', 'flex-start', 'flex-end', 'center', 'baseline'),
+  ),
+  alignSelf: own(
+    'align-self',
+    'auto',
+    keyword('auto', 'normal', 'stretch', 'flex-start', 'flex-end', 'center', 'baseline'),
   ),
   flexGrow: own('flex-grow', 0, flexFactor),
   flexShrink: own('flex-shrink', 1, flexFactor),
