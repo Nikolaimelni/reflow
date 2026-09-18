@@ -15,6 +15,11 @@ export type FlexItemInput = {
   marginMainEnd: number;
   marginCrossStart: number;
   marginCrossEnd: number;
+  /** An `auto` margin takes the free space for itself, and stops the item stretching. */
+  autoMainStart: boolean;
+  autoMainEnd: boolean;
+  autoCrossStart: boolean;
+  autoCrossEnd: boolean;
   /** Cross content size when the style pins it, null when it is auto. */
   crossSize: number | null;
   /** What `align-self` says, or null to follow the container. */
@@ -154,17 +159,28 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   const contentMain = outerMain.reduce((sum, one) => sum + one, 0);
   const mainSize = input.mainSize ?? contentMain;
 
-  const spacing = distribute(input.justify, input.items.length, mainSize - contentMain);
+  // An auto margin on the main axis eats the free space before `justify-content` sees any,
+  // which is how `margin-left: auto` pushes one item to the far end of a row.
+  const hungry = input.items.reduce(
+    (count, item) => count + (item.autoMainStart ? 1 : 0) + (item.autoMainEnd ? 1 : 0),
+    0,
+  );
+  const free = mainSize - contentMain;
+  const share = hungry > 0 && free > 0 ? free / hungry : 0;
+
+  const spacing = distribute(input.justify, input.items.length, hungry > 0 ? 0 : free);
   const mainStarts: number[] = [];
   let cursor = spacing.leading;
 
   input.items.forEach((item, i) => {
+    const eaten = (item.autoMainStart ? share : 0) + (item.autoMainEnd ? share : 0);
+    const outer = (outerMain[i] ?? 0) + eaten;
+
     // Solved from the start of the main axis whichever way it runs, then turned around, so
     // that `justify-content: flex-start` packs against the end a reversed line begins at.
-    const outer = outerMain[i] ?? 0;
     const start = input.reverse
-      ? mainSize - cursor - outer + item.marginMainEnd
-      : cursor + item.marginMainStart;
+      ? mainSize - cursor - outer + item.marginMainEnd + (item.autoMainEnd ? share : 0)
+      : cursor + item.marginMainStart + (item.autoMainStart ? share : 0);
 
     mainStarts.push(start);
     cursor += outer + spacing.between;
@@ -256,13 +272,21 @@ function resolveCross(
   const starts = input.items.map((item, i) => {
     if (aligns[i] === 'baseline') return hangs(i);
 
+    // An item with an auto margin across the line does not stretch: the margin is what takes
+    // the room, and it takes all of it.
+    const hungry = (item.autoCrossStart ? 1 : 0) + (item.autoCrossEnd ? 1 : 0);
     const stretched =
-      aligns[i] === 'stretch' && item.crossSize === null
+      aligns[i] === 'stretch' && item.crossSize === null && hungry === 0
         ? Math.max(0, lineSize - item.crossSurround)
         : (sizes[i] ?? 0);
     sizes[i] = stretched;
 
     const free = lineSize - (stretched + item.crossSurround);
+
+    if (hungry > 0) {
+      const share = free > 0 ? free / hungry : 0;
+      return item.marginCrossStart + (item.autoCrossStart ? share : 0);
+    }
 
     switch (aligns[i]) {
       case 'flex-end':

@@ -90,6 +90,29 @@
   .nowrap {
     white-space: nowrap;
   }
+  .filling {
+    display: inline-block;
+    width: 100%;
+  }
+  .thin-badge {
+    display: inline;
+    position: absolute;
+    width: 14px;
+    height: 6px;
+    background-color: #d8a8a8;
+  }
+  .holds-both {
+    position: absolute;
+    top: 300px;
+    background-color: #e8d8c8;
+  }
+  .inside {
+    height: 8px;
+    background-color: #c8d8e8;
+  }
+  .roomy {
+    line-height: 3;
+  }
   .card-badge {
     display: inline-block;
     position: absolute;
@@ -132,6 +155,9 @@
 <p><span class="card"></span><div class="block-badge"></div></p>
 <p>a line <span class="flexed"></span></p>
 <p class="nowrap">a line long enough that nothing else fits beside it at all <span class="card-badge"></span></p>
+<div><span class="filling">one internationalisation one</span> <span class="thin-badge"></span></div>
+<div>a line <span class="thin-badge roomy"></span></div>
+<div class="holds-both">a word<div class="inside"></div></div>
 <div class="kept">
   <div class="block-badge"></div>
 </div>

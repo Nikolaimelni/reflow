@@ -154,6 +154,27 @@ describe('inline boxes', () => {
     expect(rectOf(span)).toMatchObject({ x: 0, width: 106 });
   });
 
+  it('does not break a line for the border of a box with nothing in it', () => {
+    const empty = element('span', { classes: ['edged'] });
+    const p = element('p', {}, [text('ab cd'), empty]);
+    const css = 'p { margin: 0 } .edged { border: 4px solid }';
+
+    // "ab cd" is 40 wide and the borders take it past the 44 available, but a box with
+    // nothing in it is not worth moving a word for.
+    expect(page(css, [p], 44).lines).toHaveLength(1);
+  });
+
+  it('does not break a full line for a space that hangs off the end', () => {
+    const full = element('span', { classes: ['full'] });
+    const after = element('span', { classes: ['after'] });
+    const p = element('p', {}, [full, text(' '), after]);
+    const css = 'p { margin: 0 } .full { display: inline-block; width: 400px; height: 4px }';
+
+    // The box fills the line exactly, and the space behind it takes no room, so the empty
+    // span that follows stays on the same line.
+    expect(page(css, [p]).rectOf(after)).toMatchObject({ x: 400, y: 0 });
+  });
+
   it('gives a space at the end of a line no room at all', () => {
     const box = element('span', { classes: ['atomic'] });
     const empty = element('span', { classes: ['late'] });

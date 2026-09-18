@@ -108,6 +108,20 @@
   .other-way {
     flex-wrap: wrap-reverse;
   }
+  .pushed {
+    margin-left: auto;
+  }
+  .sunken {
+    margin-top: auto;
+  }
+  .floating {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+  .middled {
+    margin-left: auto;
+    margin-right: auto;
+  }
   .wide-item {
     width: 120px;
     height: 14px;
@@ -192,4 +206,7 @@
   <div class="wide-item"></div>
 </div>
 <div class="row wrapping"><div class="wide-item grows"></div><div class="wide-item"></div></div>
+<div class="row"><div class="fixed"></div><div class="fixed pushed"></div></div>
+<div class="row tall"><div class="fixed sunken"></div><div class="fixed floating"></div></div>
+<div class="row"><div class="fixed middled"></div></div>
 <div class="row"><div class="keeps">one</div><div class="fixed"></div></div>

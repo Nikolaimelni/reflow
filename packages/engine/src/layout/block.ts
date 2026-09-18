@@ -590,9 +590,16 @@ function makesALine(box: Box, containingWidth: number): boolean {
   return box.children.some((child) => makesALine(child, containingWidth));
 }
 
+/**
+ * A text box carries its parent's whole computed style so it inherits the font, which means a
+ * run of text inside an absolutely positioned box looks absolutely positioned itself. It is
+ * not: only an element is ever taken out of the flow.
+ */
 function inFlowChildren(box: BlockBox): Box[] {
   return box.children.filter(
-    (child) => !isCollapsibleWhitespace(child) && child.style.position !== 'absolute',
+    (child) =>
+      !isCollapsibleWhitespace(child) &&
+      (child.kind === 'text' || child.style.position !== 'absolute'),
   );
 }
 
@@ -931,6 +938,10 @@ type ItemMetrics = {
   measure: (main: number) => { cross: number; baseline: number | null };
 };
 
+function auto(margin: ComputedStyle['marginTop']): boolean {
+  return margin.kind === 'auto';
+}
+
 function itemMetrics(
   item: BlockBox,
   containing: ContainingBlock,
@@ -1043,6 +1054,10 @@ function itemMetrics(
       marginMainEnd: isRow ? margin.right : margin.bottom,
       marginCrossStart: isRow ? margin.top : margin.left,
       marginCrossEnd: isRow ? margin.bottom : margin.right,
+      autoMainStart: auto(isRow ? style.marginLeft : style.marginTop),
+      autoMainEnd: auto(isRow ? style.marginRight : style.marginBottom),
+      autoCrossStart: auto(isRow ? style.marginTop : style.marginLeft),
+      autoCrossEnd: auto(isRow ? style.marginBottom : style.marginRight),
       align: style.alignSelf === 'auto' ? null : style.alignSelf,
       crossSize,
     },

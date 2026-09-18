@@ -54,6 +54,24 @@ describe('position relative', () => {
     expect(page(`${css} .flexed { display: flex }`, [holding])(flexed)).toMatchObject({ y: 16 });
   });
 
+  it('keeps the text inside it when it also holds a block', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const box = element('div', { classes: ['out'] }, [text('ab'), inner]);
+    const css = '.out { position: absolute } .inner { height: 8px }';
+
+    // The text run carries the style of the box around it, absolute and all, and used to be
+    // filtered out of the flow along with it.
+    expect(page(css, [box])(box).height).toBe(24);
+  });
+
+  it('leaves its line-height out of the line it sits in', () => {
+    const tall = element('span', { classes: ['out', 'roomy'] });
+    const p = element('p', {}, [text('ab'), tall]);
+    const css = 'p { margin: 0 } .out { position: absolute } .roomy { line-height: 3 }';
+
+    expect(page(css, [p])(p).height).toBe(16);
+  });
+
   it('keeps an out of flow box in the line it was written in', () => {
     const badge = element('span', { classes: ['badge'] });
     const card = element('span', { classes: ['card'] }, [text('ab'), badge]);

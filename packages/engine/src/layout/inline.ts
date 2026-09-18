@@ -632,6 +632,27 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     if (chunk.content) content = true;
   };
 
+  /**
+   * What is on the end of the line but takes no room in the decision to break: a collapsible
+   * space, which hangs over the edge, and the edges of a box that opened and closed there
+   * without putting anything between them. A border on an empty span is not worth a break.
+   */
+  const hangs = (): number => {
+    let at = current.length;
+    while (at > 0 && isMarker(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
+
+    const trailing = current.slice(at).map(({ piece }) => piece);
+    const opened = new Set(trailing.filter((p) => p.kind === 'edge-start').map((p) => p.box));
+    const closed = new Set(trailing.filter((p) => p.kind === 'edge-end').map((p) => p.box));
+
+    const idle = trailing
+      .filter((piece) => isEdge(piece.kind) && opened.has(piece.box) && closed.has(piece.box))
+      .reduce((sum, piece) => sum + piece.width, 0);
+
+    const space = hanging();
+    return idle + (space < 0 ? 0 : (current[space]?.piece.width ?? 0));
+  };
+
   /** A space the line can be cut at, which needs something other than edges behind it. */
   const opportunity = (): number => {
     for (let at = current.length - 1; at >= 0; at--) {
@@ -685,7 +706,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     place(entry.chunk);
-    if (width > input.available) rewind();
+    if (width - hangs() > input.available) rewind();
   }
 
   flush();
@@ -727,6 +748,9 @@ function verticalMetrics(
   // An edge carries no glyphs but it is still an inline box, and an inline box contributes
   // its own line-height to the line whether or not there is anything inside it.
   for (const { piece } of items) {
+    // Out of the flow, so its line-height is nobody's business but its own.
+    if (piece.kind === 'out-of-flow') continue;
+
     if (piece.kind === 'atomic') {
       const ascent = baselineOf(piece);
       above = Math.max(above, ascent);

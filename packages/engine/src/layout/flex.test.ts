@@ -15,6 +15,10 @@ function item(overrides: Partial<FlexItemInput> = {}): FlexItemInput {
     marginMainEnd: 0,
     marginCrossStart: 0,
     marginCrossEnd: 0,
+    autoMainStart: false,
+    autoMainEnd: false,
+    autoCrossStart: false,
+    autoCrossEnd: false,
     crossSize: 20,
     align: null,
     ...overrides,
@@ -244,5 +248,33 @@ describe('wrapping', () => {
     const result = line({ items, mainSize: 450, wrap: 'nowrap' });
 
     expect(result.placements.map((one) => one.crossStart)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('auto margins', () => {
+  it('pushes an item to the far end with one of them', () => {
+    const items = [item({ basis: 60 }), item({ basis: 60, autoMainStart: true })];
+
+    expect(starts(line({ items }))).toEqual([0, 240]);
+  });
+
+  it('shares the room between them', () => {
+    const items = [item({ basis: 100, autoMainStart: true, autoMainEnd: true })];
+
+    expect(starts(line({ items }))).toEqual([100]);
+  });
+
+  it('leaves justify-content nothing to distribute', () => {
+    const items = [item({ basis: 60, autoMainEnd: true }), item({ basis: 60 })];
+
+    expect(starts(line({ items, justify: 'center' }))).toEqual([0, 240]);
+  });
+
+  it('stops an item stretching across the line', () => {
+    const items = [item({ crossSize: null, autoCrossStart: true })];
+    const result = line({ items, crossSize: 40, crossOf: () => 10 });
+
+    expect(result.placements.map((one) => one.crossSize)).toEqual([10]);
+    expect(result.placements.map((one) => one.crossStart)).toEqual([30]);
   });
 });
