@@ -328,8 +328,9 @@ function layoutChildren(
       pieces: context.pieces,
       lines: context.lines,
       trace: context.trace,
-      layoutAtomic: (child, available) => measureAtomic(child, available, context),
-      placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing.width, context, absolutes),
+      layoutAtomic: (child, available) =>
+        measureAtomic(child, available, containing.height, context),
+      placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
       defer: (child, x, y) => absolutes.push({ box: child, staticX: x, staticY: y }),
     });
 
@@ -612,7 +613,12 @@ function inFlowChildren(box: BlockBox): Box[] {
  * An inline-block lays its own children out as blocks, so it goes through the block path in
  * a throwaway context first just to find out how big it is.
  */
-function measureAtomic(box: InlineBox, available: number, context: Context): AtomicSize {
+function measureAtomic(
+  box: InlineBox,
+  available: number,
+  basis: number | null,
+  context: Context,
+): AtomicSize {
   const scratch: Context = {
     ...context,
     fragments: new Map(),
@@ -633,7 +639,7 @@ function measureAtomic(box: InlineBox, available: number, context: Context): Ato
       override: {
         x: 0,
         contentWidth,
-        contentHeight: atomicContentHeight(box, available),
+        contentHeight: atomicContentHeight(box, available, basis),
         margin,
       },
     },
@@ -668,10 +674,12 @@ function placeAtomic(
   box: InlineBox,
   x: number,
   y: number,
-  available: number,
+  containing: ContainingBlock,
   context: Context,
   absolutes: Deferred[],
 ): void {
+  const available = containing.width;
+  const basis = containing.height;
   const margin = atomicMargin(box, available);
   const contentWidth = atomicContentWidth(box, available, context);
 
@@ -688,7 +696,7 @@ function placeAtomic(
       override: {
         x: x + margin.left,
         contentWidth,
-        contentHeight: atomicContentHeight(box, available),
+        contentHeight: atomicContentHeight(box, available, basis),
         margin,
       },
     },
@@ -697,15 +705,20 @@ function placeAtomic(
 }
 
 /**
- * An inline-block keeps its own height. Percentages have no basis to resolve against inside
- * a line, so they read as auto, which is the same rule an auto height parent gets.
+ * An inline-block keeps its own height, and a percentage of it goes against the block the
+ * line belongs to, the same as anywhere else. A line does not make the basis go away; only an
+ * indefinite height above does.
  */
-function atomicContentHeight(box: InlineBox, available: number): number | null {
+function atomicContentHeight(
+  box: InlineBox,
+  available: number,
+  basis: number | null,
+): number | null {
   const border = usedBorderWidths(box.style);
   const padding = usedPadding(box.style, available);
   const down = border.top + border.bottom + padding.top + padding.bottom;
 
-  return toContentBox(box.style.boxSizing, usedSize(box.style.height, null), down);
+  return toContentBox(box.style.boxSizing, usedSize(box.style.height, basis), down);
 }
 
 /**

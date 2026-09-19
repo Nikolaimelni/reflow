@@ -16,6 +16,40 @@ function shape(box: Box): string[] {
 }
 
 describe('buildBoxTree', () => {
+  it('cuts an inline in two around a block', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const em = element('em', {}, [text('before'), inner, text('after')]);
+    const root = element('div', {}, [em]);
+
+    expect(shape(tree(root, '.inner { height: 4px }'))).toEqual([
+      'block <div>',
+      '  anonymous block',
+      '    inline <em>',
+      '      text "before"',
+      '  block <div>',
+      '  anonymous block',
+      '    inline <em>',
+      '      text "after"',
+    ]);
+  });
+
+  it('keeps both halves even when one of them is empty', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const em = element('em', {}, [inner]);
+    const root = element('div', {}, [em]);
+
+    // The spec says the box is broken around the block even if either side is empty, and an
+    // empty half still carries the border on the side it kept.
+    expect(shape(tree(root, '.inner { height: 4px }'))).toEqual([
+      'block <div>',
+      '  anonymous block',
+      '    inline <em>',
+      '  block <div>',
+      '  anonymous block',
+      '    inline <em>',
+    ]);
+  });
+
   it('drops a subtree with display none', () => {
     const hidden = element('div', { classes: ['gone'] }, [element('p')]);
     const root = element('div', {}, [hidden, element('p')]);

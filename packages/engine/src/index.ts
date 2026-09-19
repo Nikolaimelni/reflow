@@ -2,10 +2,12 @@ export {
   type BlockBox,
   type Box,
   type BoxId,
+  boxesByElement,
   describeBox,
   type InlineBox,
   isAnonymous,
   isBlock,
+  reportedRect,
   type TextBox,
   walkBoxes,
 } from './boxtree/box.js';

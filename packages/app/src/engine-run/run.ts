@@ -2,6 +2,7 @@ import {
   type BlockBox,
   type Box,
   type BoxId,
+  boxesByElement,
   buildBoxTree,
   buildDisplayList,
   computeStyles,
@@ -26,7 +27,7 @@ export type Run =
       labels: Map<BoxId, string>;
       boxes: Map<BoxId, Box>;
       root: ElementNode;
-      boxOf: Map<ElementNode, BoxId>;
+      boxOf: Map<ElementNode, { own: BoxId[]; span: BoxId[] }>;
     }
   | { status: 'empty' }
   | { status: 'failed'; message: string };
@@ -54,14 +55,11 @@ export function run(html: string, css: string, viewport: Viewport, devicePixelRa
 
     const labels = new Map<BoxId, string>();
     const boxes = new Map<BoxId, Box>();
-    const boxOf = new Map<ElementNode, BoxId>();
+    const boxOf = boxesByElement(boxTree);
 
     walkBoxes(boxTree, (box) => {
       labels.set(box.id, describeBox(box));
       boxes.set(box.id, box);
-      if (box.kind !== 'text' && box.element !== null && !boxOf.has(box.element)) {
-        boxOf.set(box.element, box.id);
-      }
     });
 
     return { status: 'ok', boxTree, layout, display, labels, boxes, root, boxOf };

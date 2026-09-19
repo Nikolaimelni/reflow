@@ -2,14 +2,12 @@ import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, test } from '@playwright/test';
-import type { ElementNode } from '@reflow/engine';
 import {
-  type Box,
-  type BoxId,
+  boxesByElement,
   buildBoxTree,
   computeStyles,
   layoutDocument,
-  walkBoxes,
+  reportedRect,
 } from '@reflow/engine';
 import { buildTree, COMPARED_PROPERTIES } from './compare.js';
 import { extractPage, measureInPage } from './extract.js';
@@ -51,10 +49,7 @@ test.describe('geometry against Chromium', () => {
 
       const measurements = await page.evaluate(measureInPage, measurementRequests(boxTree));
       const layout = layoutDocument(boxTree, extracted.viewport, tableMeasurer(measurements));
-      const byElement = new Map<ElementNode, BoxId>();
-      walkBoxes(boxTree, (box: Box) => {
-        if (box.kind !== 'text' && box.element !== null) byElement.set(box.element, box.id);
-      });
+      const byElement = boxesByElement(boxTree);
 
       let matched = 0;
       let compared = 0;
@@ -63,9 +58,10 @@ test.describe('geometry against Chromium', () => {
       extracted.nodes.forEach((element, index) => {
         if (element.kind !== 'element') return;
         const node = nodes[index];
-        const id = node?.kind === 'element' ? byElement.get(node) : undefined;
-        const fragment = id === undefined ? undefined : layout.fragments.get(id);
-        if (fragment === undefined) return;
+        const boxes = node?.kind === 'element' ? byElement.get(node) : undefined;
+        const rect = boxes === undefined ? null : reportedRect(boxes, layout.fragments);
+        if (rect === null) return;
+        const fragment = { rect };
 
         for (const edge of ['x', 'y', 'width', 'height'] as const) {
           compared++;

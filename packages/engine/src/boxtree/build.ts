@@ -6,6 +6,7 @@ import {
   properties,
   propertyNames,
 } from '../cascade/properties.js';
+import { ZERO } from '../cascade/values.js';
 import type { DomNode, ElementNode } from '../dom/node.js';
 import {
   type BlockBox,
@@ -36,19 +37,6 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
 
   // An out of flow box is always block-level, whatever display the author asked for.
   if (style.position === 'absolute' && style.display !== 'flex') {
-    return {
-      kind: 'block',
-      id: ids(),
-      element: node,
-      style,
-      children: organise(children, style, ids),
-    };
-  }
-
-  // A block inside an inline is supposed to split the inline in two around it. Turning the
-  // inline into a block container instead stacks the same boxes in the same places, and the
-  // only thing given up is the split inline's own reported rectangle.
-  if (style.display === 'inline' && children.some(isBlock)) {
     return {
       kind: 'block',
       id: ids(),
@@ -159,16 +147,78 @@ function buildChildBox(
   return buildBox(child, styles, ids);
 }
 
+/** An out of flow box is not part of the flow it sits in, so it splits nothing. */
+function splits(child: Box): boolean {
+  return isBlock(child) && child.style.position !== 'absolute';
+}
+
+/**
+ * A block inside an inline box cuts it in two. What came before the block is one box, what
+ * comes after is another, and the block is their sibling rather than their child. Both halves
+ * are the same element, and the side that was cut carries no border or padding, because the
+ * box does not end there.
+ */
+function cutAroundBlocks(children: Box[], ids: IdSource): Box[] {
+  return children.flatMap((child) => {
+    if (child.kind !== 'inline' || child.atomic) return [child];
+
+    const inside = cutAroundBlocks(child.children, ids);
+    if (!inside.some(splits)) return [{ ...child, children: inside }];
+
+    const pieces: Box[] = [];
+    let run: Box[] = [];
+
+    // The spec cuts the box in two around the block even if either side is empty, and an
+    // empty half is not nothing: it still carries the border on the side it kept.
+    const flush = () => {
+      pieces.push({ ...child, id: ids(), children: run });
+      run = [];
+    };
+
+    for (const inner of inside) {
+      if (splits(inner)) {
+        flush();
+        pieces.push(inner);
+      } else {
+        run.push(inner);
+      }
+    }
+
+    flush();
+
+    const halves = pieces.filter((piece) => piece.kind === 'inline');
+    return pieces.map((piece) =>
+      piece.kind === 'inline'
+        ? { ...piece, style: cutStyle(piece.style, piece === halves[0], piece === halves.at(-1)) }
+        : piece,
+    );
+  });
+}
+
+function cutStyle(style: ComputedStyle, opens: boolean, closes: boolean): ComputedStyle {
+  return {
+    ...style,
+    ...(opens
+      ? {}
+      : { marginLeft: ZERO, paddingLeft: ZERO, borderLeftWidth: ZERO, borderLeftStyle: 'none' }),
+    ...(closes
+      ? {}
+      : {
+          marginRight: ZERO,
+          paddingRight: ZERO,
+          borderRightWidth: ZERO,
+          borderRightStyle: 'none',
+        }),
+  };
+}
+
 /**
  * A block container holds either blocks or inlines, never a mix. When it has both, each run
  * of inline boxes is wrapped in an anonymous block. A run of nothing but whitespace is
  * dropped instead, which is why `<div><p>a</p>\n<p>b</p></div>` has two children and not five.
  */
-function organise(children: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
-  // An out of flow box is not part of the flow it sits in, so it does not split the inline
-  // content around it. It keeps its place in the line, which is where its static position
-  // comes from.
-  const splits = (child: Box) => isBlock(child) && child.style.position !== 'absolute';
+function organise(original: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
+  const children = cutAroundBlocks(original, ids);
   if (!children.some(splits)) return children;
 
   const organised: Box[] = [];

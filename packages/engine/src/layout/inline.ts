@@ -60,6 +60,13 @@ type Piece = {
   height: number;
   baseline: number | null;
   style: ComputedStyle;
+  /**
+   * Whether an edge is allowed to hang over the end of a line. Chromium lets the border of an
+   * empty `<span>` hang and breaks the line for the same border on a `<div>` that has been
+   * made inline, which is the same thing it does with a newline in front of a closing tag: it
+   * remembers what the tag was. Measured, not found in a spec.
+   */
+  mayHang: boolean;
   ancestors: readonly BoxId[];
   /** Relative offsets of the inline boxes this piece sits inside, already added up. */
   offset: Offset;
@@ -429,6 +436,7 @@ function collect(
           height,
           baseline: metrics.ascent,
           style: child.style,
+          mayHang: true,
           ancestors,
           offset,
         });
@@ -441,6 +449,7 @@ function collect(
       surrounds.set(child.id, surround);
 
       const inside = [...ancestors, child.id];
+      const hangs = !blockByDefault(child.element?.tag ?? '');
       const edge = (kind: 'edge-start' | 'edge-end', width: number): Piece => ({
         kind,
         box: child.id,
@@ -449,6 +458,7 @@ function collect(
         height: 0,
         baseline: null,
         style: child.style,
+        mayHang: hangs,
         ancestors: inside,
         offset: surround.offset,
       });
@@ -485,6 +495,7 @@ function collect(
         height: 0,
         baseline: null,
         style: child.style,
+        mayHang: true,
         ancestors,
         offset,
       });
@@ -501,6 +512,7 @@ function collect(
         height: size.height,
         baseline: size.baseline,
         style: child.style,
+        mayHang: true,
         ancestors,
         offset,
       });
@@ -614,8 +626,6 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   let width = 0;
   /** An inline box's own edges do not count: a space after one is still a leading space. */
   let content = false;
-  /** Where a leading space was dropped, which is still somewhere the line may be cut. */
-  let dropped = -1;
 
   /** The index of a collapsible space at the end of the line, past any closing edges. */
   const hanging = (): number => {
@@ -646,7 +656,6 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     current = [];
     width = 0;
     content = false;
-    dropped = -1;
   };
 
   const place = (chunk: Chunk) => {
@@ -671,7 +680,10 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     const closed = new Set(trailing.filter((p) => p.kind === 'edge-end').map((p) => p.box));
 
     const idle = trailing
-      .filter((piece) => isEdge(piece.kind) && opened.has(piece.box) && closed.has(piece.box))
+      .filter(
+        (piece) =>
+          isEdge(piece.kind) && piece.mayHang && opened.has(piece.box) && closed.has(piece.box),
+      )
       .reduce((sum, piece) => sum + piece.width, 0);
 
     const space = hanging();
@@ -708,17 +720,11 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
   };
 
-  const rewind = (overflowed: boolean) => {
+  const rewind = () => {
+    // A line always keeps what it has: a space at the start is not drawn and is not a place
+    // to break either, so what overflows simply hangs over the edge.
     const at = opportunity();
-
-    if (at < 0) {
-      // A space at the start of a line is not drawn, but it is still a place the line may
-      // break. What follows it moves down, and what it leaves behind is a line with nothing
-      // on it, which is a line of no height. Only content is worth that: a closing margin on
-      // its own is left to hang over the edge instead.
-      if (overflowed && dropped >= 0 && dropped < current.length) carryOver(dropped);
-      return;
-    }
+    if (at < 0) return;
 
     // A closing edge stays put, and so does a box out of the flow: neither of them is what
     // overflowed the line. If holding them back leaves nothing to carry, the break would do
@@ -738,11 +744,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     if (entry.kind === 'space') {
       // A space at the start of a line disappears, and a run of them counts once: the first,
       // which decides whose box it is drawn in when the run crosses a boundary.
-      if (!content) {
-        dropped = current.length;
-        continue;
-      }
-      if (hanging() >= 0) continue;
+      if (!content || hanging() >= 0) continue;
 
       current.push({ piece: entry.space, x: width });
       width += entry.space.width;
@@ -750,7 +752,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     place(entry.chunk);
-    if (width - hangs() > input.available) rewind(entry.chunk.content);
+    if (width - hangs() > input.available) rewind();
   }
 
   flush();

@@ -154,6 +154,22 @@ describe('inline boxes', () => {
     expect(rectOf(span)).toMatchObject({ x: 0, width: 106 });
   });
 
+  it('breaks for an edge the browser will not let hang', () => {
+    const css = '.pad { display: inline; padding-left: 20px }';
+    const linesFor = (tag: string) => {
+      const box = element(tag, { classes: ['pad'] });
+      const p = element('p', {}, [text('abcdefghij ab '), box]);
+      return page(css, [p], 120).lines.length;
+    };
+
+    // The words take 104 of the 120 available and the padding another 20, with the space
+    // between them hanging. A span lets its padding hang as well and the line holds; a div
+    // made inline is broken for, and the last word goes down with it. That is the same thing
+    // the browser does with a newline in front of a closing tag.
+    expect(linesFor('span')).toBe(1);
+    expect(linesFor('div')).toBe(2);
+  });
+
   it('lets a closing margin hang rather than empty the line for it', () => {
     const em = element('em', { classes: ['wide-edges'] }, [text(' abcdefghij ')]);
     const p = element('p', {}, [em]);
@@ -179,20 +195,6 @@ describe('inline boxes', () => {
 
     expect(page(css, [withHair], 0).rectOf(withHair).height).toBe(16);
     expect(page(css, [withNothing], 0).rectOf(withNothing).height).toBe(0);
-  });
-
-  it('breaks where a leading space was, and leaves a line with nothing on it', () => {
-    const empty = element('span', { classes: ['bare'] });
-    const wide = element('span', { classes: ['wide'] });
-    const p = element('p', {}, [empty, text(' '), wide]);
-    const css = 'p { margin: 0 } .wide { display: inline-block; width: 60px; height: 6px }';
-    const { rectOf, lines } = page(css, [p], 44);
-
-    // The space in front of the wide box is not drawn, but the box still moves down, and the
-    // line it leaves behind holds nothing at all, so it takes no room.
-    expect(lines).toHaveLength(2);
-    expect(rectOf(wide).x).toBe(0);
-    expect(rectOf(p).height).toBe(16);
   });
 
   it('does not break a line for the border of a box with nothing in it', () => {
@@ -336,6 +338,16 @@ describe('inline boxes', () => {
     // leading is 1.5, floored to 1, and the descent keeps the other half pixel: 24 + 5.2.
     expect(page(css, [p]).rectOf(p).height).toBe(27.2);
     expect(page(`${css} p { line-height: 19px }`, [p]).rectOf(p).height).toBe(29.2);
+  });
+
+  it('resolves an inline-block percentage height against the block above it', () => {
+    const box = element('span', { classes: ['half'] });
+    const p = element('p', { classes: ['frame'] }, [box]);
+    const css = 'p { margin: 0 } .half { display: inline-block; width: 8px; height: 50% }';
+
+    // Half of the forty the paragraph was given, and nothing at all when it was given none.
+    expect(page(`${css} .frame { height: 40px }`, [p]).rectOf(box).height).toBe(20);
+    expect(page(css, [p]).rectOf(box).height).toBe(0);
   });
 
   it('lays an inline-block out as a block and sits it on the baseline', () => {

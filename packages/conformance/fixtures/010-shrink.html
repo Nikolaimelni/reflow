@@ -26,6 +26,18 @@
     display: inline-block;
     min-width: 200px;
   }
+  .tall-frame {
+    height: 40px;
+  }
+  .loose-frame {
+    background-color: #f0f0e8;
+  }
+  .half-height {
+    display: inline-block;
+    width: 30px;
+    height: 50%;
+    background-color: #dce6f5;
+  }
   .holds-an-absolute {
     position: absolute;
     top: 240px;
@@ -45,3 +57,6 @@
 <p><span class="floor">wide floor</span></p>
 <p>text <span class="ib">middle</span> text</p>
 <div class="holds-an-absolute"><div class="out-of-flow"></div></div>
+
+<div class="tall-frame"><span class="half-height">one</span></div>
+<div class="loose-frame"><span class="half-height">one</span></div>

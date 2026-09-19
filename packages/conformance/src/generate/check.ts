@@ -1,11 +1,10 @@
 import type { Page } from '@playwright/test';
 import {
-  type Box,
-  type BoxId,
+  boxesByElement,
   buildBoxTree,
   computeStyles,
   layoutDocument,
-  walkBoxes,
+  reportedRect,
 } from '@reflow/engine';
 import { buildTree, COMPARED_PROPERTIES } from '../compare.js';
 import { extractPage, measureInPage } from '../extract.js';
@@ -37,10 +36,7 @@ export async function checkDocument(
   const measurements = await page.evaluate(measureInPage, measurementRequests(boxTree));
   const layout = layoutDocument(boxTree, extracted.viewport, tableMeasurer(measurements));
 
-  const byElement = new Map<(typeof nodes)[number], BoxId>();
-  walkBoxes(boxTree, (box: Box) => {
-    if (box.kind !== 'text' && box.element !== null) byElement.set(box.element, box.id);
-  });
+  const byElement = boxesByElement(boxTree);
 
   let compared = 0;
   const misses: string[] = [];
@@ -49,13 +45,13 @@ export async function checkDocument(
     if (element.kind !== 'element') return;
 
     const node = nodes[index];
-    const id = node === undefined ? undefined : byElement.get(node);
-    const fragment = id === undefined ? undefined : layout.fragments.get(id);
-    if (fragment === undefined) return;
+    const boxes = node?.kind === 'element' ? byElement.get(node) : undefined;
+    const rect = boxes === undefined ? null : reportedRect(boxes, layout.fragments);
+    if (rect === null) return;
 
     for (const edge of ['x', 'y', 'width', 'height'] as const) {
       compared++;
-      const ours = fragment.rect[edge];
+      const ours = rect[edge];
       const theirs = element.rect[edge];
       if (Math.abs(ours - theirs) <= tolerance) continue;
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BoxId, ElementNode } from '@reflow/engine';
+  import { type BoxId, type ElementNode, reportedRect } from '@reflow/engine';
   import { compareRects } from './divergence.js';
   import type { Session } from '../engine-run/session.svelte.js';
 
@@ -46,8 +46,9 @@
       return;
     }
 
+    const run = session.result;
     const theirs = collectElements(host.documentElement);
-    const ours = collectNodes(session.result.root);
+    const ours = collectNodes(run.root);
     const diverging = new Map<BoxId, string>();
 
     for (let i = 0; i < Math.min(theirs.length, ours.length); i++) {
@@ -55,17 +56,19 @@
       const node = ours[i];
       if (element === undefined || node === undefined) continue;
 
-      const id = session.result.boxOf.get(node);
-      const fragment = id === undefined ? undefined : session.result.layout.fragments.get(id);
-      if (id === undefined || fragment === undefined) continue;
+      // A block cuts the inline around it in two, so one element can be several boxes, and
+      // what the browser reports for it is the union of them.
+      const boxes = run.boxOf.get(node);
+      const rect = boxes === undefined ? null : reportedRect(boxes, run.layout.fragments);
+      if (boxes === undefined || rect === null) continue;
 
       const divergence = compareRects(
         `<${element.tagName.toLowerCase()}>`,
-        fragment.rect,
+        rect,
         element.getBoundingClientRect(),
       );
 
-      if (divergence !== null) diverging.set(id, divergence);
+      if (divergence !== null) for (const one of boxes.own) diverging.set(one, divergence);
     }
 
     session.diverging = diverging;

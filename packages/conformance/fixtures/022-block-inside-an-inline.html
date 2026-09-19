@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>an inline box cut in half by a block</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .cut {
+    border: 1px solid;
+    background-color: #f0e2c8;
+  }
+  .bare-cut {
+    display: inline;
+  }
+  .flat {
+    background-color: #e8e8d8;
+  }
+  .edged-after {
+    display: inline;
+    border: 1px solid;
+  }
+  .inner {
+    height: 10px;
+    background-color: #dce6f5;
+  }
+</style>
+
+<div><em class="cut"><div class="inner"></div></em></div>
+<div><em class="cut">before<div class="inner"></div>after</em></div>
+<div><em class="cut">before<div class="inner"></div></em></div>
+<div><em class="cut"><div class="inner"></div>after</em></div>
+<div>text <em class="cut">a<div class="inner"></div>b</em> tail</div>
+
+<div class="bare-cut">
+  <div class="flat"></div>
+</div>
+<div class="edged-after"></div>
