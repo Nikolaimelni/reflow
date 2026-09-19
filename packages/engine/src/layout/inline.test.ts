@@ -154,6 +154,47 @@ describe('inline boxes', () => {
     expect(rectOf(span)).toMatchObject({ x: 0, width: 106 });
   });
 
+  it('lets a closing margin hang rather than empty the line for it', () => {
+    const em = element('em', { classes: ['wide-edges'] }, [text(' abcdefghij ')]);
+    const p = element('p', {}, [em]);
+    const css = 'p { margin: 0 } .wide-edges { margin: 0 10px; padding-left: 8px }';
+    const { rectOf, lines } = page(css, [p], 100);
+
+    // 10 + 8 + 80 + 10 is two over the hundred available. There is nowhere useful to break:
+    // moving the word down would leave a line with nothing on it and the margin would still
+    // be there, so the line keeps what it has.
+    expect(lines).toHaveLength(1);
+    expect(rectOf(em)).toMatchObject({ x: 10, width: 88 });
+  });
+
+  it('makes a line for a percentage edge that comes to nothing', () => {
+    const hair = element('span', { classes: ['hair'] });
+    const nothing = element('span', { classes: ['nothing'] });
+    const css = '.hair { padding-left: 1% } .nothing { padding-left: 0 }';
+
+    // The browser decides whether an inline box has a padding before the percentages are
+    // resolved, so one per cent of nothing still makes a line and a plain zero does not.
+    const withHair = element('p', {}, [hair]);
+    const withNothing = element('p', {}, [nothing]);
+
+    expect(page(css, [withHair], 0).rectOf(withHair).height).toBe(16);
+    expect(page(css, [withNothing], 0).rectOf(withNothing).height).toBe(0);
+  });
+
+  it('breaks where a leading space was, and leaves a line with nothing on it', () => {
+    const empty = element('span', { classes: ['bare'] });
+    const wide = element('span', { classes: ['wide'] });
+    const p = element('p', {}, [empty, text(' '), wide]);
+    const css = 'p { margin: 0 } .wide { display: inline-block; width: 60px; height: 6px }';
+    const { rectOf, lines } = page(css, [p], 44);
+
+    // The space in front of the wide box is not drawn, but the box still moves down, and the
+    // line it leaves behind holds nothing at all, so it takes no room.
+    expect(lines).toHaveLength(2);
+    expect(rectOf(wide).x).toBe(0);
+    expect(rectOf(p).height).toBe(16);
+  });
+
   it('does not break a line for the border of a box with nothing in it', () => {
     const empty = element('span', { classes: ['edged'] });
     const p = element('p', {}, [text('ab cd'), empty]);

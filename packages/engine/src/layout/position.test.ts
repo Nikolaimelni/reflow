@@ -54,6 +54,18 @@ describe('position relative', () => {
     expect(page(`${css} .flexed { display: flex }`, [holding])(flexed)).toMatchObject({ y: 16 });
   });
 
+  it('stays on its line when what follows is what overflowed', () => {
+    const badge = element('span', { classes: ['out'] });
+    const fat = element('span', { classes: ['fat'] });
+    const p = element('p', {}, [text('ab'), badge, text(' '), fat]);
+    const css =
+      'p { margin: 0 } .out { position: absolute } .fat { display: inline-block; width: 380px; height: 4px }';
+
+    // The wide box does not fit beside the word and moves down. The out of flow box takes no
+    // room at all, so it has no reason to follow it.
+    expect(page(css, [p])(badge)).toMatchObject({ x: 16, y: 0 });
+  });
+
   it('keeps the text inside it when it also holds a block', () => {
     const inner = element('div', { classes: ['inner'] });
     const box = element('div', { classes: ['out'] }, [text('ab'), inner]);
@@ -84,6 +96,17 @@ describe('position relative', () => {
     // without widening it or pushing anything down.
     expect(rectOf(card)).toMatchObject({ x: 16, width: 16 });
     expect(rectOf(badge)).toMatchObject({ x: 32, width: 5 });
+  });
+
+  it('gives a percentage height inside it nothing to resolve against', () => {
+    const inner = element('div', { classes: ['share'] }, [text('ab')]);
+    const box = element('div', { classes: ['out'] }, [inner]);
+    const css = '.out { position: absolute } .share { height: 50% }';
+
+    // The box works its own height out from the content, so half of it is not a number yet
+    // and the child falls back to its own content. Give the box a height and it is.
+    expect(page(css, [box])(inner).height).toBe(16);
+    expect(page(`${css} .out { height: 40px }`, [box])(inner).height).toBe(20);
   });
 
   it('resolves its own percentage padding against the containing block', () => {

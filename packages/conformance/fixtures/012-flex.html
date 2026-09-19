@@ -105,8 +105,17 @@
   .wrapping {
     flex-wrap: wrap;
   }
+  .narrow {
+    width: 180px;
+    font-size: 23px;
+    background-color: #e8e8d8;
+  }
   .other-way {
     flex-wrap: wrap-reverse;
+  }
+  .hanging {
+    margin-bottom: 6px;
+    margin-top: 2px;
   }
   .pushed {
     margin-left: auto;
@@ -209,4 +218,8 @@
 <div class="row"><div class="fixed"></div><div class="fixed pushed"></div></div>
 <div class="row tall"><div class="fixed sunken"></div><div class="fixed floating"></div></div>
 <div class="row"><div class="fixed middled"></div></div>
+<div class="column wrapping narrow">internationalisation three one</div>
+<div class="row wrapping other-way"><div class="fixed hanging"></div></div>
+<div class="row wrapping other-way tall"><div class="fixed hanging"></div><div class="fixed"></div></div>
+<div class="column narrow">internationalisation three one</div>
 <div class="row"><div class="keeps">one</div><div class="fixed"></div></div>

@@ -75,6 +75,11 @@ type Override = {
   contentWidth: number;
   margin: Edges;
   contentHeight: number | null;
+  /**
+   * Whether that height is a size the box was given rather than one it worked out from its
+   * content. A percentage height inside only has something to resolve against when it is.
+   */
+  definite?: boolean;
 };
 
 type BlockInput = {
@@ -207,7 +212,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const childContaining: ContainingBlock = {
     x: x + border.left + padding.left,
     width: horizontal.contentWidth,
-    height: specifiedHeight,
+    height: override?.definite === false ? null : specifiedHeight,
   };
 
   // A positioned box is the containing block for the absolute boxes under it, so it collects
@@ -793,9 +798,12 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
       autoSize: () => fromContent,
     });
 
-  const tall = downAxis(
-    toContentBox(style.boxSizing, usedSize(style.height, containing.height), down),
+  const askedHeight = toContentBox(
+    style.boxSizing,
+    usedSize(style.height, containing.height),
+    down,
   );
+  const tall = downAxis(askedHeight);
   const height = clampSize(
     tall.size,
     toContentBox(style.boxSizing, usedSize(style.minHeight, containing.height), down),
@@ -814,6 +822,12 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
         x: containing.x + horizontal.start,
         contentWidth: horizontal.size,
         contentHeight: vertical.size,
+        // Worked out from the content unless the style asked for a height or the insets
+        // pinned one, and a percentage inside has nothing to resolve against either way.
+        definite:
+          askedHeight !== null ||
+          (usedInset(style.top, containing.height) !== null &&
+            usedInset(style.bottom, containing.height) !== null),
         margin: {
           top: vertical.marginStart,
           right: horizontal.marginEnd,
@@ -883,7 +897,13 @@ function layoutFlexItems(
     items.push(child);
   }
 
-  const metrics = items.map((item) => itemMetrics(item, containing, isRow, context));
+  const wraps = box.style.flexWrap !== 'nowrap';
+  // `wrap-reverse` runs the cross axis the other way, so the margin the items are laid out
+  // from is the one on the other side.
+  const flipped = box.style.flexWrap === 'wrap-reverse';
+  const metrics = items.map((item) =>
+    itemMetrics(item, containing, isRow, wraps, flipped, context),
+  );
 
   const line = solveFlex({
     reverse,
@@ -893,7 +913,10 @@ function layoutFlexItems(
     justify: box.style.justifyContent,
     align: box.style.alignItems,
     items: metrics.map((one) => one.input),
-    crossOf: (index, main) => metrics[index]?.measure(main).cross ?? 0,
+    // Across a row an item is as tall as its content; down a column it is as wide as its
+    // content wants to be, which is not the same question and not the same number.
+    crossOf: (index, main) =>
+      (isRow ? metrics[index]?.measure(main).cross : metrics[index]?.fit) ?? 0,
     baselineOf: (index, main) => metrics[index]?.measure(main).baseline ?? null,
   });
 
@@ -935,6 +958,8 @@ function layoutFlexItems(
 type ItemMetrics = {
   input: FlexItemInput;
   margin: Edges;
+  /** The width the item's content asks for, which is its cross size down a column. */
+  fit: number;
   measure: (main: number) => { cross: number; baseline: number | null };
 };
 
@@ -946,6 +971,8 @@ function itemMetrics(
   item: BlockBox,
   containing: ContainingBlock,
   isRow: boolean,
+  wraps: boolean,
+  flipped: boolean,
   context: Context,
 ): ItemMetrics {
   const style = item.style;
@@ -963,8 +990,15 @@ function itemMetrics(
   const down = border.top + border.bottom + padding.top + padding.bottom;
   const intrinsic = intrinsicContentWidths(item, context.measurer);
 
+  const crossStart = <T>(start: T, end: T) => (flipped ? end : start);
+  const crossEnd = <T>(start: T, end: T) => (flipped ? start : end);
+
+  // Down a column an item that cannot wrap is stretched to the container, and one that can
+  // takes the width its content asks for, which may be more than the container has.
+  const fit = shrinkToFit(intrinsic, containing.width);
+
   const measure = (main: number) => {
-    const width = isRow ? main : containing.width;
+    const width = isRow ? main : wraps ? fit : containing.width;
     const scratch: Context = {
       ...context,
       fragments: new Map(),
@@ -1040,6 +1074,7 @@ function itemMetrics(
         );
 
   return {
+    fit,
     input: {
       grow: style.flexGrow,
       shrink: style.flexShrink,
@@ -1052,12 +1087,28 @@ function itemMetrics(
         : across + margin.left + margin.right,
       marginMainStart: isRow ? margin.left : margin.top,
       marginMainEnd: isRow ? margin.right : margin.bottom,
-      marginCrossStart: isRow ? margin.top : margin.left,
-      marginCrossEnd: isRow ? margin.bottom : margin.right,
+      marginCrossStart: crossStart(
+        isRow ? margin.top : margin.left,
+        isRow ? margin.bottom : margin.right,
+      ),
+      marginCrossEnd: crossEnd(
+        isRow ? margin.top : margin.left,
+        isRow ? margin.bottom : margin.right,
+      ),
       autoMainStart: auto(isRow ? style.marginLeft : style.marginTop),
       autoMainEnd: auto(isRow ? style.marginRight : style.marginBottom),
-      autoCrossStart: auto(isRow ? style.marginTop : style.marginLeft),
-      autoCrossEnd: auto(isRow ? style.marginBottom : style.marginRight),
+      autoCrossStart: auto(
+        crossStart(
+          isRow ? style.marginTop : style.marginLeft,
+          isRow ? style.marginBottom : style.marginRight,
+        ),
+      ),
+      autoCrossEnd: auto(
+        crossEnd(
+          isRow ? style.marginTop : style.marginLeft,
+          isRow ? style.marginBottom : style.marginRight,
+        ),
+      ),
       align: style.alignSelf === 'auto' ? null : style.alignSelf,
       crossSize,
     },

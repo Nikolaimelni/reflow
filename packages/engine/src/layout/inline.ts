@@ -317,9 +317,31 @@ function halfLeading(lineHeight: number, metrics: FontMetrics, ratio: number): n
   return Math.floor(leading * ratio) / ratio;
 }
 
+/** What a line can end with without having been pushed there: nothing of it is drawn after. */
+function idle(kind: PieceKind | undefined): boolean {
+  return kind === 'edge-end' || kind === 'out-of-flow';
+}
+
 /** A piece that is not content of its own: an inline box's edge, or a box out of the flow. */
 function isMarker(kind: PieceKind): boolean {
   return kind !== 'glyphs' && kind !== 'space' && kind !== 'atomic';
+}
+
+/**
+ * Whether an inline box's edge is worth a line of its own. A browser decides that before the
+ * percentages are resolved, so `padding-left: 1%` of a box that turns out to be nothing wide
+ * still makes a line where `padding-left: 0` does not.
+ */
+function takesRoom(piece: Piece): boolean {
+  if (piece.width !== 0) return true;
+
+  const style = piece.style;
+  const [padding, margin] =
+    piece.kind === 'edge-start'
+      ? [style.paddingLeft, style.marginLeft]
+      : [style.paddingRight, style.marginRight];
+
+  return padding.kind === 'percent' || margin.kind === 'percent';
 }
 
 /** The inline boxes that both begin and end on this line, which is all of an empty one. */
@@ -592,6 +614,8 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   let width = 0;
   /** An inline box's own edges do not count: a space after one is still a leading space. */
   let content = false;
+  /** Where a leading space was dropped, which is still somewhere the line may be cut. */
+  let dropped = -1;
 
   /** The index of a collapsible space at the end of the line, past any closing edges. */
   const hanging = (): number => {
@@ -622,6 +646,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     current = [];
     width = 0;
     content = false;
+    dropped = -1;
   };
 
   const place = (chunk: Chunk) => {
@@ -670,14 +695,8 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
    * the box it ends has its content on this line, so its margin and border belong here too,
    * which is also what makes them count against the width before the break.
    */
-  const rewind = () => {
-    const at = opportunity();
-    if (at < 0) return;
-
-    let keep = at;
-    while (current[keep + 1]?.piece.kind === 'edge-end') keep++;
-
-    const carried = current.splice(keep + 1);
+  const carryOver = (from: number) => {
+    const carried = current.splice(from);
     width = carried[0]?.x ?? width;
     flush();
 
@@ -689,6 +708,27 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
   };
 
+  const rewind = (overflowed: boolean) => {
+    const at = opportunity();
+
+    if (at < 0) {
+      // A space at the start of a line is not drawn, but it is still a place the line may
+      // break. What follows it moves down, and what it leaves behind is a line with nothing
+      // on it, which is a line of no height. Only content is worth that: a closing margin on
+      // its own is left to hang over the edge instead.
+      if (overflowed && dropped >= 0 && dropped < current.length) carryOver(dropped);
+      return;
+    }
+
+    // A closing edge stays put, and so does a box out of the flow: neither of them is what
+    // overflowed the line. If holding them back leaves nothing to carry, the break would do
+    // nothing at all, so they come along after all.
+    let keep = at;
+    while (idle(current[keep + 1]?.piece.kind)) keep++;
+
+    carryOver(keep + 1 < current.length ? keep + 1 : at + 1);
+  };
+
   for (const entry of intoEntries(items)) {
     if (entry.kind === 'newline') {
       flush(true);
@@ -698,7 +738,11 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     if (entry.kind === 'space') {
       // A space at the start of a line disappears, and a run of them counts once: the first,
       // which decides whose box it is drawn in when the run crosses a boundary.
-      if (!content || hanging() >= 0) continue;
+      if (!content) {
+        dropped = current.length;
+        continue;
+      }
+      if (hanging() >= 0) continue;
 
       current.push({ piece: entry.space, x: width });
       width += entry.space.width;
@@ -706,7 +750,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     place(entry.chunk);
-    if (width - hangs() > input.available) rewind();
+    if (width - hangs() > input.available) rewind(entry.chunk.content);
   }
 
   flush();
@@ -730,11 +774,11 @@ function verticalMetrics(
   // and an empty `<span>`, which takes no room at all.
   const substantial =
     forced ||
-    items.some(({ piece }) =>
-      isMarker(piece.kind)
-        ? piece.width !== 0
-        : piece.kind !== 'space' || piece.style.whiteSpace === 'pre',
-    );
+    items.some(({ piece }) => {
+      if (piece.kind === 'out-of-flow') return false;
+      if (isEdge(piece.kind)) return takesRoom(piece);
+      return piece.kind !== 'space' || piece.style.whiteSpace === 'pre';
+    });
 
   if (!substantial) return { height: 0, baseline: 0 };
 

@@ -67,21 +67,44 @@ export type FlexLineResult = {
  */
 export function solveFlex(input: FlexLineInput): FlexLineResult {
   const runs = cutIntoLines(input);
-  const placements: FlexPlacement[] = [];
-  let mainSize = 0;
-  let across = 0;
+  const wraps = input.wrap !== 'nowrap';
 
-  for (const run of runs) {
-    const line = solveFlexLine({
+  const solve = (run: readonly number[], crossSize: number | null) =>
+    solveFlexLine({
       ...input,
-      items: run.map((index) => input.items[index] ?? input.items[0]).filter(present),
-      crossSize: runs.length > 1 ? null : input.crossSize,
+      crossSize,
+      items: run.map((index) => input.items[index]).filter(present),
       crossOf: (index, main) => input.crossOf(run[index] ?? 0, main),
       baselineOf: (index, main) => input.baselineOf(run[index] ?? 0, main),
     });
 
-    run.forEach((item, index) => {
-      const placement = line.placements[index];
+  // A line in a container that wraps is as big across as the items in it, even when that is
+  // more than the container has: it is the container that overflows, not the items that
+  // shrink. A container that does not wrap hands its own size down instead.
+  const natural = runs.map((run) => solve(run, wraps ? null : input.crossSize));
+  const content = natural.reduce((sum, line) => sum + line.crossSize, 0);
+
+  // `align-content` is out of the subset and its initial value stretches, which for one line
+  // means filling the container and for several means sharing out what is left over.
+  const spare =
+    wraps && input.crossSize !== null && input.crossSize > content
+      ? (input.crossSize - content) / runs.length
+      : 0;
+
+  const lines =
+    spare === 0
+      ? natural
+      : runs.map((run, index) => solve(run, (natural[index]?.crossSize ?? 0) + spare));
+
+  const placements: FlexPlacement[] = [];
+  let mainSize = 0;
+  let across = 0;
+
+  lines.forEach((line, index) => {
+    const run = runs[index] ?? [];
+
+    run.forEach((item, at) => {
+      const placement = line.placements[at];
       if (placement !== undefined) {
         placements[item] = { ...placement, crossStart: placement.crossStart + across };
       }
@@ -89,14 +112,12 @@ export function solveFlex(input: FlexLineInput): FlexLineResult {
 
     mainSize = Math.max(mainSize, line.mainSize);
     across += line.crossSize;
-  }
-
-  const crossSize = runs.length > 1 ? (input.crossSize ?? across) : across;
+  });
 
   return {
-    placements: input.wrap === 'wrap-reverse' ? turnOver(placements, input, crossSize) : placements,
+    placements: input.wrap === 'wrap-reverse' ? turnOver(placements, input, across) : placements,
     mainSize: input.mainSize ?? mainSize,
-    crossSize,
+    crossSize: across,
   };
 }
 
@@ -131,7 +152,11 @@ function cutIntoLines(input: FlexLineInput): number[][] {
   return lines;
 }
 
-/** `wrap-reverse` turns the cross axis around: the first line is the one furthest across. */
+/**
+ * `wrap-reverse` turns the cross axis around: the first line is the one furthest across, and
+ * so is the start of every item on it. The lines were solved in that turned around axis, with
+ * the margins already swapped to match, so all that is left is to reflect the answer.
+ */
 function turnOver(
   placements: readonly FlexPlacement[],
   input: FlexLineInput,
@@ -141,10 +166,10 @@ function turnOver(
     const item = input.items[index];
     if (item === undefined) return placement;
 
-    const outer = placement.crossSize + item.crossSurround;
-    const start = placement.crossStart - item.marginCrossStart;
+    const border =
+      placement.crossSize + item.crossSurround - item.marginCrossStart - item.marginCrossEnd;
 
-    return { ...placement, crossStart: crossSize - (start + outer) + item.marginCrossEnd };
+    return { ...placement, crossStart: crossSize - (placement.crossStart + border) };
   });
 }
 

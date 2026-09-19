@@ -59,6 +59,28 @@
     height: 14px;
     border: 1px solid;
   }
+  .shrunk {
+    position: absolute;
+    top: 400px;
+    font-size: 9px;
+  }
+  .hair {
+    padding-left: 1%;
+  }
+  .nothing {
+    padding-left: 0;
+  }
+  .hem {
+    width: 180px;
+  }
+  .empty-inline {
+    display: inline;
+  }
+  .too-wide {
+    display: inline-block;
+    padding: 22px;
+    border: 2px solid;
+  }
   .holder {
     display: inline;
     background-color: #f0e2c8;
@@ -96,3 +118,11 @@
 
 <p><span class="holder"><span class="tall-box"></span></span></p>
 <p><span class="little">a<span class="large">b</span></span></p>
+
+<div class="hem">
+  <div class="empty-inline"></div>
+  <div class="too-wide">internationalisation</div>
+</div>
+
+<div class="shrunk"><span class="hair"></span></div>
+<div class="shrunk"><span class="nothing"></span></div>

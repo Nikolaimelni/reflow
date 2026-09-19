@@ -243,6 +243,18 @@ describe('wrapping', () => {
     expect(result.placements.map((one) => one.crossStart)).toEqual([10, 10, 0]);
   });
 
+  it('measures a turned around line from the far side', () => {
+    // The caller hands the margins over already swapped, so the start margin here is the one
+    // that ends up at the bottom.
+    const items = [
+      item({ crossSize: 10, crossSurround: 8, marginCrossStart: 6, marginCrossEnd: 2 }),
+    ];
+    const result = line({ items, mainSize: 450, wrap: 'wrap-reverse' });
+
+    expect(result.crossSize).toBe(18);
+    expect(result.placements.map((one) => one.crossStart)).toEqual([2]);
+  });
+
   it('keeps everything on one line when it must not wrap', () => {
     const items = [box(200), box(200), box(200)];
     const result = line({ items, mainSize: 450, wrap: 'nowrap' });

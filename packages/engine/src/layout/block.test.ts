@@ -132,6 +132,22 @@ describe('margin collapsing', () => {
     expect(page(css, [outer]).rectOf(inner).height).toBe(10);
   });
 
+  it('lets a column that wraps be as wide as its content asks', () => {
+    const css =
+      '.down { display: flex; flex-direction: column; width: 40px } .wraps { flex-wrap: wrap }';
+    const widthOf = (classes: string[]) => {
+      const item = element('div', {}, [text('abcdefgh ab')]);
+      const column = element('div', { classes }, [item]);
+      return page(css, [column]).rectOf(item).width;
+    };
+
+    // The longest word is 64 wide and the column is 40. A column that wraps lets its line be
+    // as wide as the item asks for and overflows; one that does not stretches the item to the
+    // column and the text breaks inside it instead.
+    expect(widthOf(['down', 'wraps'])).toBe(64);
+    expect(widthOf(['down'])).toBe(40);
+  });
+
   it('keeps a margin inside a flex item', () => {
     const inner = element('div', { classes: ['inner'] });
     const item = element('div', {}, [inner]);
