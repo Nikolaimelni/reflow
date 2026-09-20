@@ -17,12 +17,16 @@ export type Inset = LengthPercentage | Auto;
 
 export type LineHeight = { kind: 'normal' } | { kind: 'number'; value: number } | LengthPercentage;
 
+/** `normal` is a gap of zero in a flex container, and a real value only in multi-column. */
+export type Gap = { kind: 'normal' } | LengthPercentage;
+
 export type ZIndex = Auto | { kind: 'integer'; value: number };
 
 export const AUTO: Auto = { kind: 'auto' };
 export const NONE: None = { kind: 'none' };
 export const ZERO: Px = { kind: 'px', value: 0 };
 export const NORMAL_LINE_HEIGHT: LineHeight = { kind: 'normal' };
+export const NORMAL_GAP: Gap = { kind: 'normal' };
 
 export function px(value: number): Px {
   return { kind: 'px', value };

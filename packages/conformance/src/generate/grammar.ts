@@ -65,6 +65,21 @@ const declarations = fc.record(
     'align-items': fc.constantFrom('stretch', 'flex-start', 'center', 'baseline'),
     'flex-direction': fc.constantFrom('row', 'row-reverse', 'column', 'column-reverse'),
     'flex-wrap': fc.constantFrom('nowrap', 'wrap', 'wrap-reverse'),
+    'align-content': fc.constantFrom(
+      'normal',
+      'flex-start',
+      'flex-end',
+      'center',
+      'space-between',
+      'space-around',
+      'stretch',
+    ),
+    order: fc.integer({ min: -2, max: 2 }).map(String),
+    gap: fc.oneof(
+      px,
+      percent,
+      fc.tuple(px, px).map((both) => both.join(' ')),
+    ),
   },
   { requiredKeys: [] },
 );

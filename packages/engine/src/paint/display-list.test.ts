@@ -38,6 +38,15 @@ describe('buildDisplayList', () => {
     expect(order('', [first, second]).painted).toEqual(['html', 'first', 'second', 'nested']);
   });
 
+  it('paints flex items in the order they ask for', () => {
+    const first = element('div', { classes: ['first'] });
+    const second = element('div', { classes: ['second', 'early'] });
+    const row = element('div', { classes: ['row'] }, [first, second]);
+    const css = '.row { display: flex } .early { order: -1 }';
+
+    expect(order(css, [row]).painted).toEqual(['html', 'row', 'second', 'first']);
+  });
+
   it('puts inline content on top of the blocks around it', () => {
     const host = element('div', { classes: ['host'] }, [
       text('loose'),

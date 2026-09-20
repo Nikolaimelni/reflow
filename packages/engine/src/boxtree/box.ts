@@ -44,6 +44,14 @@ export function isBlock(box: Box): box is BlockBox {
   return box.kind === 'block';
 }
 
+/**
+ * Order-modified document order: what a flex container lays out and paints in. The sort is
+ * stable, so items sharing an `order` keep the order they were written in.
+ */
+export function inFlexOrder<T extends { style: { order: number } }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => a.style.order - b.style.order);
+}
+
 export function isAnonymous(box: Box): boolean {
   return box.kind === 'block' && box.element === null;
 }
@@ -75,62 +83,63 @@ export function describeBox(box: Box): string {
  * block between those halves as well, because that is what the browser hands back for the
  * element, but only when the halves put something on a line in the first place.
  */
-export function boxesByElement(root: Box): Map<ElementNode, { own: BoxId[]; span: BoxId[] }> {
-  const order: (BlockBox | InlineBox)[] = [];
+export function boxesByElement(root: Box): Map<ElementNode, BoxId[]> {
+  const found = new Map<ElementNode, BoxId[]>();
+
   walkBoxes(root, (box) => {
-    if (box.kind !== 'text') order.push(box);
-  });
-
-  const found = new Map<ElementNode, { own: BoxId[]; span: BoxId[] }>();
-
-  order.forEach((box, index) => {
-    if (box.element === null) return;
+    if (box.kind === 'text' || box.element === null) return;
 
     const seen = found.get(box.element);
-    if (seen === undefined) {
-      found.set(box.element, { own: [box.id], span: [box.id] });
-      return;
-    }
-
-    // The anonymous blocks the halves sit in are nobody's: what the browser reports between
-    // them is the block that did the cutting.
-    const from = order.findIndex((one) => one.id === seen.own[0]);
-    found.set(box.element, {
-      own: [...seen.own, box.id],
-      span: order
-        .slice(from, index + 1)
-        .filter((one) => one.element !== null)
-        .map((one) => one.id),
-    });
+    if (seen === undefined) found.set(box.element, [box.id]);
+    else seen.push(box.id);
   });
 
   return found;
 }
 
 /**
- * The rectangle a browser reports for an element, which is the union of the boxes it made.
- * Two things about it are not obvious. An element whose own boxes came to nothing has no
- * rectangle at all, whatever sits between them. And a box with no height is left out of the
- * union: the block between the halves of a cut inline counts when it has one and not when it
- * does not, which is what `getBoundingClientRect` does.
+ * The rectangle a browser reports for an element, which is the union of the rects its boxes
+ * made, taken in order the way Blink takes them: an empty rect is skipped, unless what has
+ * been gathered so far is itself empty, in which case it replaces it. That is what decides
+ * the odd cases. An inline that only opened or closed on a line adds nothing to a union that
+ * already has a line of text in it, but it is the whole answer when there is nothing else,
+ * and the same goes for the zero height block between the halves of a cut inline.
+ *
+ * An inline is read a line at a time rather than as the one rect it was laid out into, and
+ * an element with no box that was laid out at all has no rectangle.
  */
 export function reportedRect(
-  boxes: { own: readonly BoxId[]; span: readonly BoxId[] },
+  boxes: readonly BoxId[],
   fragments: ReadonlyMap<BoxId, { rect: Rect }>,
+  lines: ReadonlyMap<BoxId, readonly Rect[]>,
 ): Rect | null {
-  const rectsOf = (ids: readonly BoxId[]) =>
-    ids.map((id) => fragments.get(id)?.rect).filter((rect) => rect !== undefined);
+  const rects = boxes.flatMap((id) => {
+    const perLine = lines.get(id);
+    if (perLine !== undefined && perLine.length > 0) return [...perLine];
 
-  if (rectsOf(boxes.own).length === 0) return null;
+    const rect = fragments.get(id)?.rect;
+    return rect === undefined ? [] : [rect];
+  });
 
-  const all = rectsOf(boxes.span);
-  const drawn = all.filter((rect) => rect.height > 0);
-  const rects = drawn.length === 0 ? all : drawn;
+  let union: Rect | null = null;
 
-  const left = Math.min(...rects.map((rect) => rect.x));
-  const top = Math.min(...rects.map((rect) => rect.y));
-  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
-  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  for (const rect of rects) {
+    if (union === null || isEmptyRect(union)) union = rect;
+    else if (!isEmptyRect(rect)) union = unite(union, rect);
+  }
+
+  return union;
+}
+
+function isEmptyRect(rect: Rect): boolean {
+  return rect.width <= 0 || rect.height <= 0;
+}
+
+function unite(a: Rect, b: Rect): Rect {
+  const left = Math.min(a.x, b.x);
+  const top = Math.min(a.y, b.y);
+  const right = Math.max(a.x + a.width, b.x + b.width);
+  const bottom = Math.max(a.y + a.height, b.y + b.height);
 
   return { x: left, y: top, width: right - left, height: bottom - top };
 }

@@ -59,7 +59,7 @@
       // A block cuts the inline around it in two, so one element can be several boxes, and
       // what the browser reports for it is the union of them.
       const boxes = run.boxOf.get(node);
-      const rect = boxes === undefined ? null : reportedRect(boxes, run.layout.fragments);
+      const rect = boxes === undefined ? null : reportedRect(boxes, run.layout.fragments, run.layout.lines);
       if (boxes === undefined || rect === null) continue;
 
       const divergence = compareRects(
@@ -68,7 +68,7 @@
         element.getBoundingClientRect(),
       );
 
-      if (divergence !== null) for (const one of boxes.own) diverging.set(one, divergence);
+      if (divergence !== null) for (const one of boxes) diverging.set(one, divergence);
     }
 
     session.diverging = diverging;

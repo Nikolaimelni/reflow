@@ -1,4 +1,4 @@
-import type { AlignItems, FlexWrap, JustifyContent } from '../cascade/properties.js';
+import type { AlignContent, AlignItems, FlexWrap, JustifyContent } from '../cascade/properties.js';
 
 export type FlexItemInput = {
   grow: number;
@@ -31,9 +31,13 @@ export type FlexLineInput = {
   mainSize: number | null;
   justify: JustifyContent;
   align: AlignItems;
+  alignContent: AlignContent;
   /** The main axis runs the other way, so the first item is laid out at the far end. */
   reverse: boolean;
   wrap: FlexWrap;
+  /** Space kept between items along a line, and between the lines themselves. */
+  mainGap: number;
+  crossGap: number;
   /** Cross content size the container pins, null when it comes from the items. */
   crossSize: number | null;
   items: readonly FlexItemInput[];
@@ -60,14 +64,13 @@ export type FlexLineResult = {
 
 /**
  * Items are cut into lines, each line is solved on its own, and the lines are then stacked
- * across. A container that will not wrap is the same thing with one line in it.
- *
- * Nothing here divides free cross space between the lines: `align-content` is out of the
- * subset, and its initial value packs them against the start, which is what stacking does.
+ * across. A container that will not wrap is the same thing with one line in it, and it hands
+ * that line its own cross size rather than letting `align-content` near it.
  */
 export function solveFlex(input: FlexLineInput): FlexLineResult {
   const runs = cutIntoLines(input);
   const wraps = input.wrap !== 'nowrap';
+  const gaps = input.crossGap * Math.max(0, runs.length - 1);
 
   const solve = (run: readonly number[], crossSize: number | null) =>
     solveFlexLine({
@@ -82,42 +85,48 @@ export function solveFlex(input: FlexLineInput): FlexLineResult {
   // more than the container has: it is the container that overflows, not the items that
   // shrink. A container that does not wrap hands its own size down instead.
   const natural = runs.map((run) => solve(run, wraps ? null : input.crossSize));
-  const content = natural.reduce((sum, line) => sum + line.crossSize, 0);
+  const content = natural.reduce((sum, line) => sum + line.crossSize, gaps);
 
-  // `align-content` is out of the subset and its initial value stretches, which for one line
-  // means filling the container and for several means sharing out what is left over.
-  const spare =
-    wraps && input.crossSize !== null && input.crossSize > content
-      ? (input.crossSize - content) / runs.length
-      : 0;
+  // `align-content` shares out the cross space the lines left over. Its initial value is
+  // `normal`, which in a flex container stretches them to fill it.
+  const packing = input.alignContent === 'normal' ? 'stretch' : input.alignContent;
+  const free = wraps && input.crossSize !== null ? input.crossSize - content : 0;
+  const spare = packing === 'stretch' && free > 0 ? free / runs.length : 0;
 
   const lines =
     spare === 0
       ? natural
       : runs.map((run, index) => solve(run, (natural[index]?.crossSize ?? 0) + spare));
+  const spacing = distribute(packing, runs.length, spare === 0 ? free : 0);
 
   const placements: FlexPlacement[] = [];
   let mainSize = 0;
-  let across = 0;
+  let across = spacing.leading;
+  let extent = 0;
 
   lines.forEach((line, index) => {
     const run = runs[index] ?? [];
+    const start = across;
 
     run.forEach((item, at) => {
       const placement = line.placements[at];
       if (placement !== undefined) {
-        placements[item] = { ...placement, crossStart: placement.crossStart + across };
+        placements[item] = { ...placement, crossStart: placement.crossStart + start };
       }
     });
 
     mainSize = Math.max(mainSize, line.mainSize);
-    across += line.crossSize;
+    extent = start + line.crossSize;
+    across = extent + input.crossGap + spacing.between;
   });
 
   return {
-    placements: input.wrap === 'wrap-reverse' ? turnOver(placements, input, across) : placements,
+    placements:
+      input.wrap === 'wrap-reverse'
+        ? turnOver(placements, input, input.crossSize ?? extent)
+        : placements,
     mainSize: input.mainSize ?? mainSize,
-    crossSize: across,
+    crossSize: extent,
   };
 }
 
@@ -137,15 +146,17 @@ function cutIntoLines(input: FlexLineInput): number[][] {
 
   input.items.forEach((item, index) => {
     const outer = clamp(item.basis, item.minMain, item.maxMain) + item.mainSurround;
+    const gap = current.length > 0 ? input.mainGap : 0;
 
-    if (current.length > 0 && used + outer > (input.mainSize ?? 0)) {
+    if (current.length > 0 && used + gap + outer > (input.mainSize ?? 0)) {
       lines.push(current);
-      current = [];
-      used = 0;
+      current = [index];
+      used = outer;
+      return;
     }
 
     current.push(index);
-    used += outer;
+    used += gap + outer;
   });
 
   if (current.length > 0) lines.push(current);
@@ -181,7 +192,10 @@ function turnOver(
 export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   const mains = resolveMainSizes(input);
   const outerMain = input.items.map((item, i) => (mains[i] ?? 0) + item.mainSurround);
-  const contentMain = outerMain.reduce((sum, one) => sum + one, 0);
+  const contentMain = outerMain.reduce(
+    (sum, one) => sum + one,
+    input.mainGap * Math.max(0, input.items.length - 1),
+  );
   const mainSize = input.mainSize ?? contentMain;
 
   // An auto margin on the main axis eats the free space before `justify-content` sees any,
@@ -208,7 +222,7 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
       : cursor + item.marginMainStart + (item.autoMainStart ? share : 0);
 
     mainStarts.push(start);
-    cursor += outer + spacing.between;
+    cursor += outer + input.mainGap + spacing.between;
   });
 
   const cross = resolveCross(input, mains);
@@ -232,7 +246,7 @@ function resolveMainSizes(input: FlexLineInput): number[] {
 
   const outer = hypothetical.reduce(
     (sum, size, i) => sum + size + (input.items[i]?.mainSurround ?? 0),
-    0,
+    input.mainGap * Math.max(0, input.items.length - 1),
   );
   const free = input.mainSize - outer;
 
@@ -327,13 +341,13 @@ function resolveCross(
 }
 
 function distribute(
-  justify: JustifyContent,
+  packing: AlignContent,
   count: number,
   free: number,
 ): { leading: number; between: number } {
   if (free <= 0 || count === 0) return { leading: 0, between: 0 };
 
-  switch (justify) {
+  switch (packing) {
     case 'flex-end':
       return { leading: free, between: 0 };
     case 'center':

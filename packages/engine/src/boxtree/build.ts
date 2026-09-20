@@ -167,24 +167,43 @@ function cutAroundBlocks(children: Box[], ids: IdSource): Box[] {
 
     const pieces: Box[] = [];
     let run: Box[] = [];
+    let cut: Box[] = [];
 
     // The spec cuts the box in two around the block even if either side is empty, and an
     // empty half is not nothing: it still carries the border on the side it kept.
-    const flush = () => {
+    const flushHalf = () => {
       pieces.push({ ...child, id: ids(), children: run });
       run = [];
     };
 
+    // A run of blocks that did the cutting gets a block of its own around it. The style is
+    // anonymous but the box belongs to the inline, which is what a browser reports between
+    // the halves and what it answers with when the point is over it.
+    const flushCut = () => {
+      if (cut.length === 0) return;
+
+      pieces.push({
+        kind: 'block',
+        id: ids(),
+        element: child.element,
+        style: anonymousStyle(child.style),
+        children: cut,
+      });
+      cut = [];
+    };
+
     for (const inner of inside) {
       if (splits(inner)) {
-        flush();
-        pieces.push(inner);
+        if (cut.length === 0) flushHalf();
+        cut.push(inner);
       } else {
+        flushCut();
         run.push(inner);
       }
     }
 
-    flush();
+    flushCut();
+    flushHalf();
 
     const halves = pieces.filter((piece) => piece.kind === 'inline');
     return pieces.map((piece) =>

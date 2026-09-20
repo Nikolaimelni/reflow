@@ -182,6 +182,20 @@ describe('margin collapsing', () => {
     expect(widthOf(['item', 'hidden'])).toBe(0);
   });
 
+  it('caps a flex item automatic minimum at the width it asked for', () => {
+    const css = '.row { display: flex } .flat { width: 0% } .thin { width: 4px }';
+    const widthOf = (classes: string[]) => {
+      const item = element('div', { classes }, [text('ab')]);
+      const row = element('div', { classes: ['row'] }, [item]);
+      return page(css, [row]).rectOf(item).width;
+    };
+
+    // The word is sixteen wide and would hold an auto width open. A width of its own is the
+    // most the content is protected up to.
+    expect(widthOf(['flat'])).toBe(0);
+    expect(widthOf(['thin'])).toBe(4);
+  });
+
   it('measures a flex item with the container as the percentage basis', () => {
     const cell = element('div', { classes: ['cell'] }, [text('ab')]);
     const row = element('div', { classes: ['row'] }, [cell]);
@@ -189,6 +203,28 @@ describe('margin collapsing', () => {
 
     // Two per cent of the row, not of the sixteen pixels the item shrank to.
     expect(page(css, [row]).rectOf(row).height).toBe(20);
+  });
+
+  it('lays out flex items in the order they ask for', () => {
+    const first = element('div', { classes: ['cell'] });
+    const second = element('div', { classes: ['cell', 'early'] });
+    const row = element('div', { classes: ['row'] }, [first, second]);
+    const css = '.row { display: flex } .cell { width: 10px; height: 4px } .early { order: -1 }';
+    const laid = page(css, [row]);
+
+    expect(laid.rectOf(second).x).toBe(0);
+    expect(laid.rectOf(first).x).toBe(10);
+  });
+
+  it('resolves a percentage gap against the axis it runs along', () => {
+    const first = element('div', { classes: ['cell'] });
+    const second = element('div', { classes: ['cell'] });
+    const row = element('div', { classes: ['row', 'apart'] }, [first, second]);
+    const css =
+      '.row { display: flex } .apart { width: 200px; gap: 10% } .cell { width: 10px; height: 4px }';
+
+    // A tenth of the two hundred the row is across, not of the four it is tall.
+    expect(page(css, [row]).rectOf(second).x).toBe(30);
   });
 
   it('clamps a flex item cross size the way a block is clamped', () => {
@@ -265,6 +301,16 @@ describe('margin collapsing', () => {
     expect(rectOf(inner).y).toBe(30);
   });
 
+  it('does not let a percentage height collapse through', () => {
+    const middle = element('div', { classes: ['share'] });
+    const after = element('div', { classes: ['after'] });
+    const outer = element('div', { classes: ['outer'] }, [middle, after]);
+    const css = '.outer { height: 100px } .share { height: 50% } .after { height: 10px }';
+
+    // Fifty of a hundred is a height like any other, so the box below it starts at fifty.
+    expect(page(css, [outer]).rectOf(after).y).toBe(50);
+  });
+
   it('lets an empty box collapse through and takes no height from it', () => {
     const first = element('div', { classes: ['a'] });
     const empty = element('div', { classes: ['gap'] });
@@ -273,6 +319,44 @@ describe('margin collapsing', () => {
       '.a { height: 10px; margin-bottom: 10px } .gap { margin: 25px 0 } .b { height: 10px; margin-top: 5px }';
 
     expect(page(css, [first, empty, second]).rectOf(second).y).toBe(35);
+  });
+});
+
+describe('align-content on a block container', () => {
+  const inside = (declarations: string, kid = '.kid { height: 20px }') => {
+    const child = element('div', { classes: ['kid'] });
+    const box = element('div', { classes: ['box'] }, [child]);
+    const laid = page(`.box { ${declarations} } ${kid}`, [box]);
+
+    return { box: laid.rectOf(box), kid: laid.rectOf(child) };
+  };
+
+  it('pushes the group to the far edge of a box with room to spare', () => {
+    expect(inside('height: 100px; align-content: flex-end').kid.y).toBe(80);
+    expect(inside('height: 100px; align-content: center').kid.y).toBe(40);
+  });
+
+  it('falls back for the values with nothing to distribute', () => {
+    expect(inside('height: 100px; align-content: space-between').kid.y).toBe(0);
+    expect(inside('height: 100px; align-content: space-around').kid.y).toBe(40);
+  });
+
+  it('aligns inside the height a minimum gave the box', () => {
+    expect(inside('min-height: 100px; align-content: flex-end').kid.y).toBe(80);
+  });
+
+  it('leaves content taller than the box where it is', () => {
+    const css = '.kid { height: 200px }';
+    expect(inside('height: 100px; align-content: center', css).kid.y).toBe(0);
+  });
+
+  it('keeps the margins of the group inside the box it is aligned in', () => {
+    const css = '.kid { height: 20px; margin: 10px 0 }';
+
+    // Forty of content to place, so the group starts sixty down and the child ten below that.
+    expect(inside('height: 100px; align-content: flex-end', css).kid.y).toBe(70);
+    // Nothing escapes a box that aligns, so with no height of its own it pays for both.
+    expect(inside('align-content: flex-end', css).box.height).toBe(40);
   });
 });
 

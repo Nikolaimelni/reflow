@@ -217,6 +217,15 @@ describe('shorthands', () => {
     );
   });
 
+  it('sets the row gap first out of the gap shorthand', () => {
+    const node = element('div');
+    const one = styles(node, 'div { gap: 4px }')(node);
+    const two = styles(node, 'div { gap: 4px 8px }')(node);
+
+    expect([one.rowGap, one.columnGap]).toEqual([px(4), px(4)]);
+    expect([two.rowGap, two.columnGap]).toEqual([px(4), px(8)]);
+  });
+
   it('reads width and style out of the border shorthand and drops the colour', () => {
     const node = element('div');
     const style = styles(node, 'div { border: 2px solid #f00 }')(node);

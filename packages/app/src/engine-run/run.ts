@@ -27,7 +27,7 @@ export type Run =
       labels: Map<BoxId, string>;
       boxes: Map<BoxId, Box>;
       root: ElementNode;
-      boxOf: Map<ElementNode, { own: BoxId[]; span: BoxId[] }>;
+      boxOf: Map<ElementNode, BoxId[]>;
     }
   | { status: 'empty' }
   | { status: 'failed'; message: string };

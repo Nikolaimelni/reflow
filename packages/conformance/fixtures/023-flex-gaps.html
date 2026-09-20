@@ -1,0 +1,160 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>gaps between flex items and between flex lines</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 400px;
+  }
+  .row {
+    display: flex;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .row > div {
+    height: 20px;
+  }
+  .fixed {
+    width: 60px;
+  }
+  .grows {
+    flex-grow: 1;
+  }
+  .shrinks {
+    width: 300px;
+  }
+  .apart {
+    gap: 12px;
+  }
+  .apart-both-ways {
+    gap: 7px 13px;
+  }
+  .apart-by-share {
+    gap: 5%;
+  }
+  .spaced {
+    justify-content: space-between;
+  }
+  .ending {
+    justify-content: flex-end;
+  }
+  .back {
+    flex-direction: row-reverse;
+  }
+  .wrapping {
+    flex-wrap: wrap;
+  }
+  .other-way {
+    flex-wrap: wrap-reverse;
+  }
+  .wide-item {
+    width: 120px;
+    height: 14px;
+    background-color: #d8c8e8;
+  }
+  .tall {
+    height: 120px;
+  }
+  .packed-start {
+    align-content: flex-start;
+  }
+  .packed-end {
+    align-content: flex-end;
+  }
+  .packed-middle {
+    align-content: center;
+  }
+  .packed-between {
+    align-content: space-between;
+  }
+  .packed-around {
+    align-content: space-around;
+  }
+  .packed-evenly {
+    align-content: space-evenly;
+  }
+  .packed-stretch {
+    align-content: stretch;
+  }
+  .column {
+    display: flex;
+    flex-direction: column;
+    height: 120px;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .column > div {
+    width: 40px;
+  }
+  .stretchy > div {
+    height: auto;
+  }
+</style>
+
+<div class="row apart"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row apart"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row apart"><div class="shrinks"></div><div class="shrinks"></div></div>
+<div class="row apart spaced"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row apart ending"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="row apart back"><div class="fixed"></div><div class="grows"></div></div>
+<div class="row apart-by-share"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="column apart"><div class="fixed"></div><div class="fixed"></div></div>
+<div class="column apart-by-share"><div class="fixed"></div><div class="fixed"></div></div>
+
+<div class="row wrapping apart-both-ways">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart-both-ways other-way">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall stretchy">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-start">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-end">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-middle">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-between">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-around">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-evenly">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-stretch">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping apart tall packed-end other-way">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row tall packed-end"><div class="fixed"></div></div>

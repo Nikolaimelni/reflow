@@ -63,9 +63,14 @@ export const INVALIDATION: Record<PropertyName, Invalidation> = {
   justifyContent: 'layout',
   alignItems: 'layout',
   alignSelf: 'layout',
+  alignContent: 'layout',
   flexGrow: 'layout',
   flexShrink: 'layout',
   flexBasis: 'layout',
+  // `order` moves the item as well as reordering what paints over what.
+  order: 'layout',
+  rowGap: 'layout',
+  columnGap: 'layout',
 
   // Nothing moves, the order things are drawn in changes.
   zIndex: 'paint',

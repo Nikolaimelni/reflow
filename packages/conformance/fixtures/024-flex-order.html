@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>order-modified document order</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 400px;
+  }
+  .row {
+    display: flex;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .row > div {
+    height: 20px;
+    width: 60px;
+  }
+  .first {
+    order: -1;
+    background-color: #d8c8a8;
+  }
+  .last {
+    order: 1;
+    background-color: #a8c8d8;
+  }
+  .also-last {
+    order: 1;
+    background-color: #c8d8a8;
+  }
+  .column {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .column > div {
+    height: 20px;
+    width: 40px;
+  }
+  .back {
+    flex-direction: row-reverse;
+  }
+  .wrapping {
+    flex-wrap: wrap;
+  }
+  .wide-item {
+    width: 180px;
+    height: 14px;
+  }
+  .overlapping {
+    margin-left: -30px;
+    background-color: #e8d8c8;
+  }
+  .grows {
+    flex-grow: 1;
+  }
+</style>
+
+<div class="row"><div></div><div class="first"></div></div>
+<div class="row"><div class="last"></div><div></div></div>
+<div class="row"><div class="last"></div><div class="also-last"></div><div class="first"></div></div>
+<div class="row back"><div></div><div class="first"></div></div>
+<div class="column"><div></div><div class="first"></div></div>
+<div class="row wrapping">
+  <div class="wide-item"></div>
+  <div class="wide-item first"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row"><div class="grows"></div><div class="first overlapping"></div></div>

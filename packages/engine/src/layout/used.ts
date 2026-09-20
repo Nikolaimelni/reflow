@@ -1,5 +1,5 @@
 import type { BorderStyle, ComputedStyle } from '../cascade/properties.js';
-import type { Inset, LengthPercentage, Margin, MaxSize, Px, Size } from '../cascade/values.js';
+import type { Gap, Inset, LengthPercentage, Margin, MaxSize, Px, Size } from '../cascade/values.js';
 import type { Edges } from '../geometry.js';
 
 /**
@@ -52,6 +52,16 @@ export function usedMaxSize(value: MaxSize, basis: number | null): number | null
 
 export function usedMargin(value: Margin, basis: number): number | null {
   return value.kind === 'auto' ? null : usedLength(value, basis);
+}
+
+/**
+ * `normal` is a gap of zero outside multi-column. A percentage resolves against the content
+ * box along its own axis, and against nothing at all while that size is still unknown.
+ */
+export function usedGap(value: Gap, basis: number | null): number {
+  if (value.kind === 'normal') return 0;
+  if (value.kind === 'percent' && basis === null) return 0;
+  return usedLength(value, basis ?? 0);
 }
 
 export function usedInset(value: Inset, basis: number): number | null {

@@ -59,7 +59,8 @@ test.describe('geometry against Chromium', () => {
         if (element.kind !== 'element') return;
         const node = nodes[index];
         const boxes = node?.kind === 'element' ? byElement.get(node) : undefined;
-        const rect = boxes === undefined ? null : reportedRect(boxes, layout.fragments);
+        const rect =
+          boxes === undefined ? null : reportedRect(boxes, layout.fragments, layout.lines);
         if (rect === null) return;
         const fragment = { rect };
 

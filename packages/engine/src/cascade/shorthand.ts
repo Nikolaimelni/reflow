@@ -36,6 +36,8 @@ export function expandShorthand(cssName: string, value: readonly Token[]): Longh
       return perSide(INSET, value);
     case 'flex':
       return flex(value);
+    case 'gap':
+      return gap(value);
     case 'border':
       return border(BORDER_WIDTH, BORDER_STYLE, value);
     case 'border-top':
@@ -132,6 +134,18 @@ function flex(value: readonly Token[]): Longhand[] | null {
 
   if (grow === null) return null;
   return factors(grow, shrink ?? ONE_TOKEN, basis ?? ZERO_TOKEN);
+}
+
+/** One word sets both gaps, two set the row gap first. */
+function gap(value: readonly Token[]): Longhand[] | null {
+  const parts = words(value);
+  const [row, column] = parts;
+
+  if (row === undefined || parts.length > 2) return null;
+  return [
+    { property: 'rowGap', value: row },
+    { property: 'columnGap', value: column ?? row },
+  ];
 }
 
 function factors(grow: Token, shrink: Token, basis: Token): Longhand[] {

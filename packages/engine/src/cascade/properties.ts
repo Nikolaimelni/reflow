@@ -2,12 +2,14 @@ import type { Token } from '../css/tokenize.js';
 import { BLACK, type Colour, parseColour, TRANSPARENT } from './colour.js';
 import {
   AUTO,
+  type Gap,
   type Inset,
   type LengthPercentage,
   type LineHeight,
   type Margin,
   type MaxSize,
   NONE,
+  NORMAL_GAP,
   NORMAL_LINE_HEIGHT,
   type Px,
   percent,
@@ -36,6 +38,7 @@ export type JustifyContent =
   | 'space-around'
   | 'space-evenly';
 export type AlignItems = 'normal' | 'stretch' | 'flex-start' | 'flex-end' | 'center' | 'baseline';
+export type AlignContent = JustifyContent | 'stretch';
 export type AlignSelf = 'auto' | AlignItems;
 export type Visibility = 'visible' | 'hidden';
 
@@ -98,9 +101,13 @@ export type ComputedStyle = {
   justifyContent: JustifyContent;
   alignItems: AlignItems;
   alignSelf: AlignSelf;
+  alignContent: AlignContent;
   flexGrow: number;
   flexShrink: number;
   flexBasis: Size;
+  order: number;
+  rowGap: Gap;
+  columnGap: Gap;
 
   /** None of these four reach layout, which is the point of having them. */
   color: Colour;
@@ -270,12 +277,22 @@ const flexFactor: PropertyDefinition<number>['parse'] = (value) => {
   return token.value < 0 ? null : token.value;
 };
 
-const zIndex: PropertyDefinition<ZIndex>['parse'] = (value) => {
-  if (keyword('auto')(value) === 'auto') return AUTO;
+function integer(value: readonly Token[]): number | null {
   const token = single(value);
   if (token?.type !== 'number' || !Number.isInteger(token.value)) return null;
-  return { kind: 'integer', value: token.value };
+  return token.value;
+}
+
+const zIndex: PropertyDefinition<ZIndex>['parse'] = (value) => {
+  if (keyword('auto')(value) === 'auto') return AUTO;
+  const depth = integer(value);
+  return depth === null ? null : { kind: 'integer', value: depth };
 };
+
+const gap: PropertyDefinition<Gap>['parse'] = (value, context) =>
+  keyword('normal')(value) === 'normal'
+    ? NORMAL_GAP
+    : nonNegative(lengthPercentage(value, context));
 
 function own<T>(
   cssName: string,
@@ -411,9 +428,26 @@ export const properties: PropertyTable = {
     'auto',
     keyword('auto', 'normal', 'stretch', 'flex-start', 'flex-end', 'center', 'baseline'),
   ),
+  alignContent: own(
+    'align-content',
+    'normal',
+    keyword(
+      'normal',
+      'stretch',
+      'flex-start',
+      'flex-end',
+      'center',
+      'space-between',
+      'space-around',
+      'space-evenly',
+    ),
+  ),
   flexGrow: own('flex-grow', 0, flexFactor),
   flexShrink: own('flex-shrink', 1, flexFactor),
   flexBasis: own('flex-basis', AUTO, size),
+  order: own('order', 0, integer),
+  rowGap: own('row-gap', NORMAL_GAP, gap),
+  columnGap: own('column-gap', NORMAL_GAP, gap),
 
   color: { cssName: 'color', initial: BLACK, inherited: true, parse: parseColour },
   backgroundColor: own('background-color', TRANSPARENT, parseColour),

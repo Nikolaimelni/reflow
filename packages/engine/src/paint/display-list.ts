@@ -1,4 +1,10 @@
-import type { BlockBox, Box, BoxId } from '../boxtree/box.js';
+import {
+  type BlockBox,
+  type Box,
+  type BoxId,
+  type InlineBox,
+  inFlexOrder,
+} from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
 import type { Rect } from '../geometry.js';
 import type { Fragment } from '../trace/events.js';
@@ -81,7 +87,7 @@ function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxI
   const inner = box.style.overflow === 'visible' ? clip : box.id;
 
   const bucket: Bucket = { negative: [], blocks: [], inlines: [], level: [], positive: [] };
-  collect(box.children, bucket, inner);
+  collect(painted(box), bucket, inner);
 
   for (const entry of [...bucket.negative].sort((a, b) => a.z - b.z)) {
     descend(entry.box, state, context, depth, entry.clip);
@@ -171,8 +177,13 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
 
     // A box that clips its overflow clips its descendants, whether or not it happens to be
     // the root of a stacking context.
-    collect(child.children, bucket, child.style.overflow === 'visible' ? clip : child.id);
+    collect(painted(child), bucket, child.style.overflow === 'visible' ? clip : child.id);
   }
+}
+
+/** Flex items paint in the order `order` puts them in, the way inline blocks would. */
+function painted(box: BlockBox | InlineBox): readonly Box[] {
+  return box.style.display === 'flex' ? inFlexOrder(box.children) : box.children;
 }
 
 function positioned(box: Box, bucket: Bucket, clip: BoxId | null): void {

@@ -3,6 +3,7 @@ import {
   type DomNode,
   element,
   formatColour,
+  type Gap,
   type Margin,
   text,
   usedBorderWidths,
@@ -49,6 +50,10 @@ const FORMATTERS: Record<string, Formatter> = {
   'justify-content': (style) => style.justifyContent,
   'align-items': (style) => style.alignItems,
   'align-self': (style) => style.alignSelf,
+  'align-content': (style) => style.alignContent,
+  order: (style) => String(style.order),
+  'row-gap': (style) => gap(style.rowGap),
+  'column-gap': (style) => gap(style.columnGap),
 };
 
 const MARGIN = {
@@ -137,7 +142,19 @@ function same(ours: string, theirs: string): boolean {
   const a = Number.parseFloat(ours);
   const b = Number.parseFloat(theirs);
   if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  // A percentage and a length can carry the same number and mean different things, which
+  // matters now that gaps are compared and a gap keeps its unit.
+  if (unit(ours) !== unit(theirs)) return false;
   return Math.abs(a - b) < 0.02;
+}
+
+function unit(value: string): string {
+  return value.slice(String(Number.parseFloat(value)).length);
+}
+
+function gap(value: Gap): string {
+  if (value.kind === 'normal') return 'normal';
+  return value.kind === 'px' ? `${round(value.value)}px` : `${round(value.value)}%`;
 }
 
 function lineHeight(style: ComputedStyle): string {

@@ -3,10 +3,11 @@ import {
   type Box,
   type BoxId,
   type InlineBox,
+  inFlexOrder,
   isBlock,
   isCollapsibleWhitespace,
 } from '../boxtree/box.js';
-import type { ComputedStyle } from '../cascade/properties.js';
+import type { AlignContent, ComputedStyle } from '../cascade/properties.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { type FlexItemInput, solveFlex } from './flex.js';
@@ -25,6 +26,7 @@ import {
   clampSize,
   toContentBox,
   usedBorderWidths,
+  usedGap,
   usedInset,
   usedMargin,
   usedMaxSize,
@@ -220,23 +222,35 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const positioned = isRoot || style.position !== 'static';
   const mine = positioned ? [] : input.absolutes;
 
+  const independent = isRoot || input.independent === true || alignsContent(style);
+
+  // Aligning the content means knowing how tall it is before anything is placed, so it is
+  // laid out once in a throwaway context and then again where the alignment puts it.
+  const group = alignsContent(style)
+    ? measureFlow(box, childContaining, contentTop, border, padding, context)
+    : 0;
+  const leading = alignsContent(style)
+    ? alignmentLeading(
+        style.alignContent,
+        clampSize(specifiedHeight ?? group, minHeight, maxHeight) - group,
+      )
+    : 0;
+
   const flow =
     style.display === 'flex'
       ? layoutFlexItems(box, childContaining, contentTop, context, mine)
       : layoutChildren(
           box,
           childContaining,
-          contentTop,
+          contentTop + leading,
           border,
           padding,
           context,
-          isRoot || input.independent === true,
+          independent,
           mine,
         );
   const bottomEscapes =
-    !isRoot &&
-    input.independent !== true &&
-    canCollapseBottom(style, padding, border, specifiedHeight);
+    !isRoot && !independent && canCollapseBottom(style, padding, border, specifiedHeight);
 
   // A trailing margin that cannot escape has to be paid for in this box's own height.
   const fromContent = flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing));
@@ -283,7 +297,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   return {
     height: fragment.rect.height,
     marginBottom: bottomEscapes ? mergeMargins(ownBottom, flow.trailing) : ownBottom,
-    collapsedThrough: !isRoot && collapsesThrough(box, containing.width),
+    collapsedThrough: !isRoot && collapsesThrough(box, containing.width, containing.height),
     baseline: flow.baseline === null ? null : border.top + padding.top + flow.baseline,
   };
 }
@@ -485,7 +499,8 @@ function establishesBfc(style: ComputedStyle): boolean {
     style.overflow !== 'visible' ||
     style.display === 'flex' ||
     style.display === 'inline-block' ||
-    style.position === 'absolute'
+    style.position === 'absolute' ||
+    alignsContent(style)
   );
 }
 
@@ -520,12 +535,13 @@ function adjoiningTopMargins(box: BlockBox, containingWidth: number): CollapsedM
   if (!canCollapseTop(box.style, padding, border)) return collapsed;
 
   const inner = resolveHorizontal(box.style, containingWidth, border, padding).contentWidth;
+  const height = usedSize(box.style.height, null);
 
   for (const child of inFlowChildren(box)) {
     if (!isBlock(child)) break;
 
     collapsed = mergeMargins(collapsed, adjoiningTopMargins(child, inner));
-    if (!collapsesThrough(child, inner)) break;
+    if (!collapsesThrough(child, inner, height)) break;
     collapsed = mergeMargins(collapsed, adjoiningBottomMargins(child, inner));
   }
 
@@ -546,7 +562,7 @@ function adjoiningBottomMargins(box: BlockBox, containingWidth: number): Collaps
     if (!isBlock(child)) break;
 
     collapsed = mergeMargins(collapsed, adjoiningBottomMargins(child, inner));
-    if (!collapsesThrough(child, inner)) break;
+    if (!collapsesThrough(child, inner, height)) break;
     collapsed = mergeMargins(collapsed, adjoiningTopMargins(child, inner));
   }
 
@@ -554,20 +570,26 @@ function adjoiningBottomMargins(box: BlockBox, containingWidth: number): Collaps
 }
 
 /** A box with nothing between its own two margins lets them meet, and takes no height. */
-function collapsesThrough(box: BlockBox, containingWidth: number): boolean {
+function collapsesThrough(
+  box: BlockBox,
+  containingWidth: number,
+  containingHeight: number | null,
+): boolean {
   const border = usedBorderWidths(box.style);
   const padding = usedPadding(box.style, containingWidth);
 
   if (establishesBfc(box.style)) return false;
   if (border.top + border.bottom + padding.top + padding.bottom > 0) return false;
 
-  const height = usedSize(box.style.height, null);
+  // A percentage height is a real height whenever there is something for it to be a
+  // percentage of, and a box with one holds its own two margins apart.
+  const height = usedSize(box.style.height, containingHeight);
   if (height !== null && height > 0) return false;
-  if ((usedSize(box.style.minHeight, null) ?? 0) > 0) return false;
+  if ((usedSize(box.style.minHeight, containingHeight) ?? 0) > 0) return false;
 
   const inner = resolveHorizontal(box.style, containingWidth, border, padding).contentWidth;
   return inFlowChildren(box).every((child) =>
-    isBlock(child) ? collapsesThrough(child, inner) : !makesALine(child, inner),
+    isBlock(child) ? collapsesThrough(child, inner, height) : !makesALine(child, inner),
   );
 }
 
@@ -594,6 +616,55 @@ function makesALine(box: Box, containingWidth: number): boolean {
   if (start !== 0 || end !== 0) return true;
 
   return box.children.some((child) => makesALine(child, containingWidth));
+}
+
+/**
+ * `align-content` on a block container aligns everything in the flow as one group, which it
+ * can only do as a formatting context of its own: a margin that escaped would move the group
+ * it was measured as part of.
+ */
+function alignsContent(style: ComputedStyle): boolean {
+  return style.display !== 'flex' && style.alignContent !== 'normal';
+}
+
+/** How tall the content is, before knowing where it goes. */
+function measureFlow(
+  box: BlockBox,
+  containing: ContainingBlock,
+  contentTop: number,
+  border: Edges,
+  padding: Edges,
+  context: Context,
+): number {
+  const scratch: Context = {
+    ...context,
+    fragments: new Map(),
+    pieces: new Map(),
+    lines: new Map(),
+    trace: [],
+  };
+  const flow = layoutChildren(box, containing, contentTop, border, padding, scratch, true, []);
+  return flow.height + resolveMargin(flow.trailing);
+}
+
+/**
+ * One group has nothing to distribute between, so the distribution values fall back to what
+ * the spec gives them: `space-between` to the start, the other two to the centre. Content
+ * taller than the box stays where it is rather than being pushed off the top.
+ */
+function alignmentLeading(align: AlignContent, free: number): number {
+  if (free <= 0) return 0;
+
+  switch (align) {
+    case 'flex-end':
+      return free;
+    case 'center':
+    case 'space-around':
+    case 'space-evenly':
+      return free / 2;
+    default:
+      return 0;
+  }
 }
 
 /**
@@ -886,10 +957,6 @@ function measureAbsolute(
   return Math.max(0, result.height - border.top - border.bottom - padding.top - padding.bottom);
 }
 
-/**
- * A single flex line. Wrapping is out of the subset, so every item shares one line, and the
- * container's cross size comes from that line.
- */
 function layoutFlexItems(
   box: BlockBox,
   containing: ContainingBlock,
@@ -900,15 +967,17 @@ function layoutFlexItems(
   const direction = box.style.flexDirection;
   const isRow = direction === 'row' || direction === 'row-reverse';
   const reverse = direction === 'row-reverse' || direction === 'column-reverse';
-  const items: BlockBox[] = [];
+  const collected: BlockBox[] = [];
 
   for (const child of box.children.filter(isBlock)) {
     if (child.style.position === 'absolute') {
       absolutes.push({ box: child, staticX: containing.x, staticY: contentTop });
       continue;
     }
-    items.push(child);
+    collected.push(child);
   }
+
+  const items = inFlexOrder(collected);
 
   const wraps = box.style.flexWrap !== 'nowrap';
   // `wrap-reverse` runs the cross axis the other way, so the margin the items are laid out
@@ -918,13 +987,21 @@ function layoutFlexItems(
     itemMetrics(item, containing, isRow, wraps, flipped, context),
   );
 
+  // A percentage gap resolves against the content box along its own axis, which down a
+  // column is the height the container may not have settled yet.
+  const rowGap = usedGap(box.style.rowGap, containing.height);
+  const columnGap = usedGap(box.style.columnGap, containing.width);
+
   const line = solveFlex({
     reverse,
     wrap: box.style.flexWrap,
     mainSize: isRow ? containing.width : containing.height,
     crossSize: isRow ? containing.height : containing.width,
+    mainGap: isRow ? columnGap : rowGap,
+    crossGap: isRow ? rowGap : columnGap,
     justify: box.style.justifyContent,
     align: box.style.alignItems,
+    alignContent: box.style.alignContent,
     items: metrics.map((one) => one.input),
     // Across a row an item is as tall as its content; down a column it is as wide as its
     // content wants to be, which is not the same question and not the same number.
@@ -1052,8 +1129,12 @@ function itemMetrics(
   // what stops flex-shrink from squeezing a word in half. Unless the item clips what runs
   // over, in which case there is nothing to protect and the floor goes back to zero.
   const minStyle = isRow ? style.minWidth : style.minHeight;
-  const automatic = isRow && style.overflow === 'visible' ? intrinsic.min : 0;
   const along = isRow ? across : down;
+  const content = isRow && style.overflow === 'visible' ? intrinsic.min : 0;
+  // A size the item asked for caps that floor. `width: 0` means zero however long the word
+  // inside is, because the content is only protected up to the size it was given.
+  const asked = toContentBox(style.boxSizing, specified, along);
+  const automatic = asked === null ? content : Math.min(content, asked);
   const basis_ = isRow ? containing.width : containing.height;
   const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;
   const maxMain = toContentBox(

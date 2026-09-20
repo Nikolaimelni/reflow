@@ -31,8 +31,11 @@ function line(overrides: Partial<FlexLineInput> = {}) {
     crossSize: null,
     justify: 'flex-start',
     align: 'stretch',
+    alignContent: 'normal',
     reverse: false,
     wrap: 'nowrap',
+    mainGap: 0,
+    crossGap: 0,
     items: [item(), item()],
     crossOf: () => 0,
     baselineOf: () => null,
@@ -260,6 +263,63 @@ describe('wrapping', () => {
     const result = line({ items, mainSize: 450, wrap: 'nowrap' });
 
     expect(result.placements.map((one) => one.crossStart)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('gaps', () => {
+  const box = (basis: number) => item({ basis, crossSize: 10, shrink: 0 });
+  const across = (result: ReturnType<typeof line>) =>
+    result.placements.map((one) => one.crossStart);
+
+  it('takes its room before the items get theirs', () => {
+    const items = [item({ basis: 100, grow: 1 }), item({ basis: 100, grow: 1 })];
+    const result = line({ items, mainGap: 20 });
+
+    expect(mains(result)).toEqual([140, 140]);
+    expect(starts(result)).toEqual([0, 160]);
+  });
+
+  it('counts towards what fits on a line', () => {
+    const items = [box(200), box(200)];
+
+    expect(across(line({ items, mainSize: 420, wrap: 'wrap', mainGap: 30 }))).toEqual([0, 10]);
+    expect(across(line({ items, mainSize: 420, wrap: 'wrap', mainGap: 10 }))).toEqual([0, 0]);
+  });
+
+  it('keeps the lines apart', () => {
+    const items = [box(200), box(200), box(200)];
+    const result = line({ items, mainSize: 450, wrap: 'wrap', crossGap: 6 });
+
+    expect(across(result)).toEqual([0, 0, 16]);
+    expect(result.crossSize).toBe(26);
+  });
+});
+
+describe('align-content', () => {
+  const box = (basis: number) => item({ basis, crossSize: 10, shrink: 0 });
+  const wrapped = (overrides: Partial<FlexLineInput>) =>
+    line({
+      items: [box(200), box(200), box(200)],
+      mainSize: 450,
+      crossSize: 100,
+      wrap: 'wrap',
+      ...overrides,
+    }).placements.map((one) => one.crossStart);
+
+  it('stretches the lines to fill the container', () => {
+    expect(wrapped({})).toEqual([0, 0, 50]);
+  });
+
+  it('packs them against the end', () => {
+    expect(wrapped({ alignContent: 'flex-end' })).toEqual([80, 80, 90]);
+  });
+
+  it('puts the free space between them', () => {
+    expect(wrapped({ alignContent: 'space-between' })).toEqual([0, 0, 90]);
+  });
+
+  it('leaves a container that will not wrap alone', () => {
+    expect(wrapped({ wrap: 'nowrap', alignContent: 'flex-end' })).toEqual([0, 0, 0]);
   });
 });
 

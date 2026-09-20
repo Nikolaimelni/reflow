@@ -5,6 +5,7 @@ export {
   boxesByElement,
   describeBox,
   type InlineBox,
+  inFlexOrder,
   isAnonymous,
   isBlock,
   reportedRect,
@@ -22,6 +23,7 @@ export {
   toCss,
 } from './cascade/colour.js';
 export {
+  type AlignContent,
   type AlignItems,
   type BorderStyle,
   type BoxSizing,
@@ -42,6 +44,7 @@ export {
 } from './cascade/properties.js';
 export {
   AUTO,
+  type Gap,
   type Inset,
   isPercent,
   isPx,
@@ -50,6 +53,7 @@ export {
   type Margin,
   type MaxSize,
   NONE,
+  NORMAL_GAP,
   type Percent,
   type Px,
   percent,

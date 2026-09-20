@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a block container aligning its content as a group</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  .box {
+    height: 100px;
+    border: 1px solid;
+    margin-bottom: 8px;
+  }
+  .kid {
+    height: 20px;
+    background-color: #d8c8a8;
+  }
+  .spaced {
+    margin: 10px 0;
+  }
+  .tall {
+    height: 200px;
+    background-color: #a8c8d8;
+  }
+  .ending {
+    align-content: flex-end;
+  }
+  .middled {
+    align-content: center;
+  }
+  .between {
+    align-content: space-between;
+  }
+  .around {
+    align-content: space-around;
+  }
+  .evenly {
+    align-content: space-evenly;
+  }
+  .stretched {
+    align-content: stretch;
+  }
+  .no-height {
+    height: auto;
+  }
+  .floored {
+    height: auto;
+    min-height: 100px;
+  }
+  .capped {
+    height: 200px;
+    max-height: 60px;
+  }
+  .inner-box {
+    box-sizing: border-box;
+    padding: 5px;
+  }
+  .out {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #c8a8d8;
+  }
+  .anchored {
+    position: relative;
+  }
+  .half {
+    height: 50%;
+    background-color: #c8d8a8;
+  }
+  .narrow {
+    width: 120px;
+  }
+</style>
+
+<div class="box ending"><div class="kid"></div></div>
+<div class="box middled"><div class="kid"></div></div>
+<div class="box between"><div class="kid"></div></div>
+<div class="box around"><div class="kid"></div></div>
+<div class="box evenly"><div class="kid"></div></div>
+<div class="box stretched"><div class="kid"></div></div>
+<div class="box ending"><div class="kid"></div><div class="kid spaced"></div></div>
+<div class="box ending no-height"><div class="kid spaced"></div></div>
+<div class="box ending floored"><div class="kid"></div></div>
+<div class="box ending capped"><div class="kid"></div></div>
+<div class="box ending inner-box"><div class="kid"></div></div>
+<div class="box middled"><div class="tall"></div></div>
+<div class="box ending"><div class="half"></div></div>
+<div class="box ending anchored"><div class="kid"></div><div class="out"></div></div>
+<div class="box middled"><div class="out"></div></div>
+<div class="box ending narrow">internationalisation three one</div>
+<div class="box middled">one<div class="kid"></div>two</div>
+<div class="box ending"><div class="kid"><div class="kid spaced"></div></div></div>

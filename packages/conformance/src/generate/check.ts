@@ -46,7 +46,7 @@ export async function checkDocument(
 
     const node = nodes[index];
     const boxes = node?.kind === 'element' ? byElement.get(node) : undefined;
-    const rect = boxes === undefined ? null : reportedRect(boxes, layout.fragments);
+    const rect = boxes === undefined ? null : reportedRect(boxes, layout.fragments, layout.lines);
     if (rect === null) return;
 
     for (const edge of ['x', 'y', 'width', 'height'] as const) {
