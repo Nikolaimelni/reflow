@@ -11,6 +11,12 @@ import type { Fragment } from '../trace/events.js';
 
 export type PaintItem = {
   box: BoxId;
+  /**
+   * The box itself, or the line boxes of a block that holds inline content. Those have
+   * nothing to draw, but they are hit tested where that content paints, over the backgrounds
+   * of the blocks that come after, so a line hanging out of its block still finds the block.
+   */
+  part: 'box' | 'lines';
   /** `visibility: hidden` keeps a box's space but takes it out of painting and hit testing. */
   visible: boolean;
   /** The nearest ancestor that clips its overflow, if there is one. */
@@ -43,7 +49,7 @@ type Bucket = {
   /** `own` marks a box that paints in its step as one unit rather than handing its
    * descendants to the buckets around it. */
   blocks: (Entry & { own: boolean })[];
-  inlines: (Entry & { own: boolean })[];
+  inlines: (Entry & { own: boolean; part: 'box' | 'lines' })[];
   /** Positioned, but with no z-index of its own, so it paints on top of the plain content. */
   level: Entry[];
   positive: (Entry & { z: number })[];
@@ -87,6 +93,7 @@ function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxI
   const inner = box.style.overflow === 'visible' ? clip : box.id;
 
   const bucket: Bucket = { negative: [], blocks: [], inlines: [], level: [], positive: [] };
+  if (holdsLines(box)) bucket.inlines.push({ box, own: false, clip: inner, part: 'lines' });
   collect(painted(box), bucket, inner);
 
   for (const entry of [...bucket.negative].sort((a, b) => a.z - b.z)) {
@@ -98,7 +105,7 @@ function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxI
   }
   for (const entry of bucket.inlines) {
     if (entry.own) descend(entry.box, state, context, depth, entry.clip);
-    else push(entry.box, state, context, depth, entry.clip);
+    else push(entry.box, state, context, depth, entry.clip, entry.part);
   }
   for (const entry of bucket.level) {
     descend(entry.box, state, context, depth, entry.clip);
@@ -108,9 +115,17 @@ function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxI
   }
 }
 
-function push(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
+function push(
+  box: Box,
+  state: State,
+  context: BoxId,
+  depth: number,
+  clip: BoxId | null,
+  part: PaintItem['part'] = 'box',
+): void {
   state.items.push({
     box: box.id,
+    part,
     visible: box.style.visibility === 'visible',
     clippedBy: clip,
     order: state.items.length,
@@ -142,7 +157,7 @@ function descend(box: Box, state: State, context: BoxId, depth: number, clip: Bo
 function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
   for (const child of children) {
     if (child.kind === 'text') {
-      bucket.inlines.push({ box: child, own: false, clip });
+      bucket.inlines.push({ box: child, own: false, clip, part: 'box' });
       continue;
     }
 
@@ -164,7 +179,7 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
       // bucket above would paint them before it, which is to say underneath its own
       // background, and a pointer over them would find the atomic instead.
       const atomic = child.style.display !== 'inline';
-      bucket.inlines.push({ box: child, own: atomic, clip });
+      bucket.inlines.push({ box: child, own: atomic, clip, part: 'box' });
       if (atomic) {
         // It paints as one piece, but a positioned descendant is not part of that piece: it
         // belongs to the stacking context, over the top of everything in the line.
@@ -177,8 +192,17 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
 
     // A box that clips its overflow clips its descendants, whether or not it happens to be
     // the root of a stacking context.
-    collect(painted(child), bucket, child.style.overflow === 'visible' ? clip : child.id);
+    const inner = child.style.overflow === 'visible' ? clip : child.id;
+    if (holdsLines(child))
+      bucket.inlines.push({ box: child, own: false, clip: inner, part: 'lines' });
+    collect(painted(child), bucket, inner);
   }
+}
+
+/** A block laying out inline content has line boxes. An inline that is not atomic has none. */
+function holdsLines(box: Box): boolean {
+  if (box.kind === 'text' || (box.kind === 'inline' && !box.atomic)) return false;
+  return box.children.some((child) => child.kind !== 'block');
 }
 
 /** Flex items paint in the order `order` puts them in, the way inline blocks would. */
@@ -218,6 +242,7 @@ export function hitTest(
     fragments: ReadonlyMap<BoxId, Fragment>;
     /** Per line rects, used in place of the union for anything that sits on several lines. */
     pieces: ReadonlyMap<BoxId, readonly Rect[]>;
+    lineBoxes: ReadonlyMap<BoxId, readonly Rect[]>;
   },
   x: number,
   y: number,
@@ -232,7 +257,10 @@ export function hitTest(
     }
 
     const fragment = geometry.fragments.get(item.box);
-    const rects = geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]);
+    const rects =
+      item.part === 'lines'
+        ? (geometry.lineBoxes.get(item.box) ?? [])
+        : (geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]));
 
     for (const rect of rects) {
       if (inside(rect, x, y)) return item.box;

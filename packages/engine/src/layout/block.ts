@@ -47,6 +47,11 @@ export type LayoutResult = {
   pieces: Map<BoxId, Rect[]>;
   /** The same, but only for inline boxes, and one rect per line rather than per word. */
   lines: Map<BoxId, Rect[]>;
+  /**
+   * The line boxes of every block that holds inline content, as wide as what is on them. A
+   * pointer that lands in one finds the block, even where the line hangs over something else.
+   */
+  lineBoxes: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
 };
 
@@ -61,6 +66,7 @@ type Context = {
   fragments: Map<BoxId, Fragment>;
   pieces: Map<BoxId, Rect[]>;
   lines: Map<BoxId, Rect[]>;
+  lineBoxes: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   measurer: TextMeasurer;
   devicePixelRatio: number;
@@ -128,6 +134,7 @@ export function layoutDocument(
     fragments: new Map(),
     pieces: new Map(),
     lines: new Map(),
+    lineBoxes: new Map(),
     trace: [],
     measurer,
     icb,
@@ -143,6 +150,7 @@ export function layoutDocument(
     fragments: context.fragments,
     pieces: context.pieces,
     lines: context.lines,
+    lineBoxes: context.lineBoxes,
     trace: context.trace,
   };
 }
@@ -341,6 +349,7 @@ function layoutChildren(
       fragments: context.fragments,
       pieces: context.pieces,
       lines: context.lines,
+      lineBoxes: context.lineBoxes,
       trace: context.trace,
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
@@ -641,6 +650,7 @@ function measureFlow(
     fragments: new Map(),
     pieces: new Map(),
     lines: new Map(),
+    lineBoxes: new Map(),
     trace: [],
   };
   const flow = layoutChildren(box, containing, contentTop, border, padding, scratch, true, []);
@@ -695,6 +705,7 @@ function measureAtomic(
     fragments: new Map(),
     pieces: new Map(),
     lines: new Map(),
+    lineBoxes: new Map(),
     trace: [],
   };
   const margin = atomicMargin(box, available);
@@ -936,6 +947,7 @@ function measureAbsolute(
     fragments: new Map(),
     pieces: new Map(),
     lines: new Map(),
+    lineBoxes: new Map(),
     trace: [],
   };
   const border = usedBorderWidths(box.style);
@@ -1094,6 +1106,7 @@ function itemMetrics(
       fragments: new Map(),
       pieces: new Map(),
       lines: new Map(),
+      lineBoxes: new Map(),
       trace: [],
     };
     const result = layoutBlock(
@@ -1130,18 +1143,19 @@ function itemMetrics(
   // over, in which case there is nothing to protect and the floor goes back to zero.
   const minStyle = isRow ? style.minWidth : style.minHeight;
   const along = isRow ? across : down;
-  const content = isRow && style.overflow === 'visible' ? intrinsic.min : 0;
-  // A size the item asked for caps that floor. `width: 0` means zero however long the word
-  // inside is, because the content is only protected up to the size it was given.
-  const asked = toContentBox(style.boxSizing, specified, along);
-  const automatic = asked === null ? content : Math.min(content, asked);
   const basis_ = isRow ? containing.width : containing.height;
-  const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;
   const maxMain = toContentBox(
     style.boxSizing,
     usedMaxSize(isRow ? style.maxWidth : style.maxHeight, basis_),
     along,
   );
+  const content = isRow && style.overflow === 'visible' ? intrinsic.min : 0;
+  // A size the item asked for caps that floor, and so does a maximum. `width: 0` means zero
+  // however long the word inside is, because the content is only protected up to the size it
+  // was given and never past the most it may have.
+  const asked = toContentBox(style.boxSizing, specified, along);
+  const automatic = Math.min(content, asked ?? content, maxMain ?? content);
+  const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;
 
   const crossStyle = isRow ? style.height : style.width;
 

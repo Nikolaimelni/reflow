@@ -68,8 +68,10 @@
       });
     }
 
+    const painted = result.display.items.filter((item) => item.part === 'box');
+
     let shown = 0;
-    for (const item of result.display.items) {
+    for (const item of painted) {
       if (shown >= LIMIT) break;
 
       const fragment = result.layout.fragments.get(item.box);
@@ -95,7 +97,7 @@
     return {
       planes: [...contexts.values()].sort((a, b) => a.depth - b.depth),
       shown,
-      total: result.display.items.length,
+      total: painted.length,
     };
   });
 

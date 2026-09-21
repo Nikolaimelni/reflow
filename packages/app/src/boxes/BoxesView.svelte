@@ -86,7 +86,11 @@
     const bounds = canvas.getBoundingClientRect();
     return hitTest(
       session.result.display,
-      { fragments: session.frame, pieces: session.result.layout.pieces },
+      {
+        fragments: session.frame,
+        pieces: session.result.layout.pieces,
+        lineBoxes: session.result.layout.lineBoxes,
+      },
       (event.clientX - bounds.left) / scale,
       (event.clientY - bounds.top) / scale,
     );

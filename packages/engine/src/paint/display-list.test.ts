@@ -3,7 +3,9 @@ import { type Box, type BoxId, walkBoxes } from '../boxtree/box.js';
 import { buildBoxTree } from '../boxtree/build.js';
 import { computeStyles } from '../cascade/cascade.js';
 import { type DomNode, element, text } from '../dom/node.js';
-import { buildDisplayList } from './display-list.js';
+import { layoutDocument } from '../layout/block.js';
+import { fixedAdvanceMeasurer } from '../layout/text.js';
+import { buildDisplayList, hitTest } from './display-list.js';
 
 function order(css: string, children: DomNode[]) {
   const root = element('html', {}, children);
@@ -19,7 +21,9 @@ function order(css: string, children: DomNode[]) {
 
   const list = buildDisplayList(boxTree);
   return {
-    painted: list.items.map((item) => names.get(item.box) ?? '?'),
+    painted: list.items
+      .filter((item) => item.part === 'box')
+      .map((item) => names.get(item.box) ?? '?'),
     contexts: list.contexts.map((one) => ({
       box: names.get(one.box) ?? '?',
       zIndex: one.zIndex,
@@ -127,5 +131,47 @@ describe('buildDisplayList', () => {
     const css = '.floating { position: absolute }';
 
     expect(order(css, [floating]).contexts).toEqual([{ box: 'html', zIndex: 'auto', depth: 0 }]);
+  });
+});
+
+describe('hitTest', () => {
+  function pointer(css: string, children: DomNode[]) {
+    const root = element('html', {}, children);
+    const boxTree = buildBoxTree(root, computeStyles(root, css));
+    if (boxTree === null) throw new Error('the root generated no box');
+
+    const layout = layoutDocument(boxTree, { width: 400, height: 300 }, fixedAdvanceMeasurer());
+    const list = buildDisplayList(boxTree);
+    const names = new Map<BoxId, string>();
+    walkBoxes(boxTree, (box: Box) => {
+      if (box.kind !== 'text' && box.element !== null) {
+        names.set(box.id, box.element.classes[0] ?? box.element.tag);
+      }
+    });
+
+    return (x: number, y: number) => {
+      const hit = hitTest(list, layout, x, y);
+      return hit === null ? 'nothing' : (names.get(hit) ?? 'anonymous');
+    };
+  }
+
+  it('finds a block through a line box that hangs out of it', () => {
+    const at = pointer(
+      '.crowded { width: 100px; height: 10px } .fat { display: inline-block; width: 80px; height: 4px } .kept { height: 40px }',
+      [
+        element('div', { classes: ['crowded'] }, [
+          text('ab '),
+          element('span', { classes: ['fat'] }),
+        ]),
+        element('div', { classes: ['kept'] }),
+      ],
+    );
+
+    // The second line runs from 16 to 32 and over the block below, as wide as the 80 on it.
+    // Inline content paints after every block background, so the line wins inside that width
+    // and the block underneath wins beside it.
+    expect(at(40, 18)).toBe('crowded');
+    expect(at(90, 18)).toBe('kept');
+    expect(at(40, 26)).toBe('fat');
   });
 });

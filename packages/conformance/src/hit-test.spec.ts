@@ -131,6 +131,7 @@ function samplePoints(
   geometry: {
     fragments: ReadonlyMap<BoxId, { rect: Rect }>;
     pieces: ReadonlyMap<BoxId, readonly Rect[]>;
+    lineBoxes: ReadonlyMap<BoxId, readonly Rect[]>;
   },
   viewport: { width: number; height: number },
   elementOf: ReadonlyMap<BoxId, number>,
@@ -139,6 +140,8 @@ function samplePoints(
   for (const box of elementOf.keys()) {
     const pieces = geometry.pieces.get(box);
     if (pieces !== undefined) rects.push(...pieces);
+    const lineBoxes = geometry.lineBoxes.get(box);
+    if (lineBoxes !== undefined) rects.push(...lineBoxes);
     const fragment = geometry.fragments.get(box);
     if (fragment !== undefined) rects.push(fragment.rect);
   }

@@ -40,6 +40,8 @@ export type InlineInput = {
   pieces: Map<BoxId, Rect[]>;
   /** The lines an inline box covers, kept apart so a view can draw the box where it is. */
   lines: Map<BoxId, Rect[]>;
+  /** The line boxes themselves, filed under the block they belong to. */
+  lineBoxes: Map<BoxId, Rect[]>;
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
@@ -219,6 +221,12 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       const seen = perLine.get(box);
       if (seen === undefined) perLine.set(box, [extent]);
       else seen.push(extent);
+    }
+
+    // As wide as what is on it and no wider, starting where the alignment put it.
+    if (line.height > 0) {
+      const rect = { x: input.contentX + offset, y, width: line.width, height: line.height };
+      record(input.lineBoxes, input.container.id, rect);
     }
 
     y += line.height;

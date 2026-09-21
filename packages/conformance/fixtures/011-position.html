@@ -2,6 +2,14 @@
 <meta charset="utf-8" />
 <title>relative and absolute positioning</title>
 <style>
+  .nudged {
+    position: relative;
+    left: 2px;
+  }
+  .nudged-far {
+    position: relative;
+    left: 7px;
+  }
   body {
     margin: 0;
     font-family: Arial, sans-serif;
@@ -176,3 +184,4 @@
 <div class="kept">
   <div class="block-badge"></div>
 </div>
+<div><span class="nudged"></span><div style="display: inline-block"></div><span class="nudged-far"></span></div>

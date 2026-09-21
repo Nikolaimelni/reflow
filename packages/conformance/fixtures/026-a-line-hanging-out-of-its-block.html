@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a line box that hangs out of its block, under the pointer</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+  .crowded {
+    width: 180px;
+    height: 20px;
+    background-color: #f0e2c8;
+  }
+  .fat {
+    display: inline-block;
+    width: 160px;
+    height: 6px;
+    background-color: #c8c8d8;
+  }
+  .kept {
+    height: 20px;
+    background-color: #dce6f5;
+  }
+  .middled {
+    text-align: center;
+  }
+  .righted {
+    text-align: right;
+  }
+  .short {
+    width: 90px;
+  }
+</style>
+
+<div class="crowded">one <span class="fat"></span></div>
+<div class="kept"></div>
+<div class="crowded middled">one <span class="fat short"></span></div>
+<div class="kept"></div>
+<div class="crowded righted">one two <span class="fat short"></span></div>
+<div class="kept"></div>
+<div class="crowded">one two three four five six seven eight nine ten eleven</div>
+<div class="kept"></div>

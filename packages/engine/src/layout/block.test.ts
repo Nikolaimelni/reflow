@@ -182,8 +182,9 @@ describe('margin collapsing', () => {
     expect(widthOf(['item', 'hidden'])).toBe(0);
   });
 
-  it('caps a flex item automatic minimum at the width it asked for', () => {
-    const css = '.row { display: flex } .flat { width: 0% } .thin { width: 4px }';
+  it('caps a flex item automatic minimum at its width and its maximum', () => {
+    const css =
+      '.row { display: flex } .flat { width: 0% } .thin { width: 4px } .capped { max-width: 0% }';
     const widthOf = (classes: string[]) => {
       const item = element('div', { classes }, [text('ab')]);
       const row = element('div', { classes: ['row'] }, [item]);
@@ -194,6 +195,7 @@ describe('margin collapsing', () => {
     // most the content is protected up to.
     expect(widthOf(['flat'])).toBe(0);
     expect(widthOf(['thin'])).toBe(4);
+    expect(widthOf(['capped'])).toBe(0);
   });
 
   it('measures a flex item with the container as the percentage basis', () => {

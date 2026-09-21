@@ -35,7 +35,9 @@ export class Session {
 
   /** Paint order, filtered to the boxes the current frame actually has geometry for. */
   order = $derived(
-    this.result.status === 'ok' ? this.result.display.items.map((item) => item.box) : [],
+    this.result.status === 'ok'
+      ? this.result.display.items.filter((item) => item.part === 'box').map((item) => item.box)
+      : [],
   );
 
   constructor() {
