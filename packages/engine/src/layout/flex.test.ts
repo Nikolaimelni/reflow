@@ -99,6 +99,28 @@ describe('main axis sizing', () => {
   });
 });
 
+describe('resolving flexible lengths', () => {
+  it('takes the room a floored item will not give up from the others', () => {
+    const items = [item({ basis: 60, minMain: 55 }), item({ basis: 60 })];
+
+    // Twenty too wide, ten each on the first pass. The first cannot go below 55, so it stops
+    // there and the second gives up the rest.
+    expect(mains(line({ items, mainSize: 100 }))).toEqual([55, 45]);
+  });
+
+  it('grows from the base size rather than from where a minimum put it', () => {
+    const items = [item({ basis: 0, minMain: 40, grow: 1 }), item({ basis: 0, grow: 1 })];
+
+    expect(mains(line({ items, mainSize: 100 }))).toEqual([50, 50]);
+  });
+
+  it('shares out only part of the space when the factors add up to less than one', () => {
+    const items = [item({ basis: 0, grow: 0.5 })];
+
+    expect(mains(line({ items, mainSize: 100 }))).toEqual([50]);
+  });
+});
+
 describe('justify-content', () => {
   const run = (justify: JustifyContent, count = 2) =>
     starts(line({ justify, items: Array.from({ length: count }, () => item({ basis: 50 })) }));
@@ -199,7 +221,16 @@ describe('the other way round', () => {
   it('keeps a margin on the side it was written on', () => {
     const items = [item({ basis: 60, mainSurround: 10, marginMainStart: 4, marginMainEnd: 6 })];
 
-    expect(starts(line({ items, reverse: true }))).toEqual([236]);
+    // The item fills 230 to 300 with its margins, and the one written on the left stays there.
+    expect(starts(line({ items, reverse: true }))).toEqual([234]);
+  });
+
+  it('gives a reversed auto margin the room on its own side', () => {
+    const items = [item({ basis: 10, autoMainEnd: true }), item({ basis: 10 })];
+
+    // The first item starts at the far end, and the auto margin on its right takes all the
+    // free space, which pushes it back until it meets the second.
+    expect(starts(line({ items, reverse: true }))).toEqual([10, 0]);
   });
 });
 

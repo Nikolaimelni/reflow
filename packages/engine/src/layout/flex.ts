@@ -216,10 +216,11 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
     const outer = (outerMain[i] ?? 0) + eaten;
 
     // Solved from the start of the main axis whichever way it runs, then turned around, so
-    // that `justify-content: flex-start` packs against the end a reversed line begins at.
-    const start = input.reverse
-      ? mainSize - cursor - outer + item.marginMainEnd + (item.autoMainEnd ? share : 0)
-      : cursor + item.marginMainStart + (item.autoMainStart ? share : 0);
+    // that `justify-content: flex-start` packs against the end a reversed line begins at. The
+    // margins are physical and do not turn with it: whichever way the line runs, the border
+    // box starts past the margin on its left or top.
+    const outerStart = input.reverse ? mainSize - cursor - outer : cursor;
+    const start = outerStart + item.marginMainStart + (item.autoMainStart ? share : 0);
 
     mainStarts.push(start);
     cursor += outer + input.mainGap + spacing.between;
@@ -239,39 +240,76 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   };
 }
 
+/**
+ * The loop the spec calls resolving flexible lengths. Space is shared out from the flex base
+ * sizes, anything the share pushes past its min or max is clamped and frozen, and what it
+ * would not take goes round again to the items still free to move. A single pass gets the
+ * sizes wrong the moment one item hits its floor: the room it refuses to give up has to come
+ * out of somebody else.
+ */
 function resolveMainSizes(input: FlexLineInput): number[] {
-  const hypothetical = input.items.map((item) => clamp(item.basis, item.minMain, item.maxMain));
+  const items = input.items;
+  const hypothetical = items.map((item) => clamp(item.basis, item.minMain, item.maxMain));
 
   if (input.mainSize === null) return hypothetical;
 
-  const outer = hypothetical.reduce(
-    (sum, size, i) => sum + size + (input.items[i]?.mainSurround ?? 0),
-    input.mainGap * Math.max(0, input.items.length - 1),
+  const room = input.mainSize - input.mainGap * Math.max(0, items.length - 1);
+  const wanted = hypothetical.reduce(
+    (sum, size, i) => sum + size + (items[i]?.mainSurround ?? 0),
+    0,
   );
-  const free = input.mainSize - outer;
+  const growing = wanted < room;
+  const factor = (item: FlexItemInput) => (growing ? item.grow : item.shrink);
 
-  if (free === 0) return hypothetical;
-  return free > 0 ? grow(input, hypothetical, free) : shrink(input, hypothetical, free);
-}
-
-function grow(input: FlexLineInput, hypothetical: readonly number[], free: number): number[] {
-  const total = input.items.reduce((sum, item) => sum + item.grow, 0);
-  if (total === 0) return [...hypothetical];
-
-  return input.items.map((item, i) =>
-    clamp((hypothetical[i] ?? 0) + (free * item.grow) / total, item.minMain, item.maxMain),
+  // An item that cannot flex, or that its min or max has already moved the way the line is
+  // going, sits at its hypothetical size from the start.
+  const target = [...hypothetical];
+  const frozen = items.map(
+    (item, i) =>
+      factor(item) === 0 ||
+      (growing && item.basis > (hypothetical[i] ?? 0)) ||
+      (!growing && item.basis < (hypothetical[i] ?? 0)),
   );
-}
 
-/** Shrinking is weighted by the base size as well as the factor, unlike growing. */
-function shrink(input: FlexLineInput, hypothetical: readonly number[], free: number): number[] {
-  const weights = input.items.map((item, i) => item.shrink * (hypothetical[i] ?? 0));
-  const total = weights.reduce((sum, one) => sum + one, 0);
-  if (total === 0) return [...hypothetical];
+  const spare = () =>
+    items.reduce(
+      (left, item, i) => left - (frozen[i] ? (target[i] ?? 0) : item.basis) - item.mainSurround,
+      room,
+    );
+  const initial = spare();
 
-  return input.items.map((item, i) =>
-    clamp((hypothetical[i] ?? 0) + (free * (weights[i] ?? 0)) / total, item.minMain, item.maxMain),
-  );
+  while (frozen.includes(false)) {
+    const flexing = items.filter((_, i) => !frozen[i]);
+    const factors = flexing.reduce((sum, item) => sum + factor(item), 0);
+
+    // Factors that add up to less than one only take that fraction of the space.
+    let free = spare();
+    if (factors < 1 && Math.abs(initial * factors) < Math.abs(free)) free = initial * factors;
+
+    // Shrinking is weighted by the base size as well as the factor, unlike growing.
+    const weight = (item: FlexItemInput) => (growing ? item.grow : item.shrink * item.basis);
+    const weights = flexing.reduce((sum, item) => sum + weight(item), 0);
+
+    let violation = 0;
+    const moved = items.map((item, i) => {
+      if (frozen[i]) return { want: target[i] ?? 0, got: target[i] ?? 0 };
+
+      const want = item.basis + (weights === 0 ? 0 : (free * weight(item)) / weights);
+      const got = Math.max(0, clamp(want, item.minMain, item.maxMain));
+      violation += got - want;
+      return { want, got };
+    });
+
+    moved.forEach(({ want, got }, i) => {
+      if (frozen[i]) return;
+      target[i] = got;
+      if (violation === 0 || (violation > 0 && got > want) || (violation < 0 && got < want)) {
+        frozen[i] = true;
+      }
+    });
+  }
+
+  return target;
 }
 
 /**

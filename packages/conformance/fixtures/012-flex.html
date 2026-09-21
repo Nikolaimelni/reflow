@@ -174,6 +174,73 @@
     width: 4px;
     background-color: #d8d8a8;
   }
+  .lopsided {
+    margin-left: 4px;
+    margin-right: 6px;
+    background-color: #a8b8d8;
+  }
+  .lopsided-down {
+    margin-top: 4px;
+    margin-bottom: 6px;
+    background-color: #a8b8d8;
+  }
+  .pushed-back {
+    margin-bottom: auto;
+  }
+  .small-print {
+    font-size: 9px;
+    background-color: #e8c8c8;
+  }
+  .large-print {
+    font-size: 23px;
+    background-color: #c8e8c8;
+  }
+  .half-grows {
+    flex-grow: 0.5;
+    flex-basis: 0;
+  }
+  .floored-grows {
+    flex: 1 1 0;
+    min-width: 100px;
+  }
+  .open-column {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+  .open-column > div {
+    background-color: #d8e8c8;
+  }
+  .shares {
+    flex: 1;
+  }
+  .shares-from-nothing {
+    flex: 1 1 0;
+  }
+  .half-basis {
+    flex-basis: 50%;
+  }
+  .sized-whole {
+    box-sizing: border-box;
+    width: 100px;
+    padding: 10px;
+    border: 2px solid;
+    flex-shrink: 0;
+  }
+  .sized-whole-down {
+    box-sizing: border-box;
+    height: 50px;
+    padding: 10px;
+    border: 2px solid;
+    flex-shrink: 0;
+  }
+  .basis-alone {
+    flex: 10px;
+  }
+  .basis-first {
+    flex: 30% 2;
+  }
   .held-down {
     max-width: 0%;
     background-color: #c8a8a8;
@@ -239,3 +306,17 @@
 <div class="row"><div class="barely-wide">one</div><div class="fixed"></div></div>
 <div class="column"><div class="none-wide">one</div></div>
 <div class="row"><div class="held-down">one</div><div class="fixed"></div></div>
+<div class="row back"><div class="fixed lopsided"></div></div>
+<div class="row back"><div class="fixed pushed"></div><div class="fixed"></div></div>
+<div class="column back"><div class="fixed lopsided-down"></div></div>
+<div class="column back"><div class="fixed pushed-back"></div><div class="fixed"></div></div>
+<div class="row"><div class="small-print">one</div><div class="large-print">three liquorice one</div></div>
+<div class="row"><div class="half-grows"></div></div>
+<div class="row"><div class="floored-grows"></div><div class="grows"></div></div>
+<div class="open-column"><div class="shares">one two three</div><div class="shares">four</div></div>
+<div class="open-column"><div class="shares-from-nothing">one two three</div><div class="shares-from-nothing">four</div></div>
+<div class="open-column"><div class="half-basis">one</div></div>
+<div class="open-column"><div class="shares-from-nothing clips">one</div></div>
+<div class="row"><div class="sized-whole">x</div></div>
+<div class="column"><div class="sized-whole-down">x</div></div>
+<div class="row"><div class="basis-alone">x</div><div class="basis-first">y</div></div>

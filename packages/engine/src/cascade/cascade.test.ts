@@ -217,6 +217,28 @@ describe('shorthands', () => {
     );
   });
 
+  it.each([
+    ['flex: 1', [1, 1, percent(0)]],
+    ['flex: 2 3', [2, 3, percent(0)]],
+    ['flex: 1 1 0', [1, 1, px(0)]],
+    ['flex: 1 0', [1, 0, percent(0)]],
+    ['flex: 10px', [1, 1, px(10)]],
+    ['flex: 30% 2', [2, 1, percent(30)]],
+    ['flex: auto', [1, 1, AUTO]],
+    ['flex: none', [0, 0, AUTO]],
+  ] as const)('expands %s the way Chromium reports it', (declaration, expected) => {
+    const node = element('div');
+    const style = styles(node, `div { ${declaration} }`)(node);
+
+    expect([style.flexGrow, style.flexShrink, style.flexBasis]).toEqual(expected);
+  });
+
+  it('rejects a flex shorthand with its factors apart', () => {
+    const node = element('div');
+
+    expect(styles(node, 'div { flex: 1 10px 2 }')(node).flexGrow).toBe(0);
+  });
+
   it('sets the row gap first out of the gap shorthand', () => {
     const node = element('div');
     const one = styles(node, 'div { gap: 4px }')(node);

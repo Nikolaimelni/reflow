@@ -91,10 +91,13 @@ function perSide(names: readonly PropertyName[], value: readonly Token[]): Longh
 const ZERO_TOKEN: Token = { type: 'number', value: 0 };
 const ONE_TOKEN: Token = { type: 'number', value: 1 };
 const AUTO_TOKEN: Token = { type: 'ident', value: 'auto' };
+const NO_PERCENT_TOKEN: Token = { type: 'percentage', value: 0 };
 
 /**
- * `flex: 1` means `1 1 0`, not `1 1 auto`. That difference is why a one-word `flex` makes
- * items share the space evenly while `flex: auto` lets their content matter.
+ * `flex: 1` means `1 1 0%`, not `1 1 auto`. That difference is why a one-word `flex` makes
+ * items share the space evenly while `flex: auto` lets their content matter. A basis on its
+ * own brings a grow factor of one with it, and a unitless zero after two factors is the basis
+ * rather than a third factor. The two factors go together; the basis may come either side.
  */
 function flex(value: readonly Token[]): Longhand[] | null {
   const parts = words(value);
@@ -108,32 +111,40 @@ function flex(value: readonly Token[]): Longhand[] | null {
         return factors(ONE_TOKEN, ONE_TOKEN, AUTO_TOKEN);
       case 'initial':
         return factors(ZERO_TOKEN, ONE_TOKEN, AUTO_TOKEN);
-      default:
-        return null;
     }
   }
 
+  const tokens: Token[] = [];
+  for (const part of parts) {
+    const token = part[0];
+    if (part.length !== 1 || token === undefined) return null;
+    tokens.push(token);
+  }
+  if (tokens.length === 0 || tokens.length > 3) return null;
+
+  let at = 0;
   let grow: Token | null = null;
   let shrink: Token | null = null;
   let basis: Token | null = null;
 
-  for (const part of parts) {
-    const token = part[0];
-    if (part.length !== 1 || token === undefined) return null;
-
-    if (token.type === 'number' && basis === null) {
-      if (grow === null) grow = token;
-      else if (shrink === null) shrink = token;
-      else return null;
-      continue;
-    }
-
-    if (basis !== null) return null;
-    basis = token;
+  const next = () => tokens[at];
+  if (next() !== undefined && next()?.type !== 'number') basis = tokens[at++] ?? null;
+  if (next()?.type === 'number') {
+    grow = tokens[at++] ?? null;
+    if (next()?.type === 'number') shrink = tokens[at++] ?? null;
+  }
+  const last = next();
+  if (basis === null && last !== undefined && (last.type !== 'number' || isZero(last))) {
+    basis = last;
+    at++;
   }
 
-  if (grow === null) return null;
-  return factors(grow, shrink ?? ONE_TOKEN, basis ?? ZERO_TOKEN);
+  if (at !== tokens.length || (grow === null && basis === null)) return null;
+  return factors(grow ?? ONE_TOKEN, shrink ?? ONE_TOKEN, basis ?? NO_PERCENT_TOKEN);
+}
+
+function isZero(token: Token | undefined): boolean {
+  return token?.type === 'number' && token.value === 0;
 }
 
 /** One word sets both gaps, two set the row gap first. */

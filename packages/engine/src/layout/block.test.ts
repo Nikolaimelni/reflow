@@ -198,6 +198,31 @@ describe('margin collapsing', () => {
     expect(widthOf(['capped'])).toBe(0);
   });
 
+  it('keeps a flex item its content height down a column of no fixed height', () => {
+    const css =
+      '.down { display: flex; flex-direction: column } .one { flex: 1 } .none { flex: 1 1 0 }';
+    const heightOf = (classes: string[]) => {
+      const item = element('div', { classes }, [text('ab')]);
+      const column = element('div', { classes: ['down'] }, [item]);
+      return page(css, [column]).rectOf(item).height;
+    };
+
+    // `flex: 1` has a basis of 0%, which with no height to take a percentage of is the content,
+    // and a basis of nothing is held open by the automatic minimum, which down a column is the
+    // height of what is inside.
+    expect(heightOf(['one'])).toBe(16);
+    expect(heightOf(['none'])).toBe(16);
+  });
+
+  it('reads a flex basis as a border box under border-box', () => {
+    const cell = element('div', { classes: ['whole'] });
+    const row = element('div', { classes: ['row'] }, [cell]);
+    const css =
+      '.row { display: flex } .whole { box-sizing: border-box; width: 100px; padding: 10px; border: 2px solid }';
+
+    expect(page(css, [row]).rectOf(cell).width).toBe(100);
+  });
+
   it('measures a flex item with the container as the percentage basis', () => {
     const cell = element('div', { classes: ['cell'] }, [text('ab')]);
     const row = element('div', { classes: ['row'] }, [cell]);

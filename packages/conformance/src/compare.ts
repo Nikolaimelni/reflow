@@ -5,6 +5,7 @@ import {
   formatColour,
   type Gap,
   type Margin,
+  type Size,
   text,
   usedBorderWidths,
 } from '@reflow/engine';
@@ -51,6 +52,9 @@ const FORMATTERS: Record<string, Formatter> = {
   'align-items': (style) => style.alignItems,
   'align-self': (style) => style.alignSelf,
   'align-content': (style) => style.alignContent,
+  'flex-grow': (style) => String(style.flexGrow),
+  'flex-shrink': (style) => String(style.flexShrink),
+  'flex-basis': (style) => size(style.flexBasis),
   order: (style) => String(style.order),
   'row-gap': (style) => gap(style.rowGap),
   'column-gap': (style) => gap(style.columnGap),
@@ -150,6 +154,11 @@ function same(ours: string, theirs: string): boolean {
 
 function unit(value: string): string {
   return value.slice(String(Number.parseFloat(value)).length);
+}
+
+function size(value: Size): string {
+  if (value.kind === 'auto') return 'auto';
+  return value.kind === 'px' ? `${round(value.value)}px` : `${round(value.value)}%`;
 }
 
 function gap(value: Gap): string {

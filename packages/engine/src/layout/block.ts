@@ -1132,24 +1132,37 @@ function itemMetrics(
   };
 
   const mainStyle = isRow ? style.width : style.height;
-  const mainBasis = isRow ? containing.width : (containing.height ?? 0);
-  const specified = usedSize(mainStyle, isRow ? containing.width : containing.height);
-  const fromBasis = usedSize(style.flexBasis, mainBasis);
+  const mainSize = isRow ? containing.width : containing.height;
+  const specified = usedSize(mainStyle, mainSize);
+  // Down a column the content size is the height the item comes to at the width it has.
+  const contentSize = () => (isRow ? intrinsic.max : measure(containing.width).cross);
 
-  const basis = fromBasis ?? specified ?? (isRow ? intrinsic.max : measure(containing.width).cross);
+  // A percentage basis with nothing definite to be a percentage of is `content`, which skips
+  // the item's own height as well as the percentage. That is what `flex: 1` down a column of
+  // no fixed height comes to, since its basis is 0%.
+  // A basis or a size given in the style is a border box under `border-box`, the same as a
+  // width, and what the line shares out is content.
+  const along = isRow ? across : down;
+  const basis =
+    style.flexBasis.kind === 'percent' && mainSize === null
+      ? contentSize()
+      : (toContentBox(style.boxSizing, usedSize(style.flexBasis, mainSize), along) ??
+        toContentBox(style.boxSizing, specified, along) ??
+        contentSize());
 
   // min-width and min-height are auto on a flex item, and auto means min-content: that is
-  // what stops flex-shrink from squeezing a word in half. Unless the item clips what runs
-  // over, in which case there is nothing to protect and the floor goes back to zero.
+  // what stops flex-shrink from squeezing a word in half, and down a column what stops a
+  // basis of nothing from flattening the item. Unless the item clips what runs over, in
+  // which case there is nothing to protect and the floor goes back to zero.
   const minStyle = isRow ? style.minWidth : style.minHeight;
-  const along = isRow ? across : down;
   const basis_ = isRow ? containing.width : containing.height;
   const maxMain = toContentBox(
     style.boxSizing,
     usedMaxSize(isRow ? style.maxWidth : style.maxHeight, basis_),
     along,
   );
-  const content = isRow && style.overflow === 'visible' ? intrinsic.min : 0;
+  const content =
+    style.overflow !== 'visible' ? 0 : isRow ? intrinsic.min : measure(containing.width).cross;
   // A size the item asked for caps that floor, and so does a maximum. `width: 0` means zero
   // however long the word inside is, because the content is only protected up to the size it
   // was given and never past the most it may have.
