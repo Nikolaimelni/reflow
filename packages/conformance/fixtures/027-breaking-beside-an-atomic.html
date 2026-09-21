@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>where a line may break beside an atomic inline</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .wide {
+    display: inline-block;
+    width: 200px;
+    height: 10px;
+    background-color: #dce6f5;
+  }
+  .narrow {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background-color: #f0e2c8;
+  }
+  .made-inline {
+    display: inline;
+  }
+  .padded {
+    padding-left: 5px;
+  }
+  .kept {
+    white-space: nowrap;
+  }
+  .tall {
+    display: inline-block;
+    padding: 22px;
+    border: 2px solid;
+  }
+</style>
+
+<div>a<span class="wide"></span></div>
+<div>a<span></span><span class="wide"></span></div>
+<div><span class="narrow"></span><span class="wide"></span></div>
+<div><span class="wide"></span>word</div>
+<div><div class="made-inline"></div><span class="wide"></span></div>
+<div><section class="made-inline"></section><span class="wide"></span></div>
+<div><em></em><span class="wide"></span></div>
+<div><span class="padded"></span><span class="wide"></span></div>
+<div><div class="made-inline"></div> <span class="wide"></span> more</div>
+<div class="kept"><div class="made-inline"></div><span class="wide"></span></div>
+<div>
+  <div class="made-inline"></div>
+  <div class="tall">internationalisation</div>
+</div>

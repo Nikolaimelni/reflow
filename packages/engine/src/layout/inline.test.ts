@@ -246,6 +246,15 @@ describe('inline boxes', () => {
     expect(page('p { margin: 0 }', [p]).rectOf(span)).toMatchObject({ x: 0, width: 24 });
   });
 
+  it('keeps the first space of a run that starts inside a nowrap box', () => {
+    const span = element('span', { classes: ['held'] }, [text('ab ')]);
+    const p = element('p', {}, [span, text(' '), element('span', { classes: ['block'] })]);
+    const css = 'p { margin: 0 } .held { white-space: nowrap } .block { display: inline-block }';
+
+    // The space inside the span comes first, so it stays there, and the one after it collapses.
+    expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 0, width: 24 });
+  });
+
   it('settles a nowrap space inside the box, in front of its padding', () => {
     const span = element('span', { classes: ['held'] }, [text('ab ')]);
     const p = element('p', {}, [text('x '), span, text('cd')]);
@@ -363,6 +372,54 @@ describe('inline boxes', () => {
     // 40 above the baseline, plus the strut's own descent below it. That leftover 5.2 is the
     // gap everyone has fought underneath an image or an inline-block.
     expect(rectOf(p).height).toBeCloseTo(45.2, 5);
+  });
+});
+
+describe('atomic inlines', () => {
+  const css =
+    'p { margin: 0 } .block { display: inline-block; width: 100px; height: 4px } .inl { display: inline } .over { display: inline-block; width: 110px; height: 4px } .full { display: inline-block; width: 100px; height: 4px } .out { position: absolute }';
+
+  it('breaks beside an atomic inline with no space to break at', () => {
+    const before = element('p', {}, [text('ab'), element('span', { classes: ['block'] })]);
+    const after = element('p', {}, [element('span', { classes: ['block'] }), text('ab')]);
+
+    expect(page(css, [before], 100).lines).toHaveLength(2);
+    expect(page(css, [after], 100).lines).toHaveLength(2);
+  });
+
+  it('leaves an empty div behind on a line of its own, and keeps an empty span', () => {
+    const div = element('div', { classes: ['inl'] });
+    const span = element('span');
+    const leaves = page(
+      css,
+      [element('p', {}, [div, element('span', { classes: ['over'] })])],
+      100,
+    );
+    const keeps = page(
+      css,
+      [element('p', {}, [span, element('span', { classes: ['over'] })])],
+      100,
+    );
+
+    // The line the div is left on holds nothing, so it has no height, and neither does the div.
+    expect(leaves.lines).toHaveLength(2);
+    expect(leaves.rectOf(div)).toEqual({ x: 0, y: 0, width: 0, height: 0 });
+    expect(keeps.lines).toHaveLength(1);
+    expect(keeps.rectOf(span).height).toBe(16);
+  });
+
+  it('starts the next line for an inline box out of the flow that comes after a full one', () => {
+    const late = element('span', { classes: ['out'] });
+    const onTime = element('span', { classes: ['out'] });
+    const over = page(css, [element('p', {}, [element('span', { classes: ['over'] }), late])], 100);
+    const full = page(
+      css,
+      [element('p', {}, [element('span', { classes: ['full'] }), onTime])],
+      100,
+    );
+
+    expect(over.rectOf(late)).toMatchObject({ x: 0, y: 16 });
+    expect(full.rectOf(onTime)).toMatchObject({ x: 100, y: 0 });
   });
 });
 

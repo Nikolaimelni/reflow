@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>the static position of an inline box out of the flow, after a line that ran out</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .over {
+    display: inline-block;
+    width: 181px;
+    height: 10px;
+    background-color: #dce6f5;
+  }
+  .full {
+    display: inline-block;
+    width: 180px;
+    height: 10px;
+    background-color: #f0e2c8;
+  }
+  .out {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background-color: #c8a8d8;
+  }
+  .middled {
+    text-align: center;
+  }
+  .empty-but-wide {
+    display: inline;
+    margin: 35%;
+    padding-left: 53px;
+    border: 1px solid;
+  }
+  .out-inline {
+    display: inline;
+    position: absolute;
+  }
+</style>
+
+<div><span class="over"></span><span class="out"></span></div>
+<div><span class="full"></span><span class="out"></span></div>
+<div class="middled"><span class="over"></span><span class="out"></span></div>
+<div><span class="over"></span> <span class="out"></span>word</div>
+<div class="empty-but-wide"></div>
+<div class="out-inline"></div>
