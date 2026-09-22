@@ -20,7 +20,7 @@ import {
   resolveMargin,
   withMargin,
 } from './margins.js';
-import { relativeOffset, solveAbsoluteAxis } from './position.js';
+import { type AxisResult, relativeOffset, solveAbsoluteAxis } from './position.js';
 import type { TextMeasurer } from './text.js';
 import {
   clampSize,
@@ -75,7 +75,18 @@ type Context = {
 };
 
 /** An out of flow box, parked until the containing block it belongs to has a size. */
-type Deferred = { box: BlockBox; staticX: number; staticY: number };
+type Deferred = {
+  box: BlockBox;
+  staticX: number;
+  staticY: number;
+  /**
+   * A child of a flex container takes its static position as if it were the only item in
+   * it, so it is aligned inside the container's content box rather than parked at its start.
+   */
+  aligned: { container: BoxId; x: Placement; y: Placement } | null;
+};
+
+type Placement = 'start' | 'center' | 'end';
 
 /** Absolute positioning solves width, position and margins together, so it hands them over. */
 type Override = {
@@ -306,7 +317,8 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
     height: fragment.rect.height,
     marginBottom: bottomEscapes ? mergeMargins(ownBottom, flow.trailing) : ownBottom,
     collapsedThrough: !isRoot && collapsesThrough(box, containing.width, containing.height),
-    baseline: flow.baseline === null ? null : border.top + padding.top + flow.baseline,
+    // The lines moved down with the alignment, and their baseline went with them.
+    baseline: flow.baseline === null ? null : border.top + padding.top + leading + flow.baseline,
   };
 }
 
@@ -354,7 +366,7 @@ function layoutChildren(
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
-      defer: (child, x, y) => absolutes.push({ box: child, staticX: x, staticY: y }),
+      defer: (child, x, y) => absolutes.push({ box: child, staticX: x, staticY: y, aligned: null }),
     });
 
     return { height: inline.height, trailing: NO_MARGIN, baseline: inline.lastBaseline };
@@ -843,6 +855,72 @@ function asBlock(box: InlineBox): BlockBox {
  * containing block it hangs from has a size. Both axes go through the same solver; the
  * horizontal one has to finish first, because the height depends on the width.
  */
+/**
+ * Where the only item of this flex container would go, in each physical axis. `justify-content`
+ * places it along the line and `align-self` across it, and the values that distribute space
+ * fall back the way they do for one item. Stretch has nothing to stretch here, so it starts.
+ */
+function soleItem(container: BlockBox, child: BlockBox): Deferred['aligned'] {
+  const style = container.style;
+  const direction = style.flexDirection;
+  const isRow = direction === 'row' || direction === 'row-reverse';
+  const reverse = direction === 'row-reverse' || direction === 'column-reverse';
+  const flipped = style.flexWrap === 'wrap-reverse';
+
+  const flip = (placement: Placement): Placement =>
+    placement === 'start' ? 'end' : placement === 'end' ? 'start' : 'center';
+
+  const justified: Placement = (() => {
+    switch (style.justifyContent) {
+      case 'flex-end':
+        return 'end';
+      case 'center':
+      case 'space-around':
+      case 'space-evenly':
+        return 'center';
+      default:
+        return 'start';
+    }
+  })();
+
+  const asked = child.style.alignSelf === 'auto' ? style.alignItems : child.style.alignSelf;
+  const aligned: Placement = asked === 'flex-end' ? 'end' : asked === 'center' ? 'center' : 'start';
+
+  const main = reverse ? flip(justified) : justified;
+  const cross = flipped ? flip(aligned) : aligned;
+
+  return { container: container.id, x: isRow ? main : cross, y: isRow ? cross : main };
+}
+
+/**
+ * Moves a box whose static position is an alignment inside a flex container's content box,
+ * once its own size is known. Only when both insets on that axis are auto: an inset pins the
+ * box and the alignment has nothing left to say.
+ */
+function alignStatic(
+  axis: AxisResult,
+  deferred: Deferred,
+  which: 'x' | 'y',
+  unpinned: boolean,
+  surround: number,
+  context: Context,
+): AxisResult {
+  const placement = deferred.aligned?.[which] ?? 'start';
+  const container =
+    deferred.aligned === null ? undefined : context.fragments.get(deferred.aligned.container);
+  if (!unpinned || placement === 'start' || container === undefined) return axis;
+
+  const { rect, border, padding } = container;
+  const room =
+    which === 'x'
+      ? rect.width - border.left - border.right - padding.left - padding.right
+      : rect.height - border.top - border.bottom - padding.top - padding.bottom;
+  const outer = axis.marginStart + axis.size + surround + axis.marginEnd;
+  const free = room - outer;
+
+  return { ...axis, start: axis.start + (placement === 'end' ? free : free / 2) };
+}
+
 function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context): void {
   const box = deferred.box;
   const style = box.style;
@@ -875,7 +953,14 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
     toContentBox(style.boxSizing, usedSize(style.minWidth, containing.width), across),
     toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, containing.width), across),
   );
-  const horizontal = width === wide.size ? wide : acrossAxis(width);
+  const horizontal = alignStatic(
+    width === wide.size ? wide : acrossAxis(width),
+    deferred,
+    'x',
+    style.left.kind === 'auto' && style.right.kind === 'auto',
+    across,
+    context,
+  );
 
   const fromContent = measureAbsolute(box, horizontal.size, containing.width, context);
 
@@ -904,7 +989,14 @@ function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context):
     toContentBox(style.boxSizing, usedSize(style.minHeight, containing.height), down),
     toContentBox(style.boxSizing, usedMaxSize(style.maxHeight, containing.height), down),
   );
-  const vertical = height === tall.size ? tall : downAxis(height);
+  const vertical = alignStatic(
+    height === tall.size ? tall : downAxis(height),
+    deferred,
+    'y',
+    style.top.kind === 'auto' && style.bottom.kind === 'auto',
+    down,
+    context,
+  );
 
   layoutBlock(
     {
@@ -983,7 +1075,12 @@ function layoutFlexItems(
 
   for (const child of box.children.filter(isBlock)) {
     if (child.style.position === 'absolute') {
-      absolutes.push({ box: child, staticX: containing.x, staticY: contentTop });
+      absolutes.push({
+        box: child,
+        staticX: containing.x,
+        staticY: contentTop,
+        aligned: soleItem(box, child),
+      });
       continue;
     }
     collected.push(child);

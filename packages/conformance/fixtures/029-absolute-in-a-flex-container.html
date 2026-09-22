@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>an absolute box in a flex container, placed as if it were the only item</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .flex {
+    display: flex;
+    height: 60px;
+    border: 1px solid;
+    margin-bottom: 4px;
+    padding: 3px;
+  }
+  .out {
+    position: absolute;
+    background-color: #d8c8a8;
+  }
+  .backwards {
+    flex-direction: row-reverse;
+  }
+  .down {
+    flex-direction: column;
+  }
+  .up {
+    flex-direction: column-reverse;
+  }
+  .wrapped-back {
+    flex-wrap: wrap-reverse;
+  }
+  .centred {
+    justify-content: center;
+  }
+  .at-end {
+    justify-content: flex-end;
+  }
+  .spread {
+    justify-content: space-between;
+  }
+  .spaced {
+    justify-content: space-around;
+  }
+  .middle {
+    align-items: center;
+  }
+  .bottom {
+    align-items: flex-end;
+  }
+  .own-end {
+    align-self: flex-end;
+  }
+  .own-stretch {
+    align-self: stretch;
+  }
+  .pinned-top {
+    top: 5px;
+  }
+  .pinned-left {
+    left: 5px;
+  }
+  .margined {
+    margin: 4px 7px 2px 9px;
+  }
+  .anchor {
+    position: relative;
+  }
+  .auto-height {
+    height: auto;
+  }
+</style>
+
+<div class="flex centred middle"><div class="out">one</div></div>
+<div class="flex at-end bottom"><div class="out">one</div></div>
+<div class="flex backwards"><div class="out">one</div></div>
+<div class="flex down centred"><div class="out">one</div></div>
+<div class="flex up middle"><div class="out">one</div></div>
+<div class="flex wrapped-back"><div class="out">one</div></div>
+<div class="flex spread"><div class="out">one</div></div>
+<div class="flex spaced bottom"><div class="out own-end">one</div></div>
+<div class="flex middle"><div class="out own-stretch">one</div></div>
+<div class="flex centred middle"><div class="out pinned-top">one</div></div>
+<div class="flex centred middle"><div class="out pinned-left">one</div></div>
+<div class="flex at-end bottom"><div class="out margined">one</div></div>
+<div class="flex centred middle anchor"><div class="out">one</div><div>item</div></div>
+<div class="flex middle auto-height"><div class="out">one</div></div>

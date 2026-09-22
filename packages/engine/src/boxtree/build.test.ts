@@ -34,6 +34,30 @@ describe('buildBoxTree', () => {
     ]);
   });
 
+  it('puts two blocks with only whitespace between them in one box', () => {
+    const em = element('em', {}, [
+      text('a'),
+      element('div', { classes: ['first'] }),
+      text('\n  '),
+      element('div', { classes: ['second'] }),
+      text('b'),
+    ]);
+    const root = element('div', {}, [em]);
+
+    expect(shape(tree(root, ''))).toEqual([
+      'block <div>',
+      '  anonymous block',
+      '    inline <em>',
+      '      text "a"',
+      '  block <em>',
+      '    block <div>',
+      '    block <div>',
+      '  anonymous block',
+      '    inline <em>',
+      '      text "b"',
+    ]);
+  });
+
   it('keeps both halves even when one of them is empty', () => {
     const inner = element('div', { classes: ['inner'] });
     const em = element('em', {}, [inner]);

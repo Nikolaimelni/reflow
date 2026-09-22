@@ -192,17 +192,27 @@ function cutAroundBlocks(children: Box[], ids: IdSource): Box[] {
       cut = [];
     };
 
+    // Whitespace that collapses away between two of those blocks is not a half of its own:
+    // the blocks share one box around them, the way they would with nothing between them,
+    // which matters to where a block whose margins collapse through it ends up.
+    let between: Box[] = [];
+
     for (const inner of inside) {
       if (splits(inner)) {
         if (cut.length === 0) flushHalf();
+        between = [];
         cut.push(inner);
+      } else if (cut.length > 0 && isCollapsibleWhitespace(inner)) {
+        between.push(inner);
       } else {
         flushCut();
-        run.push(inner);
+        run.push(...between, inner);
+        between = [];
       }
     }
 
     flushCut();
+    run.push(...between);
     flushHalf();
 
     const halves = pieces.filter((piece) => piece.kind === 'inline');

@@ -80,6 +80,9 @@ type Piece = {
  */
 type Item = Piece | { kind: 'newline' } | { kind: 'boundary' };
 
+/** A box out of the flow, and whether the text it was written in may wrap. */
+type OutOfFlow = { box: BlockBox; wraps: boolean };
+
 type Placed = { piece: Piece; x: number };
 
 type Line = { items: Placed[]; width: number; height: number; baseline: number };
@@ -96,7 +99,7 @@ type Surround = {
 
 export function layoutInlineContent(input: InlineInput): InlineResult {
   const surrounds = new Map<BoxId, Surround>();
-  const outOfFlow = new Map<BoxId, BlockBox>();
+  const outOfFlow = new Map<BoxId, OutOfFlow>();
   const items = collect(
     input.container.children,
     [],
@@ -140,14 +143,15 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       // A block one would have cut the line in two and gone under whatever came before it,
       // which is the next line down, or the top of this one when nothing came before it.
       if (piece.kind === 'out-of-flow') {
-        const deferred = outOfFlow.get(piece.box);
+        const parked = outOfFlow.get(piece.box);
+        const deferred = parked?.box;
         const still = piece.style.staticDisplay;
         const inline = still === 'inline' || still === 'inline-block';
 
         // An inline one that comes after the line has already run out of room starts the
         // next one instead, where the alignment would put an empty line. A line that is only
-        // full keeps it.
-        const late = inline && placed.x > input.available;
+        // full keeps it, and so does text that may not wrap, whatever the box itself says.
+        const late = inline && parked?.wraps === true && placed.x > input.available;
 
         if (deferred !== undefined && late) {
           input.defer(
@@ -457,7 +461,7 @@ function collect(
   wrapping: boolean,
   input: InlineInput,
   surrounds: Map<BoxId, Surround>,
-  outOfFlow: Map<BoxId, BlockBox>,
+  outOfFlow: Map<BoxId, OutOfFlow>,
 ): Item[] {
   const items: Item[] = [];
 
@@ -538,7 +542,7 @@ function collect(
     if (isBlock(child)) {
       if (child.style.position !== 'absolute') continue;
 
-      outOfFlow.set(child.id, child);
+      outOfFlow.set(child.id, { box: child, wraps: wrapping });
       items.push({
         kind: 'out-of-flow',
         box: child.id,
@@ -778,7 +782,9 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     for (let at = current.length - 1; at > 0; at--) {
       // An out of flow box counts here even though it takes no room: the line it would have
       // been on is the line its static position comes from, and a full line pushes it down.
-      if (!current.slice(at).some(({ piece: behind }) => !isEdge(behind.kind))) continue;
+      // A space does not: it would only vanish at the start of the new line.
+      const behind = current.slice(at);
+      if (!behind.some(({ piece }) => !isEdge(piece.kind) && piece.kind !== 'space')) continue;
 
       const before = current[at - 1]?.piece;
       if (before?.kind === 'space' && wraps(before.style.whiteSpace)) return at;
@@ -838,11 +844,17 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
 
     if (entry.kind === 'space') {
       // A space at the start of a line disappears, and a run of them counts once: the first,
-      // which decides whose box it is drawn in when the run crosses a boundary. The ones that
-      // collapse into it are still somewhere the line may break.
+      // which decides whose box it is drawn in when the run crosses a boundary. When that
+      // first one came from text that may not wrap, the run is still somewhere the line may
+      // break, just past it and any box it closed, and before any box this one opens.
       if (!content) continue;
-      if (hanging() >= 0) {
-        boundaries.add(current.length);
+      const kept = hanging();
+      if (kept >= 0) {
+        if (!wraps(current[kept]?.piece.style.whiteSpace ?? 'normal')) {
+          let at = kept + 1;
+          while (current[at]?.piece.kind === 'edge-end') at++;
+          boundaries.add(at);
+        }
         continue;
       }
 

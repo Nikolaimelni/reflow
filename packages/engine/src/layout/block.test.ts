@@ -198,6 +198,16 @@ describe('margin collapsing', () => {
     expect(widthOf(['capped'])).toBe(0);
   });
 
+  it('places an absolute child of a flex container as if it were the only item', () => {
+    const out = element('div', { classes: ['out'] }, [text('ab')]);
+    const row = element('div', { classes: ['row'] }, [out]);
+    const css =
+      '.row { display: flex; width: 100px; height: 40px; justify-content: flex-end; align-items: center } .out { position: absolute }';
+
+    // Sixteen wide and sixteen tall, pushed to the far end of the row and centred across it.
+    expect(page(css, [row]).rectOf(out)).toMatchObject({ x: 84, y: 12 });
+  });
+
   it('keeps a flex item its content height down a column of no fixed height', () => {
     const css =
       '.down { display: flex; flex-direction: column } .one { flex: 1 } .none { flex: 1 1 0 }';

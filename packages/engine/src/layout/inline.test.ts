@@ -255,6 +255,17 @@ describe('inline boxes', () => {
     expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 0, width: 24 });
   });
 
+  it('breaks at the first space of a run, before a box the run opens', () => {
+    const boxed = element('span', { classes: ['boxed'] }, [text(' cd ')]);
+    const p = element('p', {}, [element('span', { classes: ['block'] }), text(' '), boxed]);
+    const css =
+      'p { margin: 0 } .block { display: inline-block; width: 60px } .boxed { padding-left: 20px }';
+
+    // The space inside the span collapses into the one before it, so that is where the line
+    // breaks, and the span goes down whole with its padding.
+    expect(page(css, [p], 100).rectOf(boxed)).toMatchObject({ x: 0, y: 16, width: 36 });
+  });
+
   it('settles a nowrap space inside the box, in front of its padding', () => {
     const span = element('span', { classes: ['held'] }, [text('ab ')]);
     const p = element('p', {}, [text('x '), span, text('cd')]);
@@ -387,6 +398,16 @@ describe('atomic inlines', () => {
     expect(page(css, [after], 100).lines).toHaveLength(2);
   });
 
+  it('does not break beside an atomic inline for nothing but the edges of an empty box', () => {
+    const edges = element('span', { classes: ['edges'] });
+    const p = element('p', {}, [element('span', { classes: ['full'] }), text(' '), edges]);
+    const wide = `${css} .edges { padding-left: 20px }`;
+
+    // A break there would start the next line with the space, which vanishes, and then the
+    // padding, which is no more content than it was on this line.
+    expect(page(wide, [p], 100).lines).toHaveLength(1);
+  });
+
   it('leaves an empty div behind on a line of its own, and keeps an empty span', () => {
     const div = element('div', { classes: ['inl'] });
     const span = element('span');
@@ -420,6 +441,31 @@ describe('atomic inlines', () => {
 
     expect(over.rectOf(late)).toMatchObject({ x: 0, y: 16 });
     expect(full.rectOf(onTime)).toMatchObject({ x: 100, y: 0 });
+  });
+
+  it('leaves it where it was written when the text may not wrap', () => {
+    const late = element('span', { classes: ['out'] });
+    const held = element('p', { classes: ['held'] }, [
+      element('span', { classes: ['over'] }),
+      late,
+    ]);
+    const laid = page(`${css} .held { white-space: nowrap }`, [held], 100);
+
+    expect(laid.rectOf(late)).toMatchObject({ x: 110, y: 0 });
+  });
+});
+
+describe('an inline-block that aligns its content', () => {
+  it('takes the baseline down with the lines it moved', () => {
+    const word = element('span', {}, [text('x')]);
+    const box = element('span', { classes: ['box'] }, [text('ab')]);
+    const p = element('p', {}, [word, box]);
+    const css =
+      'p { margin: 0 } .box { display: inline-block; height: 40px; align-content: flex-end }';
+
+    // The line in the inline-block moved 24 down to the bottom of its forty, and the word
+    // beside it sits on that line's baseline, not on the one it would have had at the top.
+    expect(page(css, [p]).rectOf(word).y).toBeCloseTo(24);
   });
 });
 
