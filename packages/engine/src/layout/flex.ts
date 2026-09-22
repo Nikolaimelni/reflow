@@ -22,6 +22,9 @@ export type FlexItemInput = {
   autoCrossEnd: boolean;
   /** Cross content size when the style pins it, null when it is auto. */
   crossSize: number | null;
+  /** The min and max on the cross axis, which a stretch has to respect like anything else. */
+  minCross: number;
+  maxCross: number | null;
   /** What `align-self` says, or null to follow the container. */
   align: AlignItems | null;
 };
@@ -368,7 +371,7 @@ function resolveCross(
     const hungry = (item.autoCrossStart ? 1 : 0) + (item.autoCrossEnd ? 1 : 0);
     const stretched =
       aligns[i] === 'stretch' && item.crossSize === null && hungry === 0
-        ? Math.max(0, lineSize - item.crossSurround)
+        ? clamp(Math.max(0, lineSize - item.crossSurround), item.minCross, item.maxCross)
         : (sizes[i] ?? 0);
     sizes[i] = stretched;
 

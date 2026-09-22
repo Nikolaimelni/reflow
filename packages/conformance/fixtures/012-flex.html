@@ -259,6 +259,27 @@
   .large {
     font-size: 30px;
   }
+  .wide-left {
+    padding: 7px;
+    padding-left: 59%;
+    border: 1px solid;
+    font-size: 18px;
+  }
+  .middle-across {
+    align-items: center;
+  }
+  .no-wider {
+    max-width: 0%;
+    background-color: #d8a8a8;
+  }
+  .capped-across {
+    max-height: 12px;
+    background-color: #a8d8a8;
+  }
+  .floored-across {
+    min-width: 150px;
+    background-color: #a8a8d8;
+  }
   .held-down {
     max-width: 0%;
     background-color: #c8a8a8;
@@ -342,3 +363,8 @@
 <div class="row on-baseline auto-height"><div class="boxed-in"></div><div>text</div></div>
 <div class="row on-baseline auto-height"><div class="boxed-in lowered"></div><div class="large">text</div></div>
 <div class="row on-baseline auto-height"><div class="lowered">one</div><div class="large">two</div></div>
+<div class="open-column"><div class="wide-left">one one</div></div>
+<div class="open-column middle-across"><div class="wide-left">one one</div></div>
+<div class="open-column"><div class="no-wider">one</div></div>
+<div class="row tall auto-height"><div class="capped-across">one</div><div class="grows"></div></div>
+<div class="column narrow"><div class="floored-across">one</div></div>

@@ -46,10 +46,11 @@ export type InlineInput = {
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
   /**
-   * Hands an out of flow box back with the static position it had in the line. `alone` says
-   * the content had nothing else in it, which makes the position one in the block flow.
+   * Hands an out of flow box back with the static position it had in the line, and how tall
+   * a rectangle below that point `align-self` may move it about in: none at all in the block
+   * flow, a line's height inside a line, and null where it may not move.
    */
-  defer: (box: BlockBox, x: number, y: number, alone: boolean) => void;
+  defer: (box: BlockBox, x: number, y: number, room: number | null) => void;
   /** Lays out an out of flow box whose containing block is a positioned inline around it. */
   placeWithin: (box: BlockBox, x: number, y: number, containing: Rect) => void;
 };
@@ -117,9 +118,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   );
   const lines = breakIntoLines(items, input);
 
-  // Out of flow boxes with no text and no inline box around them are not in a line at all,
-  // as far as Chromium is concerned: they sit in the block flow, and there `align-self`
-  // moves them about their static position.
+  // Nothing here but boxes out of the flow, and whitespace that collapses away.
   const alone = items.every(
     (item) =>
       item.kind === 'out-of-flow' || (item.kind === 'space' && item.style.whiteSpace !== 'pre'),
@@ -192,7 +191,12 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
           // A positioned inline is the containing block for what is out of the flow inside
           // it, so those wait until it has its boxes rather than going up to the block.
           const within = piece.ancestors.findLast((id) => isPositioned(surrounds.get(id)));
-          if (within === undefined) input.defer(deferred, x, top, alone);
+          // Inside a line it is aligned in that line's box, or in one as tall below it when it
+          // went under the line. A line with nothing on it is no line at all to Chromium, so a
+          // box there aligns about its static position, except an inline-level one that is
+          // the only thing in the block: that one does not move. Measured, not derived.
+          const room = line.phantom ? (inline && alone ? null : 0) : line.height;
+          if (within === undefined) input.defer(deferred, x, top, room);
           else held.push({ box: deferred, x, y: top, within });
         }
         continue;
@@ -364,7 +368,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     const first = rects[0];
     const last = rects.at(-1);
     if (first === undefined || last === undefined) {
-      input.defer(box, x, top, false);
+      input.defer(box, x, top, null);
       continue;
     }
 

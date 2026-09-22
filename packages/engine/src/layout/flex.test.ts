@@ -20,6 +20,8 @@ function item(overrides: Partial<FlexItemInput> = {}): FlexItemInput {
     autoCrossStart: false,
     autoCrossEnd: false,
     crossSize: 20,
+    minCross: 0,
+    maxCross: null,
     align: null,
     ...overrides,
   };
@@ -253,6 +255,15 @@ describe('the other way round', () => {
     // The first item starts at the far end, and the auto margin on its right takes all the
     // free space, which pushes it back until it meets the second.
     expect(starts(line({ items, reverse: true }))).toEqual([10, 0]);
+  });
+});
+
+describe('stretching', () => {
+  it('stops at the maximum across the line', () => {
+    const items = [item({ crossSize: null, maxCross: 12 })];
+    const result = line({ items, crossSize: 40, crossOf: () => 5 });
+
+    expect(result.placements.map((one) => one.crossSize)).toEqual([12]);
   });
 });
 

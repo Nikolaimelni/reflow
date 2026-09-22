@@ -7,7 +7,7 @@ import {
   isBlock,
   isCollapsibleWhitespace,
 } from '../boxtree/box.js';
-import type { AlignContent, ComputedStyle } from '../cascade/properties.js';
+import type { AlignContent, AlignItems, ComputedStyle } from '../cascade/properties.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { type FlexItemInput, solveFlex } from './flex.js';
@@ -82,10 +82,10 @@ type Deferred = {
   /**
    * A child of a flex container takes its static position as if it were the only item in
    * it, so it is aligned inside the container's content box rather than parked at its start.
-   * One in the block flow is aligned about its static position instead, which is a rectangle
-   * with no size: that is what a null container stands for.
+   * One that came out of a line or the block flow is aligned in a rectangle that starts at
+   * its static position instead: a line tall, or no size at all.
    */
-  aligned: { container: BoxId | null; x: Placement; y: Placement } | null;
+  aligned: { within: BoxId | { width: number; height: number }; x: Placement; y: Placement } | null;
 };
 
 type Placement = 'start' | 'center' | 'end';
@@ -368,12 +368,12 @@ function layoutChildren(
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
-      defer: (child, x, y, alone) =>
+      defer: (child, x, y, room) =>
         absolutes.push({
           box: child,
           staticX: x,
           staticY: y,
-          aligned: alone ? selfAligned(child) : null,
+          aligned: room === null ? null : selfAligned(child, room),
         }),
       placeWithin: (child, x, y, within) =>
         layoutAbsolute({ box: child, staticX: x, staticY: y, aligned: null }, within, context),
@@ -901,7 +901,7 @@ function soleItem(container: BlockBox, child: BlockBox): Deferred['aligned'] {
   const main = reverse ? flip(justified) : justified;
   const cross = flipped ? flip(aligned) : aligned;
 
-  return { container: container.id, x: isRow ? main : cross, y: isRow ? cross : main };
+  return { within: container.id, x: isRow ? main : cross, y: isRow ? cross : main };
 }
 
 /**
@@ -920,13 +920,15 @@ function alignStatic(
   const placement = deferred.aligned?.[which] ?? 'start';
   if (!unpinned || placement === 'start' || deferred.aligned === null) return axis;
 
-  const within = deferred.aligned.container;
-  const container = within === null ? null : context.fragments.get(within);
+  const within = deferred.aligned.within;
+  const container = typeof within === 'number' ? context.fragments.get(within) : null;
   if (container === undefined) return axis;
 
   const room =
     container === null
-      ? 0
+      ? typeof within === 'number'
+        ? 0
+        : within[which === 'x' ? 'width' : 'height']
       : which === 'x'
         ? container.rect.width -
           container.border.left -
@@ -945,14 +947,14 @@ function alignStatic(
 }
 
 /**
- * `align-self` on an absolute box in the block flow, where the only thing to align against
- * is the point it would have been at: the end puts its margin box above that point, and the
- * centre puts the point halfway down it.
+ * `align-self` on an absolute box whose static position came out of the flow, aligned in a
+ * rectangle of the given height starting there. With no height, the only thing to align
+ * against is the point itself: the end puts the margin box above it, the centre across it.
  */
-function selfAligned(box: BlockBox): Deferred['aligned'] {
+function selfAligned(box: BlockBox, room: number): Deferred['aligned'] {
   const own = box.style.alignSelf;
   const y: Placement = own === 'flex-end' ? 'end' : own === 'center' ? 'center' : 'start';
-  return y === 'start' ? null : { container: null, x: 'start', y };
+  return y === 'start' ? null : { within: { width: 0, height: room }, x: 'start', y };
 }
 
 function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context): void {
@@ -1127,7 +1129,7 @@ function layoutFlexItems(
   // from is the one on the other side.
   const flipped = box.style.flexWrap === 'wrap-reverse';
   const metrics = items.map((item) =>
-    itemMetrics(item, containing, isRow, wraps, flipped, context),
+    itemMetrics(item, containing, isRow, wraps, flipped, box.style.alignItems, context),
   );
 
   // A percentage gap resolves against the content box along its own axis, which down a
@@ -1206,6 +1208,7 @@ function itemMetrics(
   isRow: boolean,
   wraps: boolean,
   flipped: boolean,
+  alignItems: AlignItems,
   context: Context,
 ): ItemMetrics {
   const style = item.style;
@@ -1226,12 +1229,41 @@ function itemMetrics(
   const crossStart = <T>(start: T, end: T) => (flipped ? end : start);
   const crossEnd = <T>(start: T, end: T) => (flipped ? start : end);
 
-  // Down a column an item that cannot wrap is stretched to the container, and one that can
-  // takes the width its content asks for, which may be more than the container has.
-  const fit = shrinkToFit(intrinsic, containing.width);
+  const crossStyle = isRow ? style.height : style.width;
+
+  // A size given on the cross axis is still a size, so the min and max on that axis bite the
+  // same way they do on a block. Without this a flex item takes `height: 0` at its word.
+  const crossBasis = isRow ? containing.height : containing.width;
+  const crossSurround = isRow ? down : across;
+  const givenCross = toContentBox(style.boxSizing, usedSize(crossStyle, crossBasis), crossSurround);
+  const minCross =
+    toContentBox(
+      style.boxSizing,
+      usedSize(isRow ? style.minHeight : style.minWidth, crossBasis),
+      crossSurround,
+    ) ?? 0;
+  const maxCross = toContentBox(
+    style.boxSizing,
+    usedMaxSize(isRow ? style.maxHeight : style.maxWidth, crossBasis),
+    crossSurround,
+  );
+  const crossSize = givenCross === null ? null : clampSize(givenCross, minCross, maxCross);
+
+  // Down a column an item is measured at the width it is going to have: its own if it has
+  // one, the container's less its margins, border and padding if it stretches, and what its
+  // content asks for otherwise, which in a column that wraps may be more than there is.
+  const available = Math.max(0, containing.width - across - margin.left - margin.right);
+  const fit = shrinkToFit(intrinsic, available);
+  const aligned = style.alignSelf === 'auto' ? alignItems : style.alignSelf;
+  const stretches =
+    (aligned === 'normal' || aligned === 'stretch') &&
+    style.marginLeft.kind !== 'auto' &&
+    style.marginRight.kind !== 'auto';
+  const columnWidth =
+    crossSize ?? (!wraps && stretches ? clampSize(available, minCross, maxCross) : fit);
 
   const measure = (main: number) => {
-    const width = isRow ? main : wraps ? fit : containing.width;
+    const width = isRow ? main : columnWidth;
     const scratch: Context = {
       ...context,
       fragments: new Map(),
@@ -1266,7 +1298,7 @@ function itemMetrics(
   const mainSize = isRow ? containing.width : containing.height;
   const specified = usedSize(mainStyle, mainSize);
   // Down a column the content size is the height the item comes to at the width it has.
-  const contentSize = () => (isRow ? intrinsic.max : measure(containing.width).cross);
+  const contentSize = () => (isRow ? intrinsic.max : measure(columnWidth).cross);
 
   // A percentage basis with nothing definite to be a percentage of is `content`, which skips
   // the item's own height as well as the percentage. That is what `flex: 1` down a column of
@@ -1293,37 +1325,13 @@ function itemMetrics(
     along,
   );
   const content =
-    style.overflow !== 'visible' ? 0 : isRow ? intrinsic.min : measure(containing.width).cross;
+    style.overflow !== 'visible' ? 0 : isRow ? intrinsic.min : measure(columnWidth).cross;
   // A size the item asked for caps that floor, and so does a maximum. `width: 0` means zero
   // however long the word inside is, because the content is only protected up to the size it
   // was given and never past the most it may have.
   const asked = toContentBox(style.boxSizing, specified, along);
   const automatic = Math.min(content, asked ?? content, maxMain ?? content);
   const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;
-
-  const crossStyle = isRow ? style.height : style.width;
-
-  // A size given on the cross axis is still a size, so the min and max on that axis bite the
-  // same way they do on a block. Without this a flex item takes `height: 0` at its word.
-  const crossBasis = isRow ? containing.height : containing.width;
-  const crossSurround = isRow ? down : across;
-  const givenCross = toContentBox(style.boxSizing, usedSize(crossStyle, crossBasis), crossSurround);
-  const crossSize =
-    givenCross === null
-      ? null
-      : clampSize(
-          givenCross,
-          toContentBox(
-            style.boxSizing,
-            usedSize(isRow ? style.minHeight : style.minWidth, crossBasis),
-            crossSurround,
-          ),
-          toContentBox(
-            style.boxSizing,
-            usedMaxSize(isRow ? style.maxHeight : style.maxWidth, crossBasis),
-            crossSurround,
-          ),
-        );
 
   return {
     fit,
@@ -1363,6 +1371,8 @@ function itemMetrics(
       ),
       align: style.alignSelf === 'auto' ? null : style.alignSelf,
       crossSize,
+      minCross,
+      maxCross,
     },
     margin,
     measure,

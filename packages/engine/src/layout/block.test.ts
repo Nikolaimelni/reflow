@@ -224,6 +224,16 @@ describe('margin collapsing', () => {
     expect(heightOf(['none'])).toBe(16);
   });
 
+  it('measures a column item at the width it will have, not the container', () => {
+    const item = element('div', { classes: ['padded'] }, [text('ab ab')]);
+    const column = element('div', { classes: ['down'] }, [item]);
+    const css =
+      '.down { display: flex; flex-direction: column; width: 100px } .padded { padding-left: 70px }';
+
+    // Thirty wide inside its padding, so the two words take a line each.
+    expect(page(css, [column]).rectOf(item).height).toBe(32);
+  });
+
   it('reads a flex basis as a border box under border-box', () => {
     const cell = element('div', { classes: ['whole'] });
     const row = element('div', { classes: ['row'] }, [cell]);
@@ -386,8 +396,14 @@ describe('align-self on an absolute box in the block flow', () => {
     expect(placed('.out { align-self: flex-start }')).toBe(0);
   });
 
-  it('leaves it alone once it is in a line with text', () => {
-    expect(placed('.out { align-self: flex-end }', [text('word')])).toBe(16);
+  it('leaves an inline-level one where it is, alone or not', () => {
+    expect(placed('.out { align-self: flex-end; display: inline-block }')).toBe(0);
+  });
+
+  it('aligns one that went under a line in a box as tall as that line', () => {
+    // The line is sixteen tall, so the box of four goes six into the next sixteen, or twelve.
+    expect(placed('.out { height: 4px; align-self: center }', [text('word')])).toBe(22);
+    expect(placed('.out { height: 4px; align-self: flex-end }', [text('word')])).toBe(28);
   });
 });
 

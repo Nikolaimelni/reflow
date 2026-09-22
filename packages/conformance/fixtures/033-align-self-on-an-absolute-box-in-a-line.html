@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>align-self on an absolute box whose static position is in a line</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .out {
+    position: absolute;
+    width: 5px;
+    height: 6px;
+    background-color: #d8c8a8;
+  }
+  .tall {
+    display: inline-block;
+    height: 50px;
+    width: 5px;
+    background-color: #c8d8e8;
+  }
+  .at-start {
+    align-self: flex-start;
+  }
+  .centred {
+    align-self: center;
+  }
+  .at-end {
+    align-self: flex-end;
+  }
+  .inline-level {
+    display: inline-block;
+  }
+  .big {
+    font-size: 40px;
+  }
+  .spaced-lines {
+    line-height: 40px;
+  }
+  .empty-block {
+    display: inline-block;
+  }
+</style>
+
+<div><span class="tall"></span><div class="out centred"></div></div>
+<div><span class="tall"></span><div class="out at-end"></div></div>
+<div><span class="tall"></span><span class="out inline-level centred"></span></div>
+<div><span class="tall"></span><span class="out inline-level at-end"></span></div>
+<div>word<div class="out centred"></div></div>
+<div>word<div class="out at-end"></div></div>
+<div>word <span class="out inline-level centred"></span></div>
+<div>word <span class="out inline-level at-end"></span></div>
+<div><span class="big">Big</span> <span class="out inline-level centred"></span></div>
+<div><div class="out at-end"></div>word</div>
+<div class="spaced-lines">word<div class="out centred"></div></div>
+<div><span class="out inline-level at-end"></span></div>
+<div><span></span><div class="out at-end"></div></div>
+<div><span></span><span class="out inline-level at-end"></span></div>
+<div><div class="empty-block"></div><div class="out centred"></div></div>
+<div>word<div class="out at-start"></div></div>
