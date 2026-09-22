@@ -45,8 +45,11 @@ export type InlineInput = {
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
-  /** Hands an out of flow box back with the static position it had in the line. */
-  defer: (box: BlockBox, x: number, y: number) => void;
+  /**
+   * Hands an out of flow box back with the static position it had in the line. `alone` says
+   * the content had nothing else in it, which makes the position one in the block flow.
+   */
+  defer: (box: BlockBox, x: number, y: number, alone: boolean) => void;
   /** Lays out an out of flow box whose containing block is a positioned inline around it. */
   placeWithin: (box: BlockBox, x: number, y: number, containing: Rect) => void;
 };
@@ -87,7 +90,8 @@ type OutOfFlow = { box: BlockBox; wraps: boolean };
 
 type Placed = { piece: Piece; x: number };
 
-type Line = { items: Placed[]; width: number; height: number; baseline: number };
+/** A phantom line holds nothing that counts, so it has no height and no baseline to offer. */
+type Line = { items: Placed[]; width: number; height: number; baseline: number; phantom: boolean };
 
 /** What an inline box adds around its own content, and where it has been shifted to. */
 type Surround = {
@@ -113,6 +117,14 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   );
   const lines = breakIntoLines(items, input);
 
+  // Out of flow boxes with no text and no inline box around them are not in a line at all,
+  // as far as Chromium is concerned: they sit in the block flow, and there `align-self`
+  // moves them about their static position.
+  const alone = items.every(
+    (item) =>
+      item.kind === 'out-of-flow' || (item.kind === 'space' && item.style.whiteSpace !== 'pre'),
+  );
+
   let y = input.contentTop;
   let lastBaseline: number | null = null;
   const extents = new Map<BoxId, Extent>();
@@ -131,11 +143,15 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     });
 
     const offset = alignmentOffset(input.containerStyle, input.available, line.width);
-    lastBaseline = y + line.baseline - input.contentTop;
+    // A line with nothing on it is treated as not being there for anything but placing what
+    // is in it, and a baseline is one of those other things.
+    if (!line.phantom) lastBaseline = y + line.baseline - input.contentTop;
     const onThisLine = new Map<BoxId, Extent>();
     const whole = opensAndCloses(line);
     /** Whether anything on this line has been laid down yet, which an out of flow box asks. */
     let behind = false;
+    /** The room the opening edge of each box took on this line, for when it closes. */
+    const opened = new Map<BoxId, number>();
 
     for (const placed of line.items) {
       const piece = placed.piece;
@@ -176,7 +192,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
           // A positioned inline is the containing block for what is out of the flow inside
           // it, so those wait until it has its boxes rather than going up to the block.
           const within = piece.ancestors.findLast((id) => isPositioned(surrounds.get(id)));
-          if (within === undefined) input.defer(deferred, x, top);
+          if (within === undefined) input.defer(deferred, x, top, alone);
           else held.push({ box: deferred, x, y: top, within });
         }
         continue;
@@ -188,8 +204,15 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       // is nothing left but a boundary, and a boundary alone is not a rectangle: the whole of
       // an empty `<span>` sitting on a line is, which is the same box seen from both ends.
       if (isEdge(piece.kind)) {
-        // A padding or a border took room even if the box around it drew nothing else.
-        if (piece.width > 0) behind = true;
+        // A padding or a border took room even if the box around it drew nothing else, but
+        // only once the box has opened and closed here. An opening edge on its own is not in
+        // front of anything yet, and a closing one left over from the line above is not
+        // either.
+        if (piece.kind === 'edge-start') opened.set(piece.box, piece.width);
+        const start = opened.get(piece.box);
+        if (piece.kind === 'edge-end' && start !== undefined && start + piece.width > 0) {
+          behind = true;
+        }
 
         const at = input.contentX + offset + placed.x + piece.offset.dx;
         if (line.height === 0) {
@@ -241,6 +264,22 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         widen(extents, ancestor, rect);
         widen(onThisLine, ancestor, rect);
       }
+    }
+
+    // An inline box runs from where it starts on the line to where it ends, in the order the
+    // line was laid down, and not around whatever is inside it. The two only differ when a
+    // negative margin pulls the end back in front of the start, and then the box has no
+    // width at all: Chromium measures it end to end and will not go below nothing.
+    for (const [box, along] of endToEnd(line)) {
+      const extent = onThisLine.get(box);
+      const surround = surrounds.get(box);
+      if (extent === undefined || surround === undefined) continue;
+
+      const base = input.contentX + offset + surround.offset.dx;
+      const lead = along.opens ? surround.border.left + surround.padding.left : 0;
+      const trail = along.closes ? surround.border.right + surround.padding.right : 0;
+      extent.left = base + along.from;
+      extent.right = Math.max(base + along.to, extent.left - lead - trail);
     }
 
     // Now that the line has a baseline, every inline box on it gets the height its own font
@@ -325,7 +364,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     const first = rects[0];
     const last = rects.at(-1);
     if (first === undefined || last === undefined) {
-      input.defer(box, x, top);
+      input.defer(box, x, top, false);
       continue;
     }
 
@@ -342,6 +381,37 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   }
 
   return { height: y - input.contentTop, lastBaseline };
+}
+
+/**
+ * Where each inline box's content starts and ends on a line, measured along it. The start is
+ * just past its opening edge, or where its first piece begins when it came from the line
+ * above. The end is just short of its closing edge, or where its last piece finishes.
+ */
+function endToEnd(
+  line: Line,
+): Map<BoxId, { from: number; to: number; opens: boolean; closes: boolean }> {
+  const found = new Map<BoxId, { from: number; to: number; opens: boolean; closes: boolean }>();
+
+  for (const { piece, x } of line.items) {
+    if (piece.kind === 'out-of-flow') continue;
+
+    for (const box of piece.ancestors) {
+      const opens = piece.kind === 'edge-start' && piece.box === box;
+      const closes = piece.kind === 'edge-end' && piece.box === box;
+      const to = closes ? x : x + piece.width;
+      const seen = found.get(box);
+
+      if (seen === undefined) {
+        found.set(box, { from: opens ? x + piece.width : x, to, opens, closes });
+      } else {
+        seen.to = to;
+        seen.closes ||= closes;
+      }
+    }
+  }
+
+  return found;
 }
 
 function isPositioned(surround: Surround | undefined): boolean {
@@ -794,8 +864,12 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
    * What is on the end of the line but takes no room in the decision to break: a collapsible
    * space, which hangs over the edge, and the edges of a box that opened and closed there
    * without putting anything between them. A border on an empty span is not worth a break.
+   *
+   * While more of the paragraph is still to come, the closing edges behind a hanging space
+   * hang with it. Chromium only breaks for them if they are the last thing there is: when
+   * something follows, the line breaks at that space and keeps the edges, overflowing.
    */
-  const hangs = (): number => {
+  const hangs = (closing: boolean): number => {
     let at = current.length;
     while (at > 0 && isMarker(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
 
@@ -803,14 +877,17 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     const opened = new Set(trailing.filter((p) => p.kind === 'edge-start').map((p) => p.box));
     const closed = new Set(trailing.filter((p) => p.kind === 'edge-end').map((p) => p.box));
 
+    const space = hanging();
     const idle = trailing
       .filter(
         (piece) =>
-          isEdge(piece.kind) && piece.mayHang && opened.has(piece.box) && closed.has(piece.box),
+          isEdge(piece.kind) &&
+          piece.mayHang &&
+          ((opened.has(piece.box) && closed.has(piece.box)) ||
+            (closing && space >= 0 && piece.kind === 'edge-end')),
       )
       .reduce((sum, piece) => sum + piece.width, 0);
 
-    const space = hanging();
     return idle + (space < 0 ? 0 : (current[space]?.piece.width ?? 0));
   };
 
@@ -822,11 +899,11 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
    */
   const opportunity = (): number => {
     for (let at = current.length - 1; at > 0; at--) {
-      // An out of flow box counts here even though it takes no room: the line it would have
-      // been on is the line its static position comes from, and a full line pushes it down.
-      // A space does not: it would only vanish at the start of the new line.
+      // Only content is worth a new line. A space would vanish at the start of it, and a box
+      // out of the flow takes no room: where a full line sends one is its static position's
+      // business, not the break's.
       const behind = current.slice(at);
-      if (!behind.some(({ piece }) => !isEdge(piece.kind) && piece.kind !== 'space')) continue;
+      if (!behind.some(({ piece }) => !isMarker(piece.kind) && piece.kind !== 'space')) continue;
 
       const before = current[at - 1]?.piece;
       if (before?.kind === 'space' && wraps(before.style.whiteSpace)) return at;
@@ -906,7 +983,14 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     place(entry.chunk);
-    if (width - hangs() > input.available) rewind();
+    if (width - hangs(true) > input.available) rewind();
+  }
+
+  // Nothing follows the end of the paragraph, so the closing edges take their room after all.
+  while (width - hangs(false) > input.available) {
+    const before = lines.length;
+    rewind();
+    if (lines.length === before) break;
   }
 
   flush();
@@ -924,7 +1008,7 @@ function verticalMetrics(
   items: readonly Placed[],
   input: InlineInput,
   forced: boolean,
-): { height: number; baseline: number } {
+): { height: number; baseline: number; phantom: boolean } {
   // A line the source asked for with a newline exists whatever is on it, and so does one
   // holding preserved whitespace. That is the difference between a `pre` block's blank line
   // and an empty `<span>`, which takes no room at all.
@@ -936,7 +1020,7 @@ function verticalMetrics(
       return piece.kind !== 'space' || piece.style.whiteSpace === 'pre';
     });
 
-  if (!substantial) return { height: 0, baseline: 0 };
+  if (!substantial) return { height: 0, baseline: 0, phantom: true };
 
   const strut = input.measurer.metrics(fontOf(input.containerStyle));
   const strutHeight = usedLineHeight(input.containerStyle, strut);
@@ -966,7 +1050,7 @@ function verticalMetrics(
     below = Math.max(below, lineHeight - ascent);
   }
 
-  return { height: above + below, baseline: above };
+  return { height: above + below, baseline: above, phantom: false };
 }
 
 function alignmentOffset(style: ComputedStyle, available: number, used: number): number {

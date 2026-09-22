@@ -34,6 +34,23 @@
   .out-unwrapped {
     white-space: nowrap;
   }
+  .block-out {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background-color: #a8c8d8;
+  }
+  .kept-inline {
+    display: inline;
+    border: 1px solid;
+    white-space: pre;
+  }
+  .opening-only {
+    padding-left: 10px;
+  }
+  .closing-only {
+    padding-right: 10px;
+  }
   .middled {
     text-align: center;
   }
@@ -63,3 +80,9 @@
     <div class="out-inline"></div>
   </div>
 </div>
+<div><div class="kept-inline">
+  one
+</div><div class="block-out"></div></div>
+<div><span class="opening-only"></span><div class="block-out"></div></div>
+<div><span class="opening-only"><div class="block-out"></div></span></div>
+<div><span class="closing-only">a<br /></span><div class="block-out"></div></div>

@@ -59,6 +59,17 @@
     white-space: nowrap;
     background-color: #e6f0e6;
   }
+  .pulls-back {
+    display: inline-block;
+    width: 0;
+    margin: -12px;
+  }
+  .indented {
+    margin-left: 50px;
+  }
+  .side-padded {
+    padding: 0 5px;
+  }
 </style>
 
 <div class="wide">
@@ -80,3 +91,8 @@
 
 <div class="roomy">internationalisation one <div class="padded-inline"></div></div>
 <div class="roomy">internationalisation one <em class="padded-inline"></em></div>
+<div class="indented"><span><span class="pulls-back"></span></span></div>
+<div class="indented"><span>ab<span class="pulls-back"></span></span></div>
+<div class="indented"><span><span class="pulls-back"></span>ab</span></div>
+<div class="indented"><span class="side-padded"><span class="pulls-back"></span></span></div>
+<div class="indented"><span><span class="pulls-back"></span></span>tail</div>

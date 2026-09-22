@@ -82,8 +82,10 @@ type Deferred = {
   /**
    * A child of a flex container takes its static position as if it were the only item in
    * it, so it is aligned inside the container's content box rather than parked at its start.
+   * One in the block flow is aligned about its static position instead, which is a rectangle
+   * with no size: that is what a null container stands for.
    */
-  aligned: { container: BoxId; x: Placement; y: Placement } | null;
+  aligned: { container: BoxId | null; x: Placement; y: Placement } | null;
 };
 
 type Placement = 'start' | 'center' | 'end';
@@ -366,7 +368,13 @@ function layoutChildren(
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
-      defer: (child, x, y) => absolutes.push({ box: child, staticX: x, staticY: y, aligned: null }),
+      defer: (child, x, y, alone) =>
+        absolutes.push({
+          box: child,
+          staticX: x,
+          staticY: y,
+          aligned: alone ? selfAligned(child) : null,
+        }),
       placeWithin: (child, x, y, within) =>
         layoutAbsolute({ box: child, staticX: x, staticY: y, aligned: null }, within, context),
     });
@@ -623,6 +631,8 @@ function collapsesThrough(
  */
 function makesALine(box: Box, containingWidth: number): boolean {
   if (box.kind === 'text') return !isCollapsibleWhitespace(box);
+  // Out of the flow, so it takes no room on the line it would have been on.
+  if (isBlock(box) && box.style.position === 'absolute') return false;
   if (isBlock(box) || box.style.display !== 'inline') return true;
 
   const border = usedBorderWidths(box.style);
@@ -908,19 +918,41 @@ function alignStatic(
   context: Context,
 ): AxisResult {
   const placement = deferred.aligned?.[which] ?? 'start';
-  const container =
-    deferred.aligned === null ? undefined : context.fragments.get(deferred.aligned.container);
-  if (!unpinned || placement === 'start' || container === undefined) return axis;
+  if (!unpinned || placement === 'start' || deferred.aligned === null) return axis;
 
-  const { rect, border, padding } = container;
+  const within = deferred.aligned.container;
+  const container = within === null ? null : context.fragments.get(within);
+  if (container === undefined) return axis;
+
   const room =
-    which === 'x'
-      ? rect.width - border.left - border.right - padding.left - padding.right
-      : rect.height - border.top - border.bottom - padding.top - padding.bottom;
+    container === null
+      ? 0
+      : which === 'x'
+        ? container.rect.width -
+          container.border.left -
+          container.border.right -
+          container.padding.left -
+          container.padding.right
+        : container.rect.height -
+          container.border.top -
+          container.border.bottom -
+          container.padding.top -
+          container.padding.bottom;
   const outer = axis.marginStart + axis.size + surround + axis.marginEnd;
   const free = room - outer;
 
   return { ...axis, start: axis.start + (placement === 'end' ? free : free / 2) };
+}
+
+/**
+ * `align-self` on an absolute box in the block flow, where the only thing to align against
+ * is the point it would have been at: the end puts its margin box above that point, and the
+ * centre puts the point halfway down it.
+ */
+function selfAligned(box: BlockBox): Deferred['aligned'] {
+  const own = box.style.alignSelf;
+  const y: Placement = own === 'flex-end' ? 'end' : own === 'center' ? 'center' : 'start';
+  return y === 'start' ? null : { container: null, x: 'start', y };
 }
 
 function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context): void {

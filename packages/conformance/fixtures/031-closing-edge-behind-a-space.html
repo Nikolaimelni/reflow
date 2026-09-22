@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>the closing edge of an inline box behind a space that hangs</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .zone {
+    width: 150px;
+    border-bottom: 1px solid;
+  }
+  .edged {
+    margin: 0 16px;
+    border: 6px solid;
+    font-size: 11px;
+  }
+  .kept {
+    padding-left: 1%;
+    border: 6px solid;
+    white-space: pre;
+  }
+  .spread {
+    padding: 1%;
+    padding-left: 32%;
+    font-size: 28px;
+  }
+  .padded-all-round {
+    padding: 5%;
+  }
+  .out {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background-color: #c8a8d8;
+  }
+  .wider {
+    width: 200px;
+  }
+</style>
+
+<div class="zone"><span class="edged">one one one three one </span>x</div>
+<div class="zone"><span class="edged">one one one three one </span></div>
+<div class="zone"><span class="edged">one one one three one</span>x</div>
+<div class="zone"><span class="edged">one one one three one</span></div>
+<div class="zone"><span class="edged">one one one three one </span> x</div>
+<div class="kept">
+  <span class="edged" style="white-space: normal">
+    one one one three one
+  </span>
+</div>
+<div class="wider">
+  <em class="spread">
+    xy three xy
+  </em>
+  <span>one</span>
+</div>
+<div>
+  <em class="padded-all-round">
+    internationalisation three one liquorice xy xy
+  </em>
+  <div class="out"></div>
+</div>

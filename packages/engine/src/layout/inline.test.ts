@@ -154,6 +154,39 @@ describe('inline boxes', () => {
     expect(rectOf(span)).toMatchObject({ x: 0, width: 106 });
   });
 
+  it('lets a closing margin behind a space hang when more of the line follows', () => {
+    const span = element('span', { classes: ['wide'] }, [text(' one one one ')]);
+    const p = element('p', {}, [span, text('x')]);
+    const css = 'p { margin: 0 } .wide { margin: 0 50px }';
+    const { rectOf, lines } = page(css, [p], 180);
+
+    // The same 188 that breaks the span when it ends the paragraph. With the x after it, the
+    // line breaks at the space instead and keeps the margin, hanging over the edge.
+    expect(lines).toHaveLength(2);
+    expect(rectOf(span)).toMatchObject({ x: 50, y: 0, width: 88 });
+  });
+
+  it('measures a span end to end, so a negative margin inside can leave it no width', () => {
+    const span = element('span', {}, [text('ab'), element('span', { classes: ['pull'] })]);
+    const p = element('p', {}, [span]);
+    const css = 'p { margin: 0 } .pull { display: inline-block; width: 0; margin: -12px }';
+
+    // The word takes sixteen and the inline-block gives back twenty four, so the span ends
+    // eight in front of where it started, and a box is never less than nothing.
+    expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 0, width: 0 });
+  });
+
+  it('does not count a box out of the flow as what follows a hanging closing edge', () => {
+    const span = element('span', { classes: ['wide'] }, [text(' one one one ')]);
+    const p = element('p', {}, [span, element('div', { classes: ['out'] })]);
+    const css = 'p { margin: 0 } .wide { margin: 0 50px } .out { position: absolute }';
+
+    // Nothing that takes room comes after the span, so its margin counts and the last word
+    // goes down with it, the same as if the paragraph ended there.
+    expect(page(css, [p], 180).lines).toHaveLength(2);
+    expect(page(css, [p], 180).rectOf(span).height).toBe(32);
+  });
+
   it('breaks for an edge the browser will not let hang', () => {
     const css = '.pad { display: inline; padding-left: 20px }';
     const linesFor = (tag: string) => {
@@ -443,6 +476,21 @@ describe('atomic inlines', () => {
     expect(full.rectOf(onTime)).toMatchObject({ x: 100, y: 0 });
   });
 
+  it('puts a block one under a box that opened and closed in front of it, and only then', () => {
+    const under = element('div', { classes: ['out'] });
+    const inside = element('div', { classes: ['out'] });
+    const wide = `${css} .padded { padding-left: 10px }`;
+    const before = page(wide, [
+      element('p', {}, [element('span', { classes: ['padded'] }), under]),
+    ]);
+    const within = page(wide, [
+      element('p', {}, [element('span', { classes: ['padded'] }, [inside])]),
+    ]);
+
+    expect(before.rectOf(under).y).toBe(16);
+    expect(within.rectOf(inside).y).toBe(0);
+  });
+
   it('leaves it where it was written when the text may not wrap', () => {
     const late = element('span', { classes: ['out'] });
     const held = element('p', { classes: ['held'] }, [
@@ -466,6 +514,19 @@ describe('an inline-block that aligns its content', () => {
     // The line in the inline-block moved 24 down to the bottom of its forty, and the word
     // beside it sits on that line's baseline, not on the one it would have had at the top.
     expect(page(css, [p]).rectOf(word).y).toBeCloseTo(24);
+  });
+});
+
+describe('a line with nothing on it', () => {
+  it('gives an inline-block no baseline from it', () => {
+    const box = element('span', { classes: ['box'] }, [element('div', { classes: ['out'] })]);
+    const p = element('p', {}, [text('x'), box]);
+    const css =
+      'p { margin: 0 } .box { display: inline-block; width: 10px; height: 40px } .out { position: absolute }';
+
+    // Its only line holds a box out of the flow, which does not count, so the inline-block
+    // sits on its bottom edge: forty above the baseline and the descent of the strut below.
+    expect(page(css, [p]).rectOf(p).height).toBeCloseTo(43.2);
   });
 });
 

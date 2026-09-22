@@ -348,6 +348,17 @@ describe('margin collapsing', () => {
     expect(page(css, [outer]).rectOf(after).y).toBe(50);
   });
 
+  it('collapses through an inline holding nothing but a box out of the flow', () => {
+    const inner = element('div', { classes: ['inner'] });
+    const wrapper = element('span', {}, [element('div', { classes: ['out'] }), inner]);
+    const outer = element('div', {}, [wrapper]);
+    const css = '.out { position: absolute } .inner { margin-top: 10px; height: 4px }';
+
+    // The half of the span in front of the block holds only the absolute box, which puts
+    // nothing on a line, so the block's margin goes straight through to the page.
+    expect(page(css, [outer]).rectOf(outer).y).toBe(10);
+  });
+
   it('lets an empty box collapse through and takes no height from it', () => {
     const first = element('div', { classes: ['a'] });
     const empty = element('div', { classes: ['gap'] });
@@ -356,6 +367,27 @@ describe('margin collapsing', () => {
       '.a { height: 10px; margin-bottom: 10px } .gap { margin: 25px 0 } .b { height: 10px; margin-top: 5px }';
 
     expect(page(css, [first, empty, second]).rectOf(second).y).toBe(35);
+  });
+});
+
+describe('align-self on an absolute box in the block flow', () => {
+  const placed = (css: string, before: DomNode[] = []) => {
+    const out = element('div', { classes: ['out'] }, [text('ab')]);
+    const wrapper = element('div', { classes: ['wrapper'] }, [...before, out]);
+    const laid = page(`.wrapper { margin-top: 50px } .out { position: absolute } ${css}`, [
+      wrapper,
+    ]);
+    return laid.rectOf(out).y - laid.rectOf(wrapper).y;
+  };
+
+  it('moves the box about the point it would have been at', () => {
+    expect(placed('.out { align-self: flex-end }')).toBe(-16);
+    expect(placed('.out { align-self: center }')).toBe(-8);
+    expect(placed('.out { align-self: flex-start }')).toBe(0);
+  });
+
+  it('leaves it alone once it is in a line with text', () => {
+    expect(placed('.out { align-self: flex-end }', [text('word')])).toBe(16);
   });
 });
 

@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>align-self on an absolute box whose static position is in the block flow</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .page {
+    margin-top: 100px;
+  }
+  .out {
+    position: absolute;
+    background-color: #d8c8a8;
+  }
+  .to-end {
+    align-self: flex-end;
+  }
+  .to-centre {
+    align-self: center;
+  }
+  .to-start {
+    align-self: flex-start;
+  }
+  .pinned-top {
+    top: 40px;
+  }
+  .pinned-left {
+    left: 5px;
+  }
+  .spaced {
+    margin: 5px 0 7px;
+  }
+  .block {
+    height: 30px;
+  }
+  .anchor {
+    position: relative;
+    height: 50px;
+  }
+  .centring {
+    align-items: center;
+  }
+  .atomic {
+    display: inline-block;
+    height: 40px;
+    width: 50px;
+  }
+</style>
+
+<div class="page">
+  <div><div class="out to-end">one</div></div>
+  <div>word<div class="out to-end">two</div></div>
+  <div><div class="out to-centre">three</div></div>
+  <div><div class="out to-end pinned-top">four</div></div>
+  <div><div class="out to-start">five</div></div>
+  <div><div class="block"></div><div class="out to-end">six</div></div>
+  <div><div class="out to-end">seven</div>word</div>
+  <div class="anchor"><div class="out to-end">eight</div></div>
+  <div class="anchor">word<div class="out to-end">nine</div></div>
+  <div>word <span class="out to-end">ten</span></div>
+  <div class="centring"><div class="out">eleven</div></div>
+  <div><div class="out to-end spaced">twelve</div></div>
+  <div><div class="block"></div><div class="out to-end">thirteen</div><div class="block"></div></div>
+  <div>x<span class="atomic"><div class="out to-end">fourteen</div></span></div>
+  <div><div class="out to-end pinned-left">fifteen</div></div>
+  <div>
+    <div class="out to-end">sixteen</div>
+  </div>
+</div>

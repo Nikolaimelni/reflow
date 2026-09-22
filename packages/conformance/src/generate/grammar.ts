@@ -63,6 +63,14 @@ const declarations = fc.record(
     'flex-basis': fc.oneof(px, fc.constant('auto')),
     'justify-content': fc.constantFrom('flex-start', 'flex-end', 'center', 'space-between'),
     'align-items': fc.constantFrom('stretch', 'flex-start', 'center', 'baseline'),
+    'align-self': fc.constantFrom(
+      'auto',
+      'stretch',
+      'flex-start',
+      'flex-end',
+      'center',
+      'baseline',
+    ),
     'flex-direction': fc.constantFrom('row', 'row-reverse', 'column', 'column-reverse'),
     'flex-wrap': fc.constantFrom('nowrap', 'wrap', 'wrap-reverse'),
     'align-content': fc.constantFrom(
