@@ -77,6 +77,22 @@
   .packed-stretch {
     align-content: stretch;
   }
+  .centred {
+    justify-content: center;
+  }
+  .crammed {
+    width: 100px;
+  }
+  .crammed > div {
+    width: 80px;
+    flex: none;
+  }
+  .short {
+    height: 60px;
+  }
+  .overfull > div {
+    height: 50px;
+  }
   .column {
     display: flex;
     flex-direction: column;
@@ -158,3 +174,18 @@
   <div class="wide-item"></div>
 </div>
 <div class="row tall packed-end"><div class="fixed"></div></div>
+<div class="row crammed ending"><div></div><div></div></div>
+<div class="row crammed centred"><div></div><div></div></div>
+<div class="row crammed spaced"><div></div><div></div></div>
+<div class="row wrapping short overfull packed-end">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping short overfull packed-middle">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>
+<div class="row wrapping short overfull packed-around">
+  <div class="wide-item"></div>
+  <div class="wide-item"></div>
+</div>

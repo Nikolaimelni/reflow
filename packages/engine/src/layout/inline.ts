@@ -47,6 +47,8 @@ export type InlineInput = {
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
   /** Hands an out of flow box back with the static position it had in the line. */
   defer: (box: BlockBox, x: number, y: number) => void;
+  /** Lays out an out of flow box whose containing block is a positioned inline around it. */
+  placeWithin: (box: BlockBox, x: number, y: number, containing: Rect) => void;
 };
 
 type Offset = { dx: number; dy: number };
@@ -117,6 +119,8 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   const perLine = new Map<BoxId, Extent[]>();
   /** Where a box was left on a line with no height, in case that is the only place it is. */
   const stranded = new Map<BoxId, { x: number; y: number }>();
+  /** Out of flow boxes waiting for the positioned inline around them to have its boxes. */
+  const held: { box: BlockBox; x: number; y: number; within: BoxId }[] = [];
 
   lines.forEach((line, index) => {
     input.trace.push({
@@ -153,18 +157,27 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         // full keeps it, and so does text that may not wrap, whatever the box itself says.
         const late = inline && parked?.wraps === true && placed.x > input.available;
 
-        if (deferred !== undefined && late) {
-          input.defer(
-            deferred,
-            input.contentX + alignmentOffset(input.containerStyle, input.available, 0),
-            y + line.height,
-          );
-        } else if (deferred !== undefined) {
-          input.defer(
-            deferred,
-            inline ? input.contentX + offset + placed.x + piece.offset.dx : input.contentX,
-            inline || !behind ? y : y + line.height,
-          );
+        if (deferred !== undefined) {
+          const x = late
+            ? input.contentX + alignmentOffset(input.containerStyle, input.available, 0)
+            : inline
+              ? input.contentX + offset + placed.x + piece.offset.dx
+              : input.contentX;
+          // A relative offset on an inline around it moves where it would have been, down as
+          // well as across.
+          const top = late
+            ? y + line.height
+            : inline
+              ? y + piece.offset.dy
+              : behind
+                ? y + line.height
+                : y;
+
+          // A positioned inline is the containing block for what is out of the flow inside
+          // it, so those wait until it has its boxes rather than going up to the block.
+          const within = piece.ancestors.findLast((id) => isPositioned(surrounds.get(id)));
+          if (within === undefined) input.defer(deferred, x, top);
+          else held.push({ box: deferred, x, y: top, within });
         }
         continue;
       }
@@ -303,7 +316,36 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     });
   }
 
+  // The containing block a positioned inline makes starts at the padding edge of its first
+  // box and ends at the padding edge of its last, which on two lines is not the rectangle
+  // around either of them. Chromium measures it that way, and so does CSS 2.1.
+  for (const { box, x, y: top, within } of held) {
+    const rects = input.lines.get(within) ?? [];
+    const border = surrounds.get(within)?.border ?? zeroEdges;
+    const first = rects[0];
+    const last = rects.at(-1);
+    if (first === undefined || last === undefined) {
+      input.defer(box, x, top);
+      continue;
+    }
+
+    const left = first.x + border.left;
+    const upper = first.y + border.top;
+    const right = last.x + last.width - border.right;
+    const lower = last.y + last.height - border.bottom;
+    input.placeWithin(box, x, top, {
+      x: left,
+      y: upper,
+      width: Math.max(0, right - left),
+      height: Math.max(0, lower - upper),
+    });
+  }
+
   return { height: y - input.contentTop, lastBaseline };
+}
+
+function isPositioned(surround: Surround | undefined): boolean {
+  return surround !== undefined && surround.style.position !== 'static';
 }
 
 function toFragment(box: BoxId, rect: Rect, surround: Surround | undefined): Fragment {

@@ -328,8 +328,16 @@ function resolveCross(
     const asked = item.align ?? input.align;
     return asked === 'normal' ? 'stretch' : asked;
   });
-  const ascents = input.items.map((_, i) =>
-    aligns[i] === 'baseline' ? (input.baselineOf(i, mains[i] ?? 0) ?? sizes[i] ?? 0) : 0,
+  // Border and padding across the line, which is the surround without its margins.
+  const inner = (item: FlexItemInput) =>
+    item.crossSurround - item.marginCrossStart - item.marginCrossEnd;
+
+  // An item with no line of text in it has its baseline made up at the bottom of its border
+  // box, which is where the ascent is measured to.
+  const ascents = input.items.map((item, i) =>
+    aligns[i] === 'baseline'
+      ? (input.baselineOf(i, mains[i] ?? 0) ?? (sizes[i] ?? 0) + inner(item))
+      : 0,
   );
 
   let above = 0;
@@ -339,10 +347,16 @@ function resolveCross(
     }
   });
 
+  // Where each item starts across the line. For one hanging from the baseline that is its
+  // border box, with its start margin already above it, so the margin is not counted twice.
   const hangs = (i: number) => (aligns[i] === 'baseline' ? above - (ascents[i] ?? 0) : 0);
   const natural = Math.max(
     0,
-    ...input.items.map((item, i) => hangs(i) + (sizes[i] ?? 0) + item.crossSurround),
+    ...input.items.map((item, i) =>
+      aligns[i] === 'baseline'
+        ? hangs(i) + (sizes[i] ?? 0) + item.crossSurround - item.marginCrossStart
+        : (sizes[i] ?? 0) + item.crossSurround,
+    ),
   );
   const lineSize = input.crossSize ?? natural;
 
@@ -383,7 +397,15 @@ function distribute(
   count: number,
   free: number,
 ): { leading: number; between: number } {
-  if (free <= 0 || count === 0) return { leading: 0, between: 0 };
+  if (count === 0 || free === 0) return { leading: 0, between: 0 };
+
+  // Out of room, the end and the centre still hold and the items overflow the start, but the
+  // values that share space out have nothing to share and start where the line starts.
+  if (free < 0) {
+    if (packing === 'flex-end') return { leading: free, between: 0 };
+    if (packing === 'center') return { leading: free / 2, between: 0 };
+    return { leading: 0, between: 0 };
+  }
 
   switch (packing) {
     case 'flex-end':

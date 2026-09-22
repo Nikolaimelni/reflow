@@ -241,6 +241,24 @@
   .basis-first {
     flex: 30% 2;
   }
+  .on-baseline {
+    align-items: baseline;
+  }
+  .nudged-down {
+    margin-top: 1%;
+  }
+  .boxed-in {
+    padding: 6px;
+    border: 3px solid;
+    height: 10px;
+    width: 10px;
+  }
+  .lowered {
+    margin-top: 12px;
+  }
+  .large {
+    font-size: 30px;
+  }
   .held-down {
     max-width: 0%;
     background-color: #c8a8a8;
@@ -320,3 +338,7 @@
 <div class="row"><div class="sized-whole">x</div></div>
 <div class="column"><div class="sized-whole-down">x</div></div>
 <div class="row"><div class="basis-alone">x</div><div class="basis-first">y</div></div>
+<div class="row on-baseline auto-height"><div class="nudged-down"></div></div>
+<div class="row on-baseline auto-height"><div class="boxed-in"></div><div>text</div></div>
+<div class="row on-baseline auto-height"><div class="boxed-in lowered"></div><div class="large">text</div></div>
+<div class="row on-baseline auto-height"><div class="lowered">one</div><div class="large">two</div></div>

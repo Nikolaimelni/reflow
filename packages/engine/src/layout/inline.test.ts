@@ -469,6 +469,31 @@ describe('an inline-block that aligns its content', () => {
   });
 });
 
+describe('a positioned inline', () => {
+  const css =
+    'p { margin: 0 } .anchor { position: relative; padding: 0 4px; border-left: 2px solid; border-right: 2px solid } .fill { position: absolute; left: 0; right: 0; top: 0; bottom: 0 }';
+
+  it('is the containing block for what is out of the flow inside it', () => {
+    const fill = element('span', { classes: ['fill'] });
+    const anchor = element('span', { classes: ['anchor'] }, [text('ab'), fill]);
+    const p = element('p', {}, [text('x '), anchor]);
+
+    // Its padding box: past the word, the space and its own border, and as wide as its text
+    // and padding.
+    expect(page(css, [p]).rectOf(fill)).toMatchObject({ x: 18, y: 0, width: 24, height: 16 });
+  });
+
+  it('runs from its first box to its last when it wraps', () => {
+    const fill = element('span', { classes: ['fill'] });
+    const anchor = element('span', { classes: ['anchor'] }, [text('abcd efgh'), fill]);
+    const p = element('p', {}, [text('x '), anchor]);
+
+    // From the padding edge on the first line, at 18, to the padding edge on the second, at
+    // 36, so the block is narrower than the first box and two lines tall.
+    expect(page(css, [p], 60).rectOf(fill)).toMatchObject({ x: 18, y: 0, width: 18, height: 32 });
+  });
+});
+
 describe('the trace with text in it', () => {
   it('still replays to the geometry it produced', () => {
     const p = element('p', {}, [text('hello world and a few more words')]);

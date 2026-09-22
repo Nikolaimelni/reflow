@@ -367,6 +367,8 @@ function layoutChildren(
         measureAtomic(child, available, containing.height, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
       defer: (child, x, y) => absolutes.push({ box: child, staticX: x, staticY: y, aligned: null }),
+      placeWithin: (child, x, y, within) =>
+        layoutAbsolute({ box: child, staticX: x, staticY: y, aligned: null }, within, context),
     });
 
     return { height: inline.height, trailing: NO_MARGIN, baseline: inline.lastBaseline };

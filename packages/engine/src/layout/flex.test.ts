@@ -204,6 +204,28 @@ describe('cross axis', () => {
   });
 });
 
+describe('baselines', () => {
+  it('counts the start margin of an item on the baseline once', () => {
+    const items = [
+      item({ crossSize: 0, crossSurround: 4, marginCrossStart: 4, align: 'baseline' }),
+    ];
+
+    // Nothing but a margin, so the line is as tall as the margin.
+    expect(line({ items }).crossSize).toBe(4);
+  });
+
+  it('makes up a missing baseline at the bottom of the border box', () => {
+    const items = [
+      item({ crossSize: 10, crossSurround: 6, align: 'baseline' }),
+      item({ crossSize: 20, align: 'baseline' }),
+    ];
+    const result = line({ items, baselineOf: (index) => (index === 1 ? 15 : null) });
+
+    // Sixteen for the first, padding and all, against fifteen for the second.
+    expect(result.placements.map((one) => one.crossStart)).toEqual([0, 1]);
+  });
+});
+
 describe('the other way round', () => {
   it('packs a reversed line against the end it starts at', () => {
     const items = [item({ basis: 60 }), item({ basis: 90 })];
@@ -347,6 +369,26 @@ describe('align-content', () => {
 
   it('puts the free space between them', () => {
     expect(wrapped({ alignContent: 'space-between' })).toEqual([0, 0, 90]);
+  });
+
+  it('overflows the start at the end and the centre when the lines do not fit', () => {
+    const tall = [
+      item({ basis: 200, crossSize: 70, shrink: 0 }),
+      item({ basis: 200, crossSize: 50, shrink: 0 }),
+    ];
+    const across = (alignContent: FlexLineInput['alignContent']) =>
+      line({
+        items: tall,
+        mainSize: 300,
+        crossSize: 100,
+        wrap: 'wrap',
+        alignContent,
+      }).placements.map((one) => one.crossStart);
+
+    // Twenty more than the hundred there is.
+    expect(across('flex-end')).toEqual([-20, 50]);
+    expect(across('center')).toEqual([-10, 60]);
+    expect(across('space-between')).toEqual([0, 70]);
   });
 
   it('leaves a container that will not wrap alone', () => {

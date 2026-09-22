@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a positioned inline as the containing block of what is out of the flow inside it</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .anchor {
+    position: relative;
+    padding: 2px 5px;
+    border: 3px solid;
+  }
+  .fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: #d8c8a8;
+  }
+  .loose {
+    position: absolute;
+    background-color: #c8d8a8;
+  }
+  .shifted {
+    left: 7px;
+    top: 3px;
+  }
+  .made-inline {
+    display: inline;
+    position: relative;
+  }
+  .padded-out {
+    position: absolute;
+    padding: 1%;
+  }
+</style>
+
+<div>aaa <span class="anchor">one<span class="fill"></span></span> zz</div>
+<div>aaaaaaaa aaaaaaaa <span class="anchor">one two three four five<span class="fill"></span></span></div>
+<div>xx <span class="anchor">one two three four five six seven<span class="fill"></span></span></div>
+<div>xx <span class="anchor">one<span class="loose">abs text here</span></span></div>
+<div>xx <span class="anchor shifted">one<span class="loose">abs</span></span></div>
+<div><div class="made-inline"><div class="padded-out"></div></div></div>
+<div>
+  <div class="made-inline">
+    <div class="loose">one one</div>
+  </div>
+</div>
