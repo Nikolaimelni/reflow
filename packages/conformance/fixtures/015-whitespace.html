@@ -28,6 +28,16 @@
   .marked {
     background-color: #f0e2c8;
   }
+  .kept-in {
+    white-space: pre;
+  }
+  .kept-framed {
+    white-space: pre;
+    border: 1px solid;
+  }
+  .made-inline {
+    display: inline;
+  }
   .beside {
     display: inline-block;
     width: 20px;
@@ -66,3 +76,22 @@ its newlines</span> inside a normal paragraph</p>
   </span>
   <span class="beside"></span>
 </div>
+
+<div><em class="kept-in">
+  one
+</em></div>
+<div><em class="kept-in">
+  one
+</em> <span>after</span></div>
+<div><em class="kept-in">
+  one
+</em> <span></span></div>
+<div><span class="kept-framed">
+  one
+</span></div>
+<div><span class="kept-framed">
+  one
+</span>after</div>
+<div><div class="kept-framed made-inline">
+  one
+</div>after</div>

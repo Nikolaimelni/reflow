@@ -84,7 +84,11 @@ type Piece = {
  * A boundary is a place the line may break with no space to break at, which is either side of
  * an atomic inline in text that wraps.
  */
-type Item = Piece | { kind: 'newline' } | { kind: 'boundary' };
+type Item =
+  | Piece
+  /** `droppable` marks one at the end of a box, which only counts if anything follows it. */
+  | { kind: 'newline'; droppable: boolean }
+  | { kind: 'boundary' };
 
 /** A box out of the flow, and whether the text it was written in may wrap. */
 type OutOfFlow = { box: BlockBox; wraps: boolean };
@@ -487,6 +491,26 @@ function idle(kind: PieceKind | undefined): boolean {
   return kind === 'edge-end' || kind === 'out-of-flow';
 }
 
+/**
+ * Whether an item would put anything on the line after a newline: content, the opening of a
+ * box, preserved whitespace, or another newline. A box closing, a space that collapses and a
+ * box out of the flow would not.
+ */
+function opensALine(item: Item): boolean {
+  switch (item.kind) {
+    case 'newline':
+      return !item.droppable;
+    case 'boundary':
+    case 'edge-end':
+    case 'out-of-flow':
+      return false;
+    case 'space':
+      return item.style.whiteSpace === 'pre';
+    default:
+      return true;
+  }
+}
+
 /** Content, or the edge of a box that may not hang, which is enough to hold a line of its own. */
 function holdsALine(piece: Piece): boolean {
   return !isMarker(piece.kind) || (isEdge(piece.kind) && !piece.mayHang);
@@ -589,7 +613,7 @@ function collect(
 
       for (const segment of segmentText(child.text, child.style.whiteSpace)) {
         if (segment.kind === 'newline') {
-          items.push({ kind: 'newline' });
+          items.push({ kind: 'newline', droppable: false });
           continue;
         }
         items.push({
@@ -640,18 +664,22 @@ function collect(
         outOfFlow,
       );
 
-      // Chromium keeps a preserved newline at the end of a `<div>` and drops it at the end of
-      // a `<span>`, whatever their `display` says, and a tag it does not know behaves like the
-      // span. There is no rule in the spec for this: it is measured, and the probe sits in
-      // fixtures/found. Without it a `pre` inline ends up a line taller than the page it is on.
-      if (!blockByDefault(child.element?.tag ?? '') && within.at(-1)?.kind === 'newline') {
-        within.pop();
-      }
+      // Chromium keeps a preserved newline at the end of a `<div>` where it is, whatever its
+      // `display` says, and the box closes on the line after it. At the end of a `<span>` the
+      // box closes first, on the line the newline ends, and the newline only counts at all
+      // if something comes after the span. A tag it does not know behaves like the span.
+      // Measured rather than found in a spec. Without it a `pre` inline at the end of a
+      // paragraph ends up a line taller than the page it is on.
+      const trailing =
+        !blockByDefault(child.element?.tag ?? '') && within.at(-1)?.kind === 'newline'
+          ? within.pop()
+          : undefined;
 
       items.push(...within);
       items.push(
         edge('edge-end', surround.padding.right + surround.border.right + surround.margin.right),
       );
+      if (trailing !== undefined) items.push({ kind: 'newline', droppable: true });
       continue;
     }
 
@@ -763,8 +791,9 @@ function intoEntries(items: readonly Item[]): Entry[] {
     if (!isMarker(piece.kind)) content = true;
   };
 
-  items.forEach((item) => {
+  items.forEach((item, index) => {
     if (item.kind === 'newline') {
+      if (item.droppable && !items.slice(index + 1).some(opensALine)) return;
       close();
       entries.push({ kind: 'newline' });
       return;
@@ -987,7 +1016,12 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
     }
 
     place(entry.chunk);
-    if (width - hangs(true) > input.available) rewind();
+
+    // A box that has only opened so far has nothing on the line to break for yet. Its padding
+    // may already be over the edge, but the break is decided when its content arrives, and
+    // then the space in front of the box is a place to break.
+    const opening = !entry.chunk.content && entry.chunk.pieces.at(-1)?.kind === 'edge-start';
+    if (!opening && width - hangs(true) > input.available) rewind();
   }
 
   // Nothing follows the end of the paragraph, so the closing edges take their room after all.

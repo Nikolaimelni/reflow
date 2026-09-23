@@ -423,7 +423,15 @@ function layoutChildren(
     pending = result.marginBottom;
     placed = true;
 
-    if (result.baseline !== null) baseline = childTop - contentTop + result.baseline;
+    // A child that clips its overflow gives the box its baseline at its own bottom margin
+    // edge, whatever lines it holds and wherever that edge is, even above the box's top when
+    // a negative margin put it there. It is the last one that counts, so it wins over any
+    // line in front of it.
+    if (child.style.overflow !== 'visible') {
+      baseline = childTop - contentTop + result.height + resolveMargin(result.marginBottom);
+    } else if (result.baseline !== null) {
+      baseline = childTop - contentTop + result.baseline;
+    }
   }
 
   return { height, trailing: pending, baseline };

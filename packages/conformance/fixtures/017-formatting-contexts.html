@@ -36,6 +36,20 @@
   .clips .inner {
     margin-top: 20px;
   }
+  .clipped-last {
+    display: inline-block;
+    background-color: #f5eaf5;
+  }
+  .clipped-last .clipping {
+    overflow: hidden;
+    width: 40px;
+    margin-top: -12px;
+  }
+  .clipped-last .clipping.tall {
+    height: 10px;
+    margin-top: 0;
+    margin-bottom: 5px;
+  }
   .rule {
     height: 4px;
     background-color: #444;
@@ -56,4 +70,24 @@
 
 <div class="clips">
   <div class="inner rule"></div>
+</div>
+
+<div>
+  <div class="clipped-last">
+    <div class="clipping"></div>
+  </div>
+</div>
+
+<div>
+  x
+  <div class="clipped-last">
+    <div>above</div>
+    <div class="clipping tall"></div>
+  </div>
+</div>
+
+<div>
+  <div class="clipped-last">
+    <div class="clipping tall">text</div>
+  </div>
 </div>

@@ -187,6 +187,17 @@ describe('inline boxes', () => {
     expect(page(css, [p], 180).rectOf(span).height).toBe(32);
   });
 
+  it('waits for a box to put something down before breaking for its padding', () => {
+    const first = element('span', {}, [text('ab cd ef')]);
+    const deep = element('div', { classes: ['deep'] }, [text('gh')]);
+    const p = element('p', {}, [first, text(' '), deep]);
+    const css = 'p { margin: 0 } .deep { display: inline; padding-left: 60px }';
+
+    // The padding alone runs over, but the break is not taken until the word inside arrives,
+    // and then it goes in front of the whole box rather than into the span before it.
+    expect(page(css, [p], 120).rectOf(first)).toMatchObject({ y: 0, height: 16 });
+  });
+
   it('breaks for an edge the browser will not let hang', () => {
     const css = '.pad { display: inline; padding-left: 20px }';
     const linesFor = (tag: string) => {
@@ -362,6 +373,20 @@ describe('inline boxes', () => {
     expect({ y: rect.y, height: rect.height }).toEqual({ y: -1, height: 34 });
   });
 
+  it('keeps that newline when something follows the tag, and closes the tag in front of it', () => {
+    const span = element('span', { classes: ['kept'] }, [text('\n  one\n')]);
+    const after = element('span', {}, [text('x')]);
+    const p = element('p', {}, [span, after]);
+    const css = 'p { margin: 0 } .kept { border: 1px solid; white-space: pre }';
+    const laid = page(css, [p]);
+
+    // Still two lines for the span, with its border closing on the second, and the word that
+    // follows starts the third.
+    expect(laid.rectOf(span)).toMatchObject({ y: -1, height: 34 });
+    expect(laid.rectOf(after).x).toBe(0);
+    expect(laid.rectOf(after).y).toBeCloseTo(32);
+  });
+
   it('leaves a space in front of an inline box outside it', () => {
     const span = element('span', { classes: ['marked'] });
     const p = element('p', {}, [text('before '), span, text('after')]);
@@ -527,6 +552,20 @@ describe('a line with nothing on it', () => {
     // Its only line holds a box out of the flow, which does not count, so the inline-block
     // sits on its bottom edge: forty above the baseline and the descent of the strut below.
     expect(page(css, [p]).rectOf(p).height).toBeCloseTo(43.2);
+  });
+});
+
+describe('an inline-block whose last child clips', () => {
+  it('sits on the bottom margin edge of that child, even above its own top', () => {
+    const word = element('span', {}, [text('x')]);
+    const box = element('span', { classes: ['box'] }, [element('div', { classes: ['clips'] })]);
+    const p = element('p', {}, [word, box]);
+    const css =
+      'p { margin: 0 } .box { display: inline-block } .clips { overflow: hidden; margin-top: -12px }';
+
+    // The child ends twelve above the inline-block's top, so that is its baseline, and the
+    // inline-block sits twelve below the line's baseline: the line is that much deeper.
+    expect(page(css, [p]).rectOf(p).height).toBeCloseTo(12.8 + 12);
   });
 });
 
