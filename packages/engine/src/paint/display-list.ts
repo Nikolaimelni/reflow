@@ -4,8 +4,10 @@ import {
   type BoxId,
   type InlineBox,
   inFlexOrder,
+  walkBoxes,
 } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
+import type { ElementNode } from '../dom/node.js';
 import type { Rect } from '../geometry.js';
 import type { Fragment } from '../trace/events.js';
 
@@ -53,11 +55,20 @@ type Bucket = {
   /** Positioned, but with no z-index of its own, so it paints on top of the plain content. */
   level: Entry[];
   positive: (Entry & { z: number })[];
+  /** Halves that paint with the first half of their element, never on their own. */
+  skip: ReadonlySet<BoxId>;
 };
 
 type State = {
   items: PaintItem[];
   contexts: StackingContext[];
+  /**
+   * A positioned inline that a block cut in two is still one element: its halves paint
+   * together, under the first of them, and whatever is positioned inside any half paints
+   * after all of them rather than under the next half.
+   */
+  together: Map<BoxId, Box[]>;
+  followers: Set<BoxId>;
 };
 
 /**
@@ -67,12 +78,32 @@ type State = {
  * missing and nothing else moves.
  */
 export function buildDisplayList(root: BlockBox): DisplayList {
-  const state: State = { items: [], contexts: [] };
+  const state: State = { items: [], contexts: [], ...cutAndPositioned(root) };
 
   state.contexts.push({ box: root.id, zIndex: 'auto', parent: null, depth: 0 });
   paint(root, state, root.id, 0, null);
 
-  return state;
+  return { items: state.items, contexts: state.contexts };
+}
+
+function cutAndPositioned(root: BlockBox): Pick<State, 'together' | 'followers'> {
+  const byElement = new Map<ElementNode, Box[]>();
+  walkBoxes(root, (box) => {
+    if (box.kind !== 'inline' || box.atomic || box.style.position === 'static') return;
+    const seen = byElement.get(box.element);
+    if (seen === undefined) byElement.set(box.element, [box]);
+    else seen.push(box);
+  });
+
+  const together = new Map<BoxId, Box[]>();
+  const followers = new Set<BoxId>();
+  for (const halves of byElement.values()) {
+    const [first, ...rest] = halves;
+    if (first === undefined || rest.length === 0) continue;
+    together.set(first.id, halves);
+    for (const half of rest) followers.add(half.id);
+  }
+  return { together, followers };
 }
 
 /**
@@ -85,16 +116,28 @@ export function formsStackingContext(style: ComputedStyle): boolean {
 }
 
 function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
-  push(box, state, context, depth, clip);
+  const group = state.together.get(box.id) ?? [box];
+  for (const one of group) push(one, state, context, depth, clip);
   if (box.kind === 'text') return;
 
   // Anything but visible overflow clips what is inside it, and the clip travels down
   // the tree with the descendants rather than applying to the box itself.
   const inner = box.style.overflow === 'visible' ? clip : box.id;
 
-  const bucket: Bucket = { negative: [], blocks: [], inlines: [], level: [], positive: [] };
+  const bucket: Bucket = {
+    negative: [],
+    blocks: [],
+    inlines: [],
+    level: [],
+    positive: [],
+    skip: state.followers,
+  };
   if (holdsLines(box)) bucket.inlines.push({ box, own: false, clip: inner, part: 'lines' });
-  collect(painted(box), bucket, inner);
+  collect(
+    group.flatMap((one) => (one.kind === 'text' ? [] : painted(one))),
+    bucket,
+    inner,
+  );
 
   for (const entry of [...bucket.negative].sort((a, b) => a.z - b.z)) {
     descend(entry.box, state, context, depth, entry.clip);
@@ -211,6 +254,7 @@ function painted(box: BlockBox | InlineBox): readonly Box[] {
 }
 
 function positioned(box: Box, bucket: Bucket, clip: BoxId | null): void {
+  if (bucket.skip.has(box.id)) return;
   const zIndex = box.style.zIndex;
 
   if (zIndex.kind === 'integer' && zIndex.value < 0) {

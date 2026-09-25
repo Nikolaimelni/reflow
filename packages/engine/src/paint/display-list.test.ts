@@ -51,6 +51,19 @@ describe('buildDisplayList', () => {
     expect(order(css, [row]).painted).toEqual(['html', 'row', 'second', 'first']);
   });
 
+  it('paints the halves of a cut positioned inline as one, with what it positions on top', () => {
+    const anchor = element('span', { classes: ['anchor'] }, [
+      element('span', { classes: ['out'] }),
+      element('div', { classes: ['cut'] }),
+      text('after'),
+    ]);
+    const css = '.anchor { position: relative } .out { position: absolute }';
+
+    // Both halves of the anchor come before the absolute box, which is inside the first.
+    const painted = order(css, [anchor]).painted;
+    expect(painted.indexOf('out')).toBeGreaterThan(painted.lastIndexOf('anchor'));
+  });
+
   it('puts inline content on top of the blocks around it', () => {
     const host = element('div', { classes: ['host'] }, [
       text('loose'),

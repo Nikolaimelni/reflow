@@ -329,7 +329,11 @@ function resolveCross(
   // container it means stretch.
   const aligns = input.items.map((item) => {
     const asked = item.align ?? input.align;
-    return asked === 'normal' ? 'stretch' : asked;
+    const resolved = asked === 'normal' ? 'stretch' : asked;
+    // An item with an auto margin across the line is placed by the margin, so it never joins
+    // the others on a shared baseline.
+    const margined = item.autoCrossStart || item.autoCrossEnd;
+    return resolved === 'baseline' && margined ? 'flex-start' : resolved;
   });
   // Border and padding across the line, which is the surround without its margins.
   const inner = (item: FlexItemInput) =>

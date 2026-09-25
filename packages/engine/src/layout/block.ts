@@ -2,12 +2,14 @@ import {
   type BlockBox,
   type Box,
   type BoxId,
+  boxesByElement,
   type InlineBox,
   inFlexOrder,
   isBlock,
   isCollapsibleWhitespace,
 } from '../boxtree/box.js';
 import type { AlignContent, AlignItems, ComputedStyle } from '../cascade/properties.js';
+import type { ElementNode } from '../dom/node.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { type FlexItemInput, solveFlex } from './flex.js';
@@ -72,6 +74,9 @@ type Context = {
   devicePixelRatio: number;
   /** The initial containing block, which is what an absolute box falls back to. */
   icb: Rect;
+  /** Every box an element made, in order, for a positioned inline that was cut in two. */
+  boxesOf: ReadonlyMap<ElementNode, readonly BoxId[]>;
+  elementOf: ReadonlyMap<BoxId, ElementNode>;
 };
 
 /** An out of flow box, parked until the containing block it belongs to has a size. */
@@ -86,6 +91,8 @@ type Deferred = {
    * its static position instead: a line tall, or no size at all.
    */
   aligned: { within: BoxId | { width: number; height: number }; x: Placement; y: Placement } | null;
+  /** A positioned inline that is the containing block, rather than the block it was given. */
+  inside: ElementNode | null;
 };
 
 type Placement = 'start' | 'center' | 'end';
@@ -152,6 +159,7 @@ export function layoutDocument(
     measurer,
     icb,
     devicePixelRatio: viewport.devicePixelRatio ?? 1,
+    ...elementsOf(root),
   };
   const containing: ContainingBlock = { x: 0, width: viewport.width, height: viewport.height };
 
@@ -368,15 +376,14 @@ function layoutChildren(
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
-      defer: (child, x, y, room) =>
+      defer: (child, x, y, room, within) =>
         absolutes.push({
           box: child,
           staticX: x,
           staticY: y,
           aligned: room === null ? null : selfAligned(child, room),
+          inside: within === null ? null : (context.elementOf.get(within) ?? null),
         }),
-      placeWithin: (child, x, y, within) =>
-        layoutAbsolute({ box: child, staticX: x, staticY: y, aligned: null }, within, context),
     });
 
     return { height: inline.height, trailing: NO_MARGIN, baseline: inline.lastBaseline };
@@ -965,7 +972,46 @@ function selfAligned(box: BlockBox, room: number): Deferred['aligned'] {
   return y === 'start' ? null : { within: { width: 0, height: room }, x: 'start', y };
 }
 
-function layoutAbsolute(deferred: Deferred, containing: Rect, context: Context): void {
+/**
+ * The containing block a positioned inline makes. It starts at the padding edge of the first
+ * box the element made and ends at the padding edge of its last, which on two lines is not
+ * the rectangle around either of them, and when a block cut the inline in two the block
+ * between the halves is one of those boxes. A half with nothing in it does not count.
+ * Chromium measures it this way, and CSS 2.1 describes the two lines.
+ */
+function inlineContainingBlock(element: ElementNode, context: Context): Rect | null {
+  const all = (context.boxesOf.get(element) ?? []).flatMap((id) => {
+    const fragment = context.fragments.get(id);
+    const lines = context.lines.get(id);
+    const rects = lines !== undefined && lines.length > 0 ? lines : fragment ? [fragment.rect] : [];
+    return rects.map((rect) => ({ rect, border: fragment?.border ?? zeroEdges }));
+  });
+  const drawn = all.filter(({ rect }) => rect.width > 0 || rect.height > 0);
+  const used = drawn.length > 0 ? drawn : all;
+
+  const first = used[0];
+  const last = used.at(-1);
+  if (first === undefined || last === undefined) return null;
+
+  const left = first.rect.x + first.border.left;
+  const top = first.rect.y + first.border.top;
+  const right = last.rect.x + last.rect.width - last.border.right;
+  const bottom = last.rect.y + last.rect.height - last.border.bottom;
+  return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
+function elementsOf(root: BlockBox): Pick<Context, 'boxesOf' | 'elementOf'> {
+  const boxesOf = boxesByElement(root);
+  const elementOf = new Map<BoxId, ElementNode>();
+  for (const [element, ids] of boxesOf) {
+    for (const id of ids) elementOf.set(id, element);
+  }
+  return { boxesOf, elementOf };
+}
+
+function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void {
+  const containing =
+    deferred.inside === null ? given : (inlineContainingBlock(deferred.inside, context) ?? given);
   const box = deferred.box;
   const style = box.style;
   const border = usedBorderWidths(style);
@@ -1124,6 +1170,7 @@ function layoutFlexItems(
         staticX: containing.x,
         staticY: contentTop,
         aligned: soleItem(box, child),
+        inside: null,
       });
       continue;
     }

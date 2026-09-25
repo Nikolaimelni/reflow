@@ -48,11 +48,10 @@ export type InlineInput = {
   /**
    * Hands an out of flow box back with the static position it had in the line, and how tall
    * a rectangle below that point `align-self` may move it about in: none at all in the block
-   * flow, a line's height inside a line, and null where it may not move.
+   * flow, a line's height inside a line, and null where it may not move. `within` is the
+   * positioned inline around it, when there is one, which is then its containing block.
    */
-  defer: (box: BlockBox, x: number, y: number, room: number | null) => void;
-  /** Lays out an out of flow box whose containing block is a positioned inline around it. */
-  placeWithin: (box: BlockBox, x: number, y: number, containing: Rect) => void;
+  defer: (box: BlockBox, x: number, y: number, room: number | null, within: BoxId | null) => void;
 };
 
 type Offset = { dx: number; dy: number };
@@ -120,7 +119,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     surrounds,
     outOfFlow,
   );
-  const lines = breakIntoLines(items, input);
+  const { lines, atBreak } = breakIntoLines(items, input);
 
   // Nothing here but boxes out of the flow, and whitespace that collapses away.
   const alone = items.every(
@@ -134,8 +133,6 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   const perLine = new Map<BoxId, Extent[]>();
   /** Where a box was left on a line with no height, in case that is the only place it is. */
   const stranded = new Map<BoxId, { x: number; y: number }>();
-  /** Out of flow boxes waiting for the positioned inline around them to have its boxes. */
-  const held: { box: BlockBox; x: number; y: number; within: BoxId }[] = [];
 
   lines.forEach((line, index) => {
     input.trace.push({
@@ -174,7 +171,8 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         // An inline one that comes after the line has already run out of room starts the
         // next one instead, where the alignment would put an empty line. A line that is only
         // full keeps it, and so does text that may not wrap, whatever the box itself says.
-        const late = inline && parked?.wraps === true && placed.x > input.available;
+        const late =
+          inline && parked?.wraps === true && atBreak.has(piece) && placed.x > input.available;
 
         if (deferred !== undefined) {
           const x = late
@@ -193,15 +191,15 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
                 : y;
 
           // A positioned inline is the containing block for what is out of the flow inside
-          // it, so those wait until it has its boxes rather than going up to the block.
+          // it. The box is still placed with the block's others, once every box the inline
+          // makes has been laid out, which a block cutting it in two may not have been yet.
           const within = piece.ancestors.findLast((id) => isPositioned(surrounds.get(id)));
           // Inside a line it is aligned in that line's box, or in one as tall below it when it
           // went under the line. A line with nothing on it is no line at all to Chromium, so a
           // box there aligns about its static position, except an inline-level one that is
           // the only thing in the block: that one does not move. Measured, not derived.
           const room = line.phantom ? (inline && alone ? null : 0) : line.height;
-          if (within === undefined) input.defer(deferred, x, top, room);
-          else held.push({ box: deferred, x, y: top, within });
+          input.defer(deferred, x, top, room, within ?? null);
         }
         continue;
       }
@@ -227,7 +225,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
           if (!stranded.has(piece.box)) stranded.set(piece.box, { x: at, y });
           continue;
         }
-        if (piece.width === 0 && !whole.has(piece.box)) continue;
+        if (!takesRoom(piece) && !whole.has(piece.box)) continue;
 
         const rect = {
           x: piece.kind === 'edge-start' ? at + piece.width : at,
@@ -360,31 +358,6 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
         surround === undefined
           ? 'union of the line boxes it sits on'
           : 'its line boxes, plus its own padding and border',
-    });
-  }
-
-  // The containing block a positioned inline makes starts at the padding edge of its first
-  // box and ends at the padding edge of its last, which on two lines is not the rectangle
-  // around either of them. Chromium measures it that way, and so does CSS 2.1.
-  for (const { box, x, y: top, within } of held) {
-    const rects = input.lines.get(within) ?? [];
-    const border = surrounds.get(within)?.border ?? zeroEdges;
-    const first = rects[0];
-    const last = rects.at(-1);
-    if (first === undefined || last === undefined) {
-      input.defer(box, x, top, null);
-      continue;
-    }
-
-    const left = first.x + border.left;
-    const upper = first.y + border.top;
-    const right = last.x + last.width - border.right;
-    const lower = last.y + last.height - border.bottom;
-    input.placeWithin(box, x, top, {
-      x: left,
-      y: upper,
-      width: Math.max(0, right - left),
-      height: Math.max(0, lower - upper),
     });
   }
 
@@ -522,7 +495,9 @@ function isMarker(kind: PieceKind): boolean {
 }
 
 /**
- * Whether an inline box's edge is worth a line of its own. A browser decides that before the
+ * Whether an inline box's edge is worth a line of its own. The spec asks whether the box has
+ * a margin, padding or border there, not whether they add up to anything: a margin of -12 and
+ * a padding of 12 come to nothing and still count. A browser also decides it before the
  * percentages are resolved, so `padding-left: 1%` of a box that turns out to be nothing wide
  * still makes a line where `padding-left: 0` does not.
  */
@@ -530,12 +505,15 @@ function takesRoom(piece: Piece): boolean {
   if (piece.width !== 0) return true;
 
   const style = piece.style;
-  const [padding, margin] =
-    piece.kind === 'edge-start'
-      ? [style.paddingLeft, style.marginLeft]
-      : [style.paddingRight, style.marginRight];
+  const start = piece.kind === 'edge-start';
+  const [padding, margin] = start
+    ? [style.paddingLeft, style.marginLeft]
+    : [style.paddingRight, style.marginRight];
+  const border = usedBorderWidths(style)[start ? 'left' : 'right'];
 
-  return padding.kind === 'percent' || margin.kind === 'percent';
+  const given = (value: typeof padding | typeof margin) =>
+    value.kind === 'percent' || (value.kind === 'px' && value.value !== 0);
+  return given(padding) || given(margin) || border !== 0;
 }
 
 /** The inline boxes that both begin and end on this line, which is all of an empty one. */
@@ -843,7 +821,19 @@ function intoEntries(items: readonly Item[]): Entry[] {
   return entries;
 }
 
-function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
+/**
+ * The lines, and the boxes out of the flow that sit where the line could have broken: right
+ * after a space or beside an atomic inline, with nothing but the edges of boxes in between.
+ * One of those goes to the next line when it comes too late for this one. One written inside
+ * a run that cannot break stays where it is, however far over the edge that is.
+ */
+function breakIntoLines(
+  items: readonly Item[],
+  input: InlineInput,
+): { lines: Line[]; atBreak: Set<Piece> } {
+  const atBreak = new Set<Piece>();
+  let afterBreak = false;
+
   const lines: Line[] = [];
 
   let current: Placed[] = [];
@@ -915,8 +905,9 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
       .filter(
         (piece) =>
           isEdge(piece.kind) &&
-          piece.mayHang &&
-          ((opened.has(piece.box) && closed.has(piece.box)) ||
+          // Whether the tag was a block by default decides an empty box, not a closing edge
+          // behind a space: that one hangs whatever the box was.
+          ((piece.mayHang && opened.has(piece.box) && closed.has(piece.box)) ||
             (closing && space >= 0 && piece.kind === 'edge-end')),
       )
       .reduce((sum, piece) => sum + piece.width, 0);
@@ -991,22 +982,28 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
 
     if (entry.kind === 'boundary') {
       boundaries.add(current.length);
+      afterBreak = true;
       continue;
     }
 
     if (entry.kind === 'space') {
       // A space at the start of a line disappears, and a run of them counts once: the first,
-      // which decides whose box it is drawn in when the run crosses a boundary. When that
-      // first one came from text that may not wrap, the run is still somewhere the line may
-      // break, just past it and any box it closed, and before any box this one opens.
+      // which decides whose box it is drawn in when the run crosses a boundary. The run is
+      // still somewhere the line may break at its end: past the space it kept, past any box
+      // that closed after it or opened and closed with nothing in it, and in front of a box
+      // that has only opened.
+      afterBreak = true;
       if (!content) continue;
       const kept = hanging();
       if (kept >= 0) {
-        if (!wraps(current[kept]?.piece.style.whiteSpace ?? 'normal')) {
-          let at = kept + 1;
-          while (current[at]?.piece.kind === 'edge-end') at++;
-          boundaries.add(at);
-        }
+        const run = current.slice(kept + 1);
+        const closed = new Set(
+          run.filter(({ piece }) => piece.kind === 'edge-end').map(({ piece }) => piece.box),
+        );
+        const opening = run.findIndex(
+          ({ piece }) => piece.kind === 'edge-start' && !closed.has(piece.box),
+        );
+        boundaries.add(opening < 0 ? current.length : kept + 1 + opening);
         continue;
       }
 
@@ -1014,6 +1011,14 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
       width += entry.space.width;
       continue;
     }
+
+    if (afterBreak) {
+      for (const piece of entry.chunk.pieces) {
+        if (piece.kind === 'out-of-flow') atBreak.add(piece);
+        else if (!isEdge(piece.kind)) break;
+      }
+    }
+    afterBreak = false;
 
     place(entry.chunk);
 
@@ -1032,7 +1037,7 @@ function breakIntoLines(items: readonly Item[], input: InlineInput): Line[] {
   }
 
   flush();
-  return lines;
+  return { lines, atBreak };
 }
 
 /**

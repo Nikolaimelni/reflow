@@ -198,6 +198,27 @@ describe('inline boxes', () => {
     expect(page(css, [p], 120).rectOf(first)).toMatchObject({ y: 0, height: 16 });
   });
 
+  it('lets the closing edge of a div made inline hang behind a space as well', () => {
+    const box = element('div', { classes: ['wide'] }, [text(' one one one ')]);
+    const p = element('p', {}, [box, text('x')]);
+    const css = 'p { margin: 0 } .wide { display: inline; margin: 0 50px }';
+
+    // What a div cannot do is hang the edges of a box with nothing in it; behind a space the
+    // closing margin hangs the same as a span's.
+    expect(page(css, [p], 180).rectOf(box)).toMatchObject({ y: 0, height: 16 });
+  });
+
+  it('counts an edge whose margin and padding cancel out as an edge', () => {
+    const box = element('span', { classes: ['even'] }, [text('\nab')]);
+    const p = element('p', {}, [box]);
+    const css =
+      'p { margin: 0 } .even { margin-left: -12px; padding-left: 12px; white-space: pre }';
+
+    // Nothing wide, but a margin and a padding all the same, so the box starts on the line
+    // above the word, where it opens.
+    expect(page(css, [p]).rectOf(box)).toMatchObject({ y: 0, height: 32 });
+  });
+
   it('breaks for an edge the browser will not let hang', () => {
     const css = '.pad { display: inline; padding-left: 20px }';
     const linesFor = (tag: string) => {
@@ -297,6 +318,21 @@ describe('inline boxes', () => {
 
     // The space inside the span comes first, so it stays there, and the one after it collapses.
     expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 0, width: 24 });
+  });
+
+  it('breaks at the end of a run that crosses an empty box, not in front of it', () => {
+    const empty = element('em', { classes: ['empty'] });
+    const p = element('p', {}, [
+      text('ab '),
+      empty,
+      text(' '),
+      element('span', {}, [text('cdefgh')]),
+    ]);
+    const css = 'p { margin: 0 } .empty { padding: 0 10px }';
+
+    // The two spaces collapse into the one in front of the em, but the line still breaks
+    // where the run ends, so the em stays with the word before it.
+    expect(page(css, [p], 60).rectOf(empty).y).toBe(0);
   });
 
   it('breaks at the first space of a run, before a box the run opens', () => {
@@ -516,6 +552,19 @@ describe('atomic inlines', () => {
     expect(within.rectOf(inside).y).toBe(0);
   });
 
+  it('leaves it where it was written when the line could not have broken there', () => {
+    const late = element('span', { classes: ['out'] });
+    const held = element('span', { classes: ['held'] }, [text('abcdefghijklm')]);
+    const laid = page(
+      `${css} .held { white-space: nowrap }`,
+      [element('p', {}, [held, late])],
+      100,
+    );
+
+    // Straight after a word that runs over, with no space and nothing atomic in between.
+    expect(laid.rectOf(late)).toMatchObject({ x: 104, y: 0 });
+  });
+
   it('leaves it where it was written when the text may not wrap', () => {
     const late = element('span', { classes: ['out'] });
     const held = element('p', { classes: ['held'] }, [
@@ -581,6 +630,18 @@ describe('a positioned inline', () => {
     // Its padding box: past the word, the space and its own border, and as wide as its text
     // and padding.
     expect(page(css, [p]).rectOf(fill)).toMatchObject({ x: 18, y: 0, width: 24, height: 16 });
+  });
+
+  it('counts the block between its halves as one of its boxes when a block cuts it', () => {
+    const fill = element('span', { classes: ['fill'] });
+    const cut = element('div', { classes: ['cut'] });
+    const anchor = element('span', { classes: ['plain'] }, [fill, cut]);
+    const p = element('p', {}, [anchor]);
+    const wide = `${css} .plain { position: relative } .cut { height: 20px; width: 50px }`;
+
+    // Nothing after the block, so the box around it is the last one and the containing block
+    // is as wide as the line and as tall as the block.
+    expect(page(wide, [p], 100).rectOf(fill)).toMatchObject({ x: 0, y: 0, width: 100, height: 20 });
   });
 
   it('runs from its first box to its last when it wraps', () => {

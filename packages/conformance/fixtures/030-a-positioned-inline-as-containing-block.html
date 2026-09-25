@@ -32,6 +32,14 @@
     display: inline;
     position: relative;
   }
+  .plain-anchor {
+    position: relative;
+  }
+  .cutting {
+    height: 20px;
+    width: 50px;
+    background-color: #a8c8d8;
+  }
   .padded-out {
     position: absolute;
     padding: 1%;
@@ -49,3 +57,8 @@
     <div class="loose">one one</div>
   </div>
 </div>
+<div><span class="plain-anchor"><span class="fill"></span><div class="cutting"></div></span></div>
+<div><span class="plain-anchor"><span class="fill"></span><div class="cutting"></div>after</span></div>
+<div><span class="plain-anchor">before<span class="fill"></span><div class="cutting"></div></span></div>
+<div><span class="plain-anchor">before<span class="fill"></span><div class="cutting"></div>after</span></div>
+<div><span class="plain-anchor"><div class="cutting"></div><span class="fill"></span>after</span></div>

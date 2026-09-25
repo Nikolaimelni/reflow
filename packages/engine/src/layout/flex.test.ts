@@ -216,6 +216,16 @@ describe('baselines', () => {
     expect(line({ items }).crossSize).toBe(4);
   });
 
+  it('leaves an item with an auto margin across the line to the margin', () => {
+    const items = [
+      item({ crossSize: 0, align: 'baseline', autoCrossStart: true, autoCrossEnd: true }),
+      item({ crossSize: 10 }),
+    ];
+
+    // Centred in the ten the other item makes, not hung from a baseline.
+    expect(line({ items }).placements.map((one) => one.crossStart)).toEqual([5, 0]);
+  });
+
   it('makes up a missing baseline at the bottom of the border box', () => {
     const items = [
       item({ crossSize: 10, crossSurround: 6, align: 'baseline' }),
