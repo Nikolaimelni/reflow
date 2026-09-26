@@ -28,6 +28,11 @@ export type TextBox = {
   id: BoxId;
   text: string;
   style: ComputedStyle;
+  /**
+   * The disc, circle or square of a list marker inside its item, which takes the room Blink
+   * gives the symbol rather than the width of the character standing in for it.
+   */
+  symbol: boolean;
 };
 
 export type Box = BlockBox | InlineBox | TextBox;

@@ -7,7 +7,7 @@ import {
   propertyNames,
 } from '../cascade/properties.js';
 import { ZERO } from '../cascade/values.js';
-import type { DomNode, ElementNode } from '../dom/node.js';
+import { type DomNode, type ElementNode, elementChildren } from '../dom/node.js';
 import {
   type BlockBox,
   type Box,
@@ -16,6 +16,7 @@ import {
   isBlock,
   isCollapsibleWhitespace,
   isWhitespaceText,
+  type TextBox,
 } from './box.js';
 
 export function buildBoxTree(root: ElementNode, styles: StyleMap): BlockBox | null {
@@ -34,6 +35,16 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
   if (style === undefined || style.display === 'none') return null;
 
   const children = buildChildren(node, style, styles, ids);
+
+  // A marker inside the item is the first thing on its first line. One outside it takes no
+  // room in the box at all, and layout gives it a line only if nothing else does.
+  if (
+    style.display === 'list-item' &&
+    style.listStylePosition === 'inside' &&
+    style.listStyleType !== 'none'
+  ) {
+    children.unshift(insideMarker(node, style, styles, ids));
+  }
 
   // An out of flow box is always block-level, whatever display the author asked for.
   if (style.position === 'absolute' && style.display !== 'flex') {
@@ -69,6 +80,30 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
     children:
       style.display === 'flex' ? flexItems(children, style, ids) : organise(children, style, ids),
   };
+}
+
+/**
+ * The text of a marker inside its item. A number is text like any other, and its trailing
+ * space is kept: the marker is `white-space: pre` in the browser's own stylesheet. A symbol
+ * stands in as one character whose room layout works out from the font.
+ */
+function insideMarker(
+  node: ElementNode,
+  style: ComputedStyle,
+  styles: StyleMap,
+  ids: IdSource,
+): TextBox {
+  const marker = { ...style, whiteSpace: 'pre' as const };
+  if (style.listStyleType !== 'decimal') {
+    return { kind: 'text', id: ids(), text: '•', style: marker, symbol: true };
+  }
+
+  // Counted among the element's siblings that are list items, which is what the counter the
+  // browser keeps comes to while nothing resets or sets it.
+  const siblings = node.parent === null ? [node] : elementChildren(node.parent);
+  const before = siblings.slice(0, siblings.indexOf(node) + 1);
+  const ordinal = before.filter((one) => styles.get(one)?.display === 'list-item').length;
+  return { kind: 'text', id: ids(), text: `${ordinal}. `, style: marker, symbol: false };
 }
 
 /**
@@ -142,7 +177,7 @@ function buildChildBox(
   ids: IdSource,
 ): Box | null {
   if (child.kind === 'text') {
-    return { kind: 'text', id: ids(), text: child.text, style: parentStyle };
+    return { kind: 'text', id: ids(), text: child.text, style: parentStyle, symbol: false };
   }
   return buildBox(child, styles, ids);
 }

@@ -72,6 +72,11 @@ export const INVALIDATION: Record<PropertyName, Invalidation> = {
   rowGap: 'layout',
   columnGap: 'layout',
 
+  // A marker inside the box takes room on the first line, and one outside it can make that
+  // line in a box with nothing else in it.
+  listStyleType: 'layout',
+  listStylePosition: 'layout',
+
   // Nothing moves, the order things are drawn in changes.
   zIndex: 'paint',
   color: 'paint',

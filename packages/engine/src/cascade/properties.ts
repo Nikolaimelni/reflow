@@ -19,7 +19,7 @@ import {
   type ZIndex,
 } from './values.js';
 
-export type Display = 'block' | 'inline' | 'inline-block' | 'flex' | 'none';
+export type Display = 'block' | 'inline' | 'inline-block' | 'flex' | 'list-item' | 'none';
 export type Position = 'static' | 'relative' | 'absolute';
 export type BoxSizing = 'content-box' | 'border-box';
 export type Overflow = 'visible' | 'hidden';
@@ -41,6 +41,8 @@ export type AlignItems = 'normal' | 'stretch' | 'flex-start' | 'flex-end' | 'cen
 export type AlignContent = JustifyContent | 'stretch';
 export type AlignSelf = 'auto' | AlignItems;
 export type Visibility = 'visible' | 'hidden';
+export type ListStyleType = 'disc' | 'circle' | 'square' | 'decimal' | 'none';
+export type ListStylePosition = 'outside' | 'inside';
 
 export type ComputedStyle = {
   display: Display;
@@ -95,6 +97,9 @@ export type ComputedStyle = {
   whiteSpace: WhiteSpace;
 
   zIndex: ZIndex;
+
+  listStyleType: ListStyleType;
+  listStylePosition: ListStylePosition;
 
   flexDirection: FlexDirection;
   flexWrap: FlexWrap;
@@ -309,7 +314,7 @@ export const properties: PropertyTable = {
     cssName: 'display',
     initial: 'inline',
     inherited: false,
-    parse: keyword('block', 'inline', 'inline-block', 'flex', 'none'),
+    parse: keyword('block', 'inline', 'inline-block', 'flex', 'list-item', 'none'),
   },
   position: {
     cssName: 'position',
@@ -396,6 +401,19 @@ export const properties: PropertyTable = {
   },
 
   zIndex: own('z-index', AUTO, zIndex),
+
+  listStyleType: {
+    cssName: 'list-style-type',
+    initial: 'disc',
+    inherited: true,
+    parse: keyword('disc', 'circle', 'square', 'decimal', 'none'),
+  },
+  listStylePosition: {
+    cssName: 'list-style-position',
+    initial: 'outside',
+    inherited: true,
+    parse: keyword('outside', 'inside'),
+  },
 
   flexDirection: own(
     'flex-direction',

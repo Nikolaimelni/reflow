@@ -13,7 +13,7 @@ import type { ElementNode } from '../dom/node.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { type FlexItemInput, solveFlex } from './flex.js';
-import { type AtomicSize, layoutInlineContent } from './inline.js';
+import { type AtomicSize, hasOutsideMarker, layoutInlineContent } from './inline.js';
 import { intrinsicContentWidths, shrinkToFit } from './intrinsic.js';
 import {
   type CollapsedMargin,
@@ -23,7 +23,7 @@ import {
   withMargin,
 } from './margins.js';
 import { type AxisResult, relativeOffset, solveAbsoluteAxis } from './position.js';
-import type { TextMeasurer } from './text.js';
+import { fontOf, type TextMeasurer, usedLineHeight } from './text.js';
 import {
   clampSize,
   toContentBox,
@@ -281,8 +281,17 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const bottomEscapes =
     !isRoot && !independent && canCollapseBottom(style, padding, border, specifiedHeight);
 
-  // A trailing margin that cannot escape has to be paid for in this box's own height.
-  const fromContent = flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing));
+  // A trailing margin that cannot escape has to be paid for in this box's own height. A
+  // marker outside a list item has to sit on a line, and when nothing in the item makes one
+  // it makes its own, as tall as the item's line height, without pushing anything down.
+  const marker =
+    hasOutsideMarker(style) && flow.baseline === null
+      ? usedLineHeight(style, context.measurer.metrics(fontOf(style)))
+      : 0;
+  const fromContent = Math.max(
+    marker,
+    flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing)),
+  );
 
   // A used height is never negative, however far a negative margin pulls the content up.
   const height = Math.max(0, clampSize(specifiedHeight ?? fromContent, minHeight, maxHeight));
@@ -624,7 +633,7 @@ function collapsesThrough(
   const border = usedBorderWidths(box.style);
   const padding = usedPadding(box.style, containingWidth);
 
-  if (establishesBfc(box.style)) return false;
+  if (establishesBfc(box.style) || hasOutsideMarker(box.style)) return false;
   if (border.top + border.bottom + padding.top + padding.bottom > 0) return false;
 
   // A percentage height is a real height whenever there is something for it to be a

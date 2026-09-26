@@ -85,6 +85,17 @@ export function segmentText(text: string, whiteSpace: WhiteSpace): Segment[] {
   return segments;
 }
 
+/**
+ * How far a disc, circle or square inside a list item pushes the text after it. Blink does not
+ * measure a glyph for these: it sizes the symbol from the font's ascent, rounded to a whole
+ * pixel, and gives it a margin of a pixel less than nothing in front and an em behind.
+ */
+export function symbolMarkerAdvance(metrics: FontMetrics, fontSize: number): number {
+  const ascent = Math.round(metrics.ascent);
+  const symbol = Math.floor((Math.floor((ascent * 2) / 3) + 1) / 2) + 2;
+  return symbol - 1 + fontSize;
+}
+
 export function usedLineHeight(style: ComputedStyle, metrics: FontMetrics): number {
   switch (style.lineHeight.kind) {
     case 'normal':

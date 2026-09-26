@@ -43,6 +43,9 @@
     top: 240px;
     border: 1px solid;
   }
+  .held-inside {
+    white-space: nowrap;
+  }
   .out-of-flow {
     position: absolute;
     width: 90px;
@@ -60,3 +63,11 @@
 
 <div class="tall-frame"><span class="half-height">one</span></div>
 <div class="loose-frame"><span class="half-height">one</span></div>
+<div>
+  <span class="ib">
+    one
+    <span class="held-inside">
+      one
+    </span>
+  </span>
+</div>

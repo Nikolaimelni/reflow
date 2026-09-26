@@ -38,6 +38,8 @@ export function expandShorthand(cssName: string, value: readonly Token[]): Longh
       return flex(value);
     case 'gap':
       return gap(value);
+    case 'list-style':
+      return listStyle(value);
     case 'border':
       return border(BORDER_WIDTH, BORDER_STYLE, value);
     case 'border-top':
@@ -145,6 +147,39 @@ function flex(value: readonly Token[]): Longhand[] | null {
 
 function isZero(token: Token | undefined): boolean {
   return token?.type === 'number' && token.value === 0;
+}
+
+const TYPE_KEYWORDS = ['disc', 'circle', 'square', 'decimal'];
+const POSITION_KEYWORDS = ['outside', 'inside'];
+
+/**
+ * A type, a position, or both, in either order, and whatever is missing goes back to its
+ * initial value. `none` is the type, unless the type was given as well.
+ */
+function listStyle(value: readonly Token[]): Longhand[] | null {
+  let type: Token[] | null = null;
+  let position: Token[] | null = null;
+  let none = false;
+
+  for (const word of words(value)) {
+    const token = word[0];
+    if (word.length !== 1 || token?.type !== 'ident') return null;
+    const name = token.value.toLowerCase();
+
+    if (TYPE_KEYWORDS.includes(name) && type === null) type = word;
+    else if (POSITION_KEYWORDS.includes(name) && position === null) position = word;
+    else if (name === 'none' && !none) none = true;
+    else return null;
+  }
+
+  if (none && type !== null) return null;
+  return [
+    {
+      property: 'listStyleType',
+      value: type ?? [{ type: 'ident', value: none ? 'none' : 'disc' }],
+    },
+    { property: 'listStylePosition', value: position ?? [{ type: 'ident', value: 'outside' }] },
+  ];
 }
 
 /** One word sets both gaps, two set the row gap first. */

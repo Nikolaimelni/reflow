@@ -239,6 +239,18 @@ describe('shorthands', () => {
     expect(styles(node, 'div { flex: 1 10px 2 }')(node).flexGrow).toBe(0);
   });
 
+  it.each([
+    ['list-style: square', ['square', 'outside']],
+    ['list-style: inside', ['disc', 'inside']],
+    ['list-style: inside decimal', ['decimal', 'inside']],
+    ['list-style: none', ['none', 'outside']],
+  ] as const)('expands %s', (declaration, expected) => {
+    const node = element('li');
+    const style = styles(node, `li { ${declaration} }`)(node);
+
+    expect([style.listStyleType, style.listStylePosition]).toEqual(expected);
+  });
+
   it('sets the row gap first out of the gap shorthand', () => {
     const node = element('div');
     const one = styles(node, 'div { gap: 4px }')(node);

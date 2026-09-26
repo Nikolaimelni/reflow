@@ -53,6 +53,14 @@ describe('line boxes', () => {
     expect(rectOf(p).height).toBe(32);
   });
 
+  it('lets a line run a sixty-fourth of a pixel past the end and still fit', () => {
+    const p = element('p', {}, [text('aa bb')]);
+
+    // Forty wide in a box a LayoutUnit narrower than that stays on one line, as in Blink.
+    expect(page('p { margin: 0 }', [p], 40 - 1 / 64).lines).toHaveLength(1);
+    expect(page('p { margin: 0 }', [p], 40 - 2 / 64).lines).toHaveLength(2);
+  });
+
   it('drops the space that the break replaced', () => {
     const p = element('p', {}, [text('aa bb')]);
     const { lines } = page('p { margin: 0 }', [p], 30);
@@ -318,6 +326,17 @@ describe('inline boxes', () => {
 
     // The space inside the span comes first, so it stays there, and the one after it collapses.
     expect(page(css, [p]).rectOf(span)).toMatchObject({ x: 0, width: 24 });
+  });
+
+  it('breaks in front of a box whose content opens with a space', () => {
+    const box = element('span', { classes: ['padded'] }, [text(' cd')]);
+    const p = element('p', {}, [element('span', { classes: ['block'] }), box]);
+    const css =
+      'p { margin: 0 } .block { display: inline-block; width: 80px } .padded { padding-left: 10px }';
+
+    // Breaking after the space would leave the padding alone at the end of the line, so the
+    // whole box goes down, and the space it opened with is not drawn there.
+    expect(page(css, [p], 100).rectOf(box)).toMatchObject({ x: 0, y: 16, width: 26 });
   });
 
   it('breaks at the end of a run that crosses an empty box, not in front of it', () => {
@@ -615,6 +634,51 @@ describe('an inline-block whose last child clips', () => {
     // The child ends twelve above the inline-block's top, so that is its baseline, and the
     // inline-block sits twelve below the line's baseline: the line is that much deeper.
     expect(page(css, [p]).rectOf(p).height).toBeCloseTo(12.8 + 12);
+  });
+});
+
+describe('list markers', () => {
+  const item = (css: string, children: DomNode[] = []) => {
+    const li = element('li', {}, children);
+    const list = element('ul', {}, [li]);
+    return page(`ul { margin: 0; padding: 0 } ${css}`, [list]).rectOf(li);
+  };
+
+  it('gives an empty item a line for a marker outside it, and none without one', () => {
+    expect(item('').height).toBe(16);
+    expect(item('ul { list-style-type: none }').height).toBe(0);
+  });
+
+  it('makes the first line real for what sits on it beside an outside marker', () => {
+    const empty = element('span');
+    const li = element('li', {}, [empty]);
+    const laid = page('ul { margin: 0; padding: 0 }', [element('ul', {}, [li])]);
+
+    // On its own the empty span makes no line, but the marker is on it, so the span gets the
+    // strut of a real one.
+    expect(laid.rectOf(empty).height).toBe(16);
+  });
+
+  it('pushes the text along by a number inside the item', () => {
+    const word = element('span', {}, [text('x')]);
+    const li = element('li', {}, [word]);
+    const laid = page('ul { margin: 0; padding: 0; list-style: decimal inside }', [
+      element('ul', {}, [li]),
+    ]);
+
+    // "1. " is three characters at eight each.
+    expect(laid.rectOf(word).x).toBe(24);
+  });
+
+  it('pushes it by the room Blink gives a symbol, not by a character', () => {
+    const word = element('span', {}, [text('x')]);
+    const li = element('li', {}, [word]);
+    const laid = page('ul { margin: 0; padding: 0; list-style-position: inside }', [
+      element('ul', {}, [li]),
+    ]);
+
+    // An ascent of 12.8 rounds to 13, which makes a symbol of 6, then a pixel back and an em on.
+    expect(laid.rectOf(word).x).toBe(21);
   });
 });
 

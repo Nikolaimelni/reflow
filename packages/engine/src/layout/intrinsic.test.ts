@@ -27,6 +27,15 @@ describe('intrinsicWidths', () => {
     expect(widths(css, [box])).toMatchObject({ min: 16, max: 16 });
   });
 
+  it('counts a run of spaces across a nowrap boundary once', () => {
+    const held = element('span', { classes: ['held'] }, [text(' cd ')]);
+    const box = element('div', {}, [text('ab '), held]);
+    const css = '.held { white-space: nowrap }';
+
+    // "ab" and "cd" with one space between them, not two, and none after.
+    expect(widths(css, [box]).max).toBe(40);
+  });
+
   it('takes the minimum from the longest word and the maximum from the whole run', () => {
     const p = element('p', {}, [text('aa bbbb cc')]);
     // "bbbb" is 32, and the whole thing is 8+4+16+4+8 wide with its two spaces

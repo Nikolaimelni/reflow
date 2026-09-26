@@ -1,0 +1,132 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>list items and the markers they carry</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+  }
+  .none {
+    list-style-type: none;
+  }
+  .inside {
+    list-style-position: inside;
+  }
+  .large {
+    font-size: 30px;
+  }
+  .spaced {
+    line-height: 40px;
+  }
+  .squeezed {
+    line-height: 5px;
+  }
+  .shorthand {
+    list-style: square inside;
+  }
+  .shorthand-none {
+    list-style: none;
+  }
+  .ten {
+    height: 10px;
+    background-color: #d8c8a8;
+  }
+  .made-item {
+    display: list-item;
+  }
+  .empty-inline {
+    display: inline;
+  }
+  .margined {
+    margin: 12px 0;
+  }
+</style>
+
+<ul>
+  <li>one</li>
+  <li></li>
+  <li>two</li>
+</ul>
+<ol>
+  <li>one</li>
+  <li></li>
+  <li>two</li>
+</ol>
+<ul class="none">
+  <li>one</li>
+  <li></li>
+  <li>two</li>
+</ul>
+<ul class="inside">
+  <li><span>one</span></li>
+  <li></li>
+  <li>two words that wrap onto another line</li>
+</ul>
+<ol class="inside">
+  <li><span>one</span></li>
+  <li></li>
+  <li><span>three</span></li>
+  <li><span>four</span></li>
+  <li><span>five</span></li>
+  <li><span>six</span></li>
+  <li><span>seven</span></li>
+  <li><span>eight</span></li>
+  <li><span>nine</span></li>
+  <li><span>ten</span></li>
+</ol>
+<ul>
+  <li><div>block</div></li>
+  <li><div></div></li>
+  <li><div class="ten"></div></li>
+  <li><div>first</div><div>second</div></li>
+</ul>
+<ul class="inside">
+  <li><div>block</div></li>
+</ul>
+<ul class="large">
+  <li>one</li>
+  <li></li>
+</ul>
+<ul class="large inside">
+  <li><span>one</span></li>
+</ul>
+<ul class="spaced">
+  <li></li>
+</ul>
+<ul class="squeezed">
+  <li>one</li>
+  <li></li>
+</ul>
+<ul class="shorthand">
+  <li><span>square</span></li>
+</ul>
+<ul class="shorthand-none">
+  <li></li>
+</ul>
+<div>
+  <div class="made-item">one</div>
+  <div class="made-item"></div>
+  <span class="made-item">x</span>
+</div>
+<ul>
+  <li class="margined"></li>
+  <li class="margined"></li>
+</ul>
+<ul>
+  <li>
+    outer
+    <ul>
+      <li>inner</li>
+      <li></li>
+    </ul>
+  </li>
+</ul>
+<ul>
+  <li>
+    <div class="empty-inline"></div>
+  </li>
+  <li><span></span></li>
+  <li>
+  </li>
+</ul>

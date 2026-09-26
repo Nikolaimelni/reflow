@@ -8,6 +8,7 @@ import {
   type FontMetrics,
   fontOf,
   segmentText,
+  symbolMarkerAdvance,
   type TextMeasurer,
   usedLineHeight,
   wraps,
@@ -464,6 +465,15 @@ function idle(kind: PieceKind | undefined): boolean {
   return kind === 'edge-end' || kind === 'out-of-flow';
 }
 
+/** A list item whose marker hangs outside it, which still needs a line to sit on. */
+export function hasOutsideMarker(style: ComputedStyle): boolean {
+  return (
+    style.display === 'list-item' &&
+    style.listStylePosition === 'outside' &&
+    style.listStyleType !== 'none'
+  );
+}
+
 /**
  * Whether an item would put anything on the line after a newline: content, the opening of a
  * box, preserved whitespace, or another newline. A box closing, a space that collapses and a
@@ -598,7 +608,9 @@ function collect(
           kind: segment.kind === 'word' ? 'glyphs' : 'space',
           box: child.id,
           source: null,
-          width: input.measurer.advance(segment.text, font),
+          width: child.symbol
+            ? symbolMarkerAdvance(metrics, font.size)
+            : input.measurer.advance(segment.text, font),
           height,
           baseline: metrics.ascent,
           style: child.style,
@@ -827,6 +839,13 @@ function intoEntries(items: readonly Item[]): Entry[] {
  * One of those goes to the next line when it comes too late for this one. One written inside
  * a run that cannot break stays where it is, however far over the edge that is.
  */
+/**
+ * How far past the end a line may run and still count as fitting: one LayoutUnit. Blink adds
+ * it to the width it tests against, so that a width rounded down on the way in does not push
+ * a word that measured exactly that wide onto the next line.
+ */
+const FIT_SLACK = 1 / 64;
+
 function breakIntoLines(
   items: readonly Item[],
   input: InlineInput,
@@ -869,7 +888,10 @@ function breakIntoLines(
     boundaries.clear();
     if (current.length === 0 && !force) return;
 
-    lines.push({ items: current, width, ...verticalMetrics(current, input, force) });
+    // The marker outside a list item sits on its first line, which makes that line a line
+    // whatever else is on it.
+    const marked = lines.length === 0 && hasOutsideMarker(input.container.style);
+    lines.push({ items: current, width, ...verticalMetrics(current, input, force || marked) });
     current = [];
     width = 0;
     content = false;
@@ -930,7 +952,15 @@ function breakIntoLines(
       if (!behind.some(({ piece }) => !isMarker(piece.kind) && piece.kind !== 'space')) continue;
 
       const before = current[at - 1]?.piece;
-      if (before?.kind === 'space' && wraps(before.style.whiteSpace)) return at;
+      if (before?.kind === 'space' && wraps(before.style.whiteSpace)) {
+        // A space that is the first thing inside a box breaks in front of the box: its
+        // opening edge would be left on its own at the end of the line otherwise. The space
+        // goes down with it and vanishes at the start of the new line.
+        let start = at - 1;
+        while (start > 0 && current[start - 1]?.piece.kind === 'edge-start') start--;
+        const content = current.slice(0, start).some(({ piece }) => holdsALine(piece));
+        return start < at - 1 && content ? start : at;
+      }
 
       if (boundaries.has(at) && current.slice(0, at).some(({ piece }) => holdsALine(piece))) {
         return at;
@@ -949,14 +979,23 @@ function breakIntoLines(
     const ahead = [...boundaries].filter((at) => at > from).map((at) => at - from);
     width = carried[0]?.x ?? width;
     flush();
-    for (const at of ahead) boundaries.add(at);
 
-    const base = carried[0]?.x ?? 0;
-    for (const placed of carried) {
-      current.push({ piece: placed.piece, x: placed.x - base });
-      width = placed.x - base + placed.piece.width;
-      if (!isMarker(placed.piece.kind) && placed.piece.kind !== 'space') content = true;
-    }
+    // A collapsible space at the start of the new line is not drawn, so it goes, along with
+    // the room it took and its place in the count the boundaries are kept by.
+    let shift = carried[0]?.x ?? 0;
+    const dropped: number[] = [];
+    carried.forEach((placed, index) => {
+      const { piece } = placed;
+      if (!content && piece.kind === 'space' && wraps(piece.style.whiteSpace)) {
+        shift += piece.width;
+        dropped.push(index);
+        return;
+      }
+      current.push({ piece, x: placed.x - shift });
+      width = placed.x - shift + piece.width;
+      if (!isMarker(piece.kind) && piece.kind !== 'space') content = true;
+    });
+    for (const at of ahead) boundaries.add(at - dropped.filter((index) => index < at).length);
   };
 
   const rewind = () => {
@@ -1026,17 +1065,17 @@ function breakIntoLines(
     // may already be over the edge, but the break is decided when its content arrives, and
     // then the space in front of the box is a place to break.
     const opening = !entry.chunk.content && entry.chunk.pieces.at(-1)?.kind === 'edge-start';
-    if (!opening && width - hangs(true) > input.available) rewind();
+    if (!opening && width - hangs(true) > input.available + FIT_SLACK) rewind();
   }
 
   // Nothing follows the end of the paragraph, so the closing edges take their room after all.
-  while (width - hangs(false) > input.available) {
+  while (width - hangs(false) > input.available + FIT_SLACK) {
     const before = lines.length;
     rewind();
     if (lines.length === before) break;
   }
 
-  flush();
+  flush(lines.length === 0 && hasOutsideMarker(input.container.style));
   return { lines, atBreak };
 }
 

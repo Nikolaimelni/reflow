@@ -1,9 +1,6 @@
 /**
  * The slice of the browser default stylesheet that changes layout. Without it a `div` would
  * compute to `display: inline` and every fixture would disagree with Chromium on line one.
- *
- * `li` is `display: list-item` in a real browser. There are no markers here, and the box it
- * generates is a block, so block is what it gets.
  */
 const BLOCK_TAGS = [
   'html',
@@ -87,6 +84,11 @@ h4 { margin: 1.33em 0 }
 h5 { font-size: 0.83em; margin: 1.67em 0 }
 h6 { font-size: 0.67em; margin: 2.33em 0 }
 ul, ol { margin: 1em 0; padding-left: 40px }
+li { display: list-item }
+ol { list-style-type: decimal }
+ul ul, ol ul, ul ol, ol ol { margin-top: 0; margin-bottom: 0 }
+ul ul, ol ul { list-style-type: circle }
+ul ul ul, ol ul ul, ul ol ul, ol ol ul { list-style-type: square }
 dd { margin-left: 40px }
 blockquote, figure { margin: 1em 40px }
 pre { white-space: pre; margin: 1em 0; font-family: monospace }

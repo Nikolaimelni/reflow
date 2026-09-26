@@ -25,7 +25,7 @@ const factor = fc.integer({ min: 0, max: 3 }).map(String);
 
 const declarations = fc.record(
   {
-    display: fc.constantFrom('block', 'inline', 'inline-block', 'flex'),
+    display: fc.constantFrom('block', 'inline', 'inline-block', 'flex', 'list-item'),
     position: fc.constantFrom('static', 'relative', 'absolute'),
     'box-sizing': fc.constantFrom('content-box', 'border-box'),
     overflow: fc.constantFrom('visible', 'hidden'),
@@ -83,6 +83,8 @@ const declarations = fc.record(
       'stretch',
     ),
     order: fc.integer({ min: -2, max: 2 }).map(String),
+    'list-style-type': fc.constantFrom('disc', 'circle', 'square', 'decimal', 'none'),
+    'list-style-position': fc.constantFrom('outside', 'inside'),
     gap: fc.oneof(
       px,
       percent,
@@ -110,7 +112,7 @@ const text = fc.oneof(
  */
 const node: fc.Arbitrary<GeneratedNode> = fc.letrec<{ node: GeneratedNode }>((tie) => ({
   node: fc.record({
-    tag: fc.constantFrom('div', 'p', 'span', 'section', 'em'),
+    tag: fc.constantFrom('div', 'p', 'span', 'section', 'em', 'li'),
     declarations,
     text,
     children: fc.oneof(

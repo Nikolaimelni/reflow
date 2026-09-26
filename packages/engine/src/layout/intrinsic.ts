@@ -1,6 +1,6 @@
 import type { Box } from '../boxtree/box.js';
 import { isBlock } from '../boxtree/box.js';
-import { fontOf, segmentText, type TextMeasurer, wraps } from './text.js';
+import { fontOf, segmentText, symbolMarkerAdvance, type TextMeasurer, wraps } from './text.js';
 import {
   clampSize,
   toContentBox,
@@ -143,12 +143,23 @@ function inlineIntrinsic(
             continue;
           }
 
-          const width = measurer.advance(segment.text, fontOf(child.style));
+          const font = fontOf(child.style);
+          const width = child.symbol
+            ? symbolMarkerAdvance(measurer.metrics(font), font.size)
+            : measurer.advance(segment.text, font);
 
           if (segment.kind === 'space') {
             if (preserve) add(width);
             else if (!content) continue;
-            else if (wraps(child.style.whiteSpace)) {
+            else if (gap > 0 || glue > 0) {
+              // A run of spaces counts once, and it is the first that counts, the same as on
+              // the line. One that may break still makes the run somewhere to break.
+              if (glue > 0 && wraps(child.style.whiteSpace)) {
+                endRun();
+                gap = glue;
+                glue = 0;
+              }
+            } else if (wraps(child.style.whiteSpace)) {
               endRun();
               gap = width;
             } else {
