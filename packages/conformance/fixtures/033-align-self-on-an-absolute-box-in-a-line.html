@@ -37,6 +37,16 @@
   .spaced-lines {
     line-height: 40px;
   }
+  .held-wide {
+    white-space: nowrap;
+    padding-left: 45px;
+    border: 3px solid;
+  }
+  .over {
+    display: inline-block;
+    width: 181px;
+    height: 10px;
+  }
   .empty-block {
     display: inline-block;
   }
@@ -58,3 +68,7 @@
 <div><span></span><span class="out inline-level at-end"></span></div>
 <div><div class="empty-block"></div><div class="out centred"></div></div>
 <div>word<div class="out at-start"></div></div>
+<div><span class="held-wide">one one one three</span> <div class="out centred"></div></div>
+<div><span class="held-wide">one one one three</span> <div class="out at-end"></div></div>
+<div>internationalisationxxxxxx <div class="out at-end"></div></div>
+<div><span class="over"></span><div class="out at-end"></div></div>

@@ -196,10 +196,19 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
           // makes has been laid out, which a block cutting it in two may not have been yet.
           const within = piece.ancestors.findLast((id) => isPositioned(surrounds.get(id)));
           // Inside a line it is aligned in that line's box, or in one as tall below it when it
-          // went under the line. A line with nothing on it is no line at all to Chromium, so a
-          // box there aligns about its static position, except an inline-level one that is
-          // the only thing in the block: that one does not move. Measured, not derived.
-          const room = line.phantom ? (inline && alone ? null : 0) : line.height;
+          // went under the line, unless that line ran over the edge, and then about the point
+          // it went to. A line with nothing on it is no line at all to Chromium, so a box there
+          // aligns about its static position, except an inline-level one that is the only
+          // thing in the block: that one does not move. Measured, not derived.
+          const under = !inline && behind && !late;
+          const overflowed = line.width > input.available + FIT_SLACK;
+          const room = line.phantom
+            ? inline && alone
+              ? null
+              : 0
+            : under && overflowed
+              ? 0
+              : line.height;
           input.defer(deferred, x, top, room, within ?? null);
         }
         continue;
@@ -521,8 +530,10 @@ function takesRoom(piece: Piece): boolean {
     : [style.paddingRight, style.marginRight];
   const border = usedBorderWidths(style)[start ? 'left' : 'right'];
 
+  // A percentage that is not zero counts even when it resolves to nothing; zero is zero in
+  // any unit.
   const given = (value: typeof padding | typeof margin) =>
-    value.kind === 'percent' || (value.kind === 'px' && value.value !== 0);
+    (value.kind === 'percent' || value.kind === 'px') && value.value !== 0;
   return given(padding) || given(margin) || border !== 0;
 }
 

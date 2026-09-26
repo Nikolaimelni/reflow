@@ -195,6 +195,9 @@ function inlineIntrinsic(
   visit(children);
   endLine();
 
-  // Nothing can break, so the narrowest the content goes is also the widest it gets.
-  return canWrap ? { min, max } : { min: max, max };
+  // Nothing can break, so the narrowest the content goes is also the widest it gets. Blink
+  // keeps these in sixty-fourths of a pixel, rounded up, so text measured a hair under a
+  // sixty-fourth still asks for the whole of it.
+  const up = (value: number) => Math.ceil(value * 64 - 1e-6) / 64;
+  return canWrap ? { min: up(min), max: up(max) } : { min: up(max), max: up(max) };
 }

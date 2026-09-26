@@ -297,7 +297,8 @@ function resolveMainSizes(input: FlexLineInput): number[] {
     const moved = items.map((item, i) => {
       if (frozen[i]) return { want: target[i] ?? 0, got: target[i] ?? 0 };
 
-      const want = item.basis + (weights === 0 ? 0 : (free * weight(item)) / weights);
+      const share = weights === 0 ? 0 : (free * weight(item)) / weights;
+      const want = item.basis + toLayoutUnit(share);
       const got = Math.max(0, clamp(want, item.minMain, item.maxMain));
       violation += got - want;
       return { want, got };
@@ -428,6 +429,15 @@ function distribute(
     default:
       return { leading: 0, between: 0 };
   }
+}
+
+/**
+ * Blink adds each item's share of the space as a whole number of sixty-fourths, rounded to the
+ * nearest and away from zero at the half. It is a fraction of a pixel, and it decides whether
+ * the last word of a line still fits in an item that was only just squeezed.
+ */
+function toLayoutUnit(value: number): number {
+  return (Math.sign(value) * Math.round(Math.abs(value) * 64)) / 64;
 }
 
 function clamp(value: number, min: number, max: number | null): number {

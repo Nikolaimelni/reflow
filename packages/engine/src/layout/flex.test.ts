@@ -58,8 +58,8 @@ describe('main axis sizing', () => {
     const result = line({
       items: [item({ basis: 50, grow: 1 }), item({ basis: 50, grow: 2 })],
     });
-    // 200 left over, split one to two
-    expect(mains(result)).toEqual([50 + 200 / 3, 50 + 400 / 3]);
+    // 200 left over, split one to two, each share rounded to a sixty-fourth of a pixel.
+    expect(mains(result)).toEqual([50 + 4267 / 64, 50 + 8533 / 64]);
   });
 
   it('weighs shrinking by the base size as well as the factor', () => {
