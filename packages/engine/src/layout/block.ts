@@ -1397,6 +1397,12 @@ function itemMetrics(
   const automatic = Math.min(content, asked ?? content, maxMain ?? content);
   const minMain = toContentBox(style.boxSizing, usedSize(minStyle, basis_), along) ?? automatic;
 
+  // Only an item whose cross size is auto stretches. A percentage with nothing definite to be
+  // a percentage of sizes the item from its content the way auto would, but it is not auto,
+  // and on that item stretch is flex-start.
+  const unstretchable =
+    crossStyle.kind !== 'auto' && (aligned === 'normal' || aligned === 'stretch');
+
   return {
     fit,
     input: {
@@ -1433,7 +1439,7 @@ function itemMetrics(
           isRow ? style.marginBottom : style.marginRight,
         ),
       ),
-      align: style.alignSelf === 'auto' ? null : style.alignSelf,
+      align: unstretchable ? 'flex-start' : style.alignSelf === 'auto' ? null : style.alignSelf,
       crossSize,
       minCross,
       maxCross,

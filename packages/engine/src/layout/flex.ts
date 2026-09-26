@@ -202,7 +202,8 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   const mainSize = input.mainSize ?? contentMain;
 
   // An auto margin on the main axis eats the free space before `justify-content` sees any,
-  // which is how `margin-left: auto` pushes one item to the far end of a row.
+  // which is how `margin-left: auto` pushes one item to the far end of a row. When the line
+  // overflows the margins come to nothing, and the overflow is aligned like any other.
   const hungry = input.items.reduce(
     (count, item) => count + (item.autoMainStart ? 1 : 0) + (item.autoMainEnd ? 1 : 0),
     0,
@@ -210,7 +211,7 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   const free = mainSize - contentMain;
   const share = hungry > 0 && free > 0 ? free / hungry : 0;
 
-  const spacing = distribute(input.justify, input.items.length, hungry > 0 ? 0 : free);
+  const spacing = distribute(input.justify, input.items.length, share > 0 ? 0 : free);
   const mainStarts: number[] = [];
   let cursor = spacing.leading;
 

@@ -304,6 +304,29 @@
     margin-bottom: 3%;
     background-color: #c8d8e8;
   }
+  .over-wide {
+    width: 440px;
+    flex-shrink: 0;
+    margin: auto;
+    background-color: #c8c8e8;
+  }
+  .row > .over-tall {
+    height: 80px;
+    margin-top: auto;
+    background-color: #e8c8d8;
+  }
+  .row > .taller {
+    height: 40px;
+  }
+  .row > .half-tall,
+  .half-tall {
+    height: 50%;
+    background-color: #d8d8c8;
+  }
+  .row > .sunk-half {
+    height: 0%;
+    margin-top: -12px;
+  }
 </style>
 
 <div class="row"><div class="fixed"></div><div class="grows"></div></div>
@@ -387,3 +410,10 @@
 <div class="row auto-height"><div class="centred-by-margins"></div><div class="nudged-down">one</div></div>
 <div class="row auto-height"><div>one one</div><div class="just-over"></div></div>
 <div class="row auto-height"><div><div>one one</div></div><div class="squeezed-wide">one of</div></div>
+<div class="row ending"><div class="over-wide"></div></div>
+<div class="row back"><div class="over-wide"></div></div>
+<div class="row tall bottomed"><div class="fixed over-tall"></div></div>
+<div class="row"><div class="fixed taller"></div><div class="fixed half-tall">one</div></div>
+<div class="row wrapping other-way"><div class="fixed taller"></div><div class="fixed half-tall">one</div></div>
+<div class="row"><div class="fixed sunk-half"></div></div>
+<div class="row auto-height"><div class="fixed taller"></div><div class="fixed"><div class="half-tall">one</div></div></div>

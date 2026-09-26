@@ -150,6 +150,17 @@ describe('justify-content', () => {
   it('gives every gap the same width', () => {
     expect(run('space-evenly')).toEqual([200 / 3, 50 + (200 / 3) * 2]);
   });
+
+  it('still aligns an item too wide for the line, whose auto margins have nothing to take', () => {
+    const items = [item({ basis: 130, shrink: 0, autoMainStart: true, autoMainEnd: true })];
+    const run = (justify: JustifyContent, reverse = false) =>
+      starts(line({ justify, reverse, mainSize: 100, items }));
+
+    expect(run('flex-end')).toEqual([-30]);
+    expect(run('center')).toEqual([-15]);
+    expect(run('space-around')).toEqual([0]);
+    expect(run('flex-start', true)).toEqual([-30]);
+  });
 });
 
 describe('cross axis', () => {

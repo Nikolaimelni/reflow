@@ -282,6 +282,17 @@ describe('margin collapsing', () => {
     expect(page(css, [row]).rectOf(cell).height).toBe(6);
   });
 
+  it('stretches only a flex item whose cross size is auto', () => {
+    const tall = element('div', { classes: ['tall'] });
+    const half = element('div', { classes: ['half'] });
+    const row = element('div', { classes: ['row'] }, [tall, half]);
+    const css = '.row { display: flex } .tall { height: 40px } .half { height: 50% }';
+
+    // Half of a row with no height of its own is half of nothing definite, so the item is as
+    // tall as its content. It still was not auto, and it does not stretch to the line.
+    expect(page(css, [row]).rectOf(half).height).toBe(0);
+  });
+
   it('collapses a margin through an inline that puts nothing on a line', () => {
     const css = '.after { margin-top: 18px; height: 10px } .marked { padding-left: 4px }';
     const build = (span: ElementNode) =>
