@@ -31,7 +31,8 @@ export type AtomicSize = {
 
 export type InlineResult = {
   height: number;
-  /** The last line's baseline, measured from the content top, for a parent to align to. */
+  /** The first and last lines' baselines, measured from the content top. */
+  firstBaseline: number | null;
   lastBaseline: number | null;
 };
 
@@ -82,6 +83,8 @@ type Piece = {
    * remembers what the tag was. Measured, not found in a spec.
    */
   mayHang: boolean;
+  /** Part of a list marker inside its item, which a space after it does not count as content. */
+  listMarker: boolean;
   ancestors: readonly BoxId[];
   /** Relative offsets of the inline boxes this piece sits inside, already added up. */
   offset: Offset;
@@ -136,6 +139,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   );
 
   let y = input.contentTop;
+  let firstBaseline: number | null = null;
   let lastBaseline: number | null = null;
   const extents = new Map<BoxId, Extent>();
   const perLine = new Map<BoxId, Extent[]>();
@@ -153,7 +157,10 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     const offset = alignmentOffset(input.containerStyle, input.available, line.width);
     // A line with nothing on it is treated as not being there for anything but placing what
     // is in it, and a baseline is one of those other things.
-    if (!line.phantom) lastBaseline = y + line.baseline - input.contentTop;
+    if (!line.phantom) {
+      lastBaseline = y + line.baseline - input.contentTop;
+      firstBaseline ??= lastBaseline;
+    }
     const onThisLine = new Map<BoxId, Extent>();
     const whole = opensAndCloses(line);
     /** Whether anything on this line has been laid down yet, which an out of flow box asks. */
@@ -239,7 +246,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 
         const at = input.contentX + offset + placed.x + piece.offset.dx;
         if (line.height === 0) {
-          if (!stranded.has(piece.box)) stranded.set(piece.box, { x: at, y });
+          if (!stranded.has(piece.box)) stranded.set(piece.box, { x: at, y: y + piece.offset.dy });
           continue;
         }
         if (!takesRoom(piece) && !whole.has(piece.box)) continue;
@@ -397,7 +404,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     });
   }
 
-  return { height: y - input.contentTop, lastBaseline };
+  return { height: y - input.contentTop, firstBaseline, lastBaseline };
 }
 
 /**
@@ -703,17 +710,22 @@ function collect(
           kind: segment.kind === 'word' ? 'glyphs' : 'space',
           box: child.id,
           source: null,
-          width: child.symbol
-            ? symbolMarkerAdvance(metrics, font.size)
-            : input.measurer.advance(segment.text, font),
+          width:
+            child.listMarker === 'symbol'
+              ? symbolMarkerAdvance(metrics, font.size)
+              : input.measurer.advance(segment.text, font),
           height,
           baseline: metrics.ascent,
           style: child.style,
           mayHang: true,
+          listMarker: child.listMarker !== null,
           ancestors,
           offset,
         });
       }
+      // A marker inside its item can be broken after, the way an atomic inline can, whether or
+      // not a space follows it.
+      if (child.listMarker !== null && wrapping) items.push({ kind: 'boundary' });
       continue;
     }
 
@@ -732,6 +744,7 @@ function collect(
         baseline: null,
         style: child.style,
         mayHang: hangs,
+        listMarker: false,
         ancestors: inside,
         offset: surround.offset,
       });
@@ -781,6 +794,7 @@ function collect(
         baseline: null,
         style: child.style,
         mayHang: true,
+        listMarker: false,
         ancestors,
         offset,
       });
@@ -799,6 +813,7 @@ function collect(
         baseline: size.baseline,
         style: child.style,
         mayHang: true,
+        listMarker: false,
         ancestors,
         offset,
       });
@@ -873,7 +888,7 @@ function intoEntries(items: readonly Item[]): Entry[] {
     }
     pieces.push(piece);
     width += piece.width;
-    if (!isMarker(piece.kind)) content = true;
+    if (!isMarker(piece.kind) && !piece.listMarker) content = true;
   };
 
   items.forEach((item, index) => {

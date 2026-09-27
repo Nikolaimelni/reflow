@@ -1,0 +1,75 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>flex items lined up by their first baselines</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  .row {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 10px;
+    border-bottom: 1px solid;
+  }
+  .narrow {
+    width: 30px;
+  }
+  .clips {
+    overflow: hidden;
+  }
+  .tall {
+    height: 20px;
+    background-color: #d8e8c8;
+  }
+  .column {
+    display: flex;
+    flex-direction: column;
+  }
+  .inner-row {
+    display: flex;
+  }
+  .stub {
+    width: 5px;
+  }
+  .shrunk {
+    display: inline-block;
+    width: 30px;
+    background-color: #e8d8c8;
+  }
+  .small {
+    font-size: 9px;
+  }
+</style>
+
+<div class="row"><div class="narrow">one two three</div><div>x</div></div>
+<div class="row">
+  <div><div class="narrow">one two</div><div>three</div></div>
+  <div>x</div>
+</div>
+<div class="row">
+  <div><div class="clips narrow">one two</div><div>three</div></div>
+  <div>x</div>
+</div>
+<div class="row">
+  <div><div class="clips tall"></div><div>three</div></div>
+  <div>x</div>
+</div>
+<div class="row">
+  <div><div class="tall"></div><div>three</div></div>
+  <div>x</div>
+</div>
+<div class="row">
+  <div class="column"><div class="tall">one</div><div>two</div></div>
+  <div>x</div>
+</div>
+<div class="row">
+  <div class="inner-row"><div class="tall stub"></div></div>
+  <div>x</div>
+</div>
+<div class="row">
+  <div><span class="shrunk">one two</span></div>
+  <div>x</div>
+</div>
+<div class="row small">one one <div class="narrow">liquorice three</div><div class="tall stub"></div></div>

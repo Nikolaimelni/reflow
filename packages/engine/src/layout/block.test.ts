@@ -298,6 +298,31 @@ describe('margin collapsing', () => {
     expect(page(css, [row]).rectOf(cell).height).toBe(6);
   });
 
+  it('lines flex items up by their first baselines', () => {
+    const wrapped = element('div', { classes: ['narrow'] }, [text('ab cd')]);
+    const short = element('div', {}, [text('x')]);
+    const row = element('div', { classes: ['row'] }, [wrapped, short]);
+    const css = '.row { display: flex; align-items: baseline } .narrow { width: 20px }';
+
+    // Two lines in the first item, and the second item sits level with the upper one.
+    expect(page(css, [row]).rectOf(short).y).toBe(0);
+  });
+
+  it('gives a flex container the baseline of the item that comes first on the page', () => {
+    const inner = element('div', { classes: ['inner'] }, [
+      element('div', { classes: ['big'] }, [text('a')]),
+      element('div', {}, [text('b')]),
+    ]);
+    const short = element('div', {}, [text('x')]);
+    const row = element('div', { classes: ['row'] }, [inner, short]);
+    const css =
+      '.row { display: flex; align-items: baseline } .inner { display: flex; flex-direction: column-reverse } .big { font-size: 32px }';
+
+    // Reversed, so it is the second item that is on top, and its baseline is 12.8 down.
+    expect(page(css, [row]).rectOf(short).y).toBe(0);
+    expect(page(css.replace('column-reverse', 'column'), [row]).rectOf(short).y).toBeCloseTo(12.8);
+  });
+
   it('stretches only a flex item whose cross size is auto', () => {
     const tall = element('div', { classes: ['tall'] });
     const half = element('div', { classes: ['half'] });

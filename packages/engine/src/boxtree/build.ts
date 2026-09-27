@@ -95,7 +95,7 @@ function insideMarker(
 ): TextBox {
   const marker = { ...style, whiteSpace: 'pre' as const };
   if (style.listStyleType !== 'decimal') {
-    return { kind: 'text', id: ids(), text: '•', style: marker, symbol: true };
+    return { kind: 'text', id: ids(), text: '•', style: marker, listMarker: 'symbol' };
   }
 
   // Counted among the element's siblings that are list items, which is what the counter the
@@ -103,7 +103,7 @@ function insideMarker(
   const siblings = node.parent === null ? [node] : elementChildren(node.parent);
   const before = siblings.slice(0, siblings.indexOf(node) + 1);
   const ordinal = before.filter((one) => styles.get(one)?.display === 'list-item').length;
-  return { kind: 'text', id: ids(), text: `${ordinal}. `, style: marker, symbol: false };
+  return { kind: 'text', id: ids(), text: `${ordinal}. `, style: marker, listMarker: 'counter' };
 }
 
 /**
@@ -177,7 +177,7 @@ function buildChildBox(
   ids: IdSource,
 ): Box | null {
   if (child.kind === 'text') {
-    return { kind: 'text', id: ids(), text: child.text, style: parentStyle, symbol: false };
+    return { kind: 'text', id: ids(), text: child.text, style: parentStyle, listMarker: null };
   }
   return buildBox(child, styles, ids);
 }

@@ -667,6 +667,18 @@ describe('a line with nothing on it', () => {
     // sits on its bottom edge: forty above the baseline and the descent of the strut below.
     expect(page(css, [p]).rectOf(p).height).toBeCloseTo(43.2);
   });
+
+  it('moves an empty inline left on it by its relative offset, down as well as across', () => {
+    const empty = element('span', { classes: ['moved'] });
+    const css = 'p { margin: 0 } .moved { position: relative; top: 3px; left: 2px }';
+
+    expect(page(css, [element('p', {}, [empty])]).rectOf(empty)).toMatchObject({
+      x: 2,
+      y: 3,
+      width: 0,
+      height: 0,
+    });
+  });
 });
 
 describe('an inline-block whose last child clips', () => {
@@ -726,6 +738,17 @@ describe('list markers', () => {
     // An ascent of 12.8 rounds to 13, which makes a symbol of 6, then a pixel back and an em on.
     expect(laid.rectOf(word).x).toBe(21);
   });
+
+  it('drops the space after it and can break straight after it', () => {
+    const word = element('span', {}, [text('ab')]);
+    const css = 'ul { margin: 0; padding: 0; list-style: decimal inside }';
+    const list = () => element('ul', {}, [element('li', {}, [text(' '), word, text(' cd')])]);
+
+    // The space goes the way one at the start of a line would, so "1. " is all there is in
+    // front of the word. Too narrow for both, and the line breaks after the marker.
+    expect(page(css, [list()]).rectOf(word).x).toBe(24);
+    expect(page(css, [list()], 30).rectOf(word)).toMatchObject({ x: 0, y: 16 });
+  });
 });
 
 describe('a positioned inline', () => {
@@ -752,6 +775,21 @@ describe('a positioned inline', () => {
     // Nothing after the block, so the box around it is the last one and the containing block
     // is as wide as the line and as tall as the block.
     expect(page(wide, [p], 100).rectOf(fill)).toMatchObject({ x: 0, y: 0, width: 100, height: 20 });
+  });
+
+  it('is the containing block for what is absolute inside the block that cut it', () => {
+    const fill = element('span', { classes: ['fill'] });
+    const anchor = element('span', { classes: ['plain'] }, [text('x'), element('div', {}, [fill])]);
+    const wide = `${css} .plain { position: relative }`;
+
+    // The block between the halves holds nothing that takes room, so it has no height and does
+    // not count, and nor does the empty half after it: the first half is all there is.
+    expect(page(wide, [element('p', {}, [anchor])], 100).rectOf(fill)).toMatchObject({
+      x: 0,
+      y: 0,
+      width: 8,
+      height: 16,
+    });
   });
 
   it('runs from its first box to its last when it wraps', () => {

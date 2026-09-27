@@ -41,6 +41,22 @@
   .margined {
     margin: 12px 0;
   }
+  .narrow {
+    width: 50px;
+    padding: 0;
+  }
+  .kept-together {
+    white-space: nowrap;
+  }
+  .holder {
+    position: relative;
+    height: 60px;
+  }
+  .fitted {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+  }
 </style>
 
 <ul>
@@ -130,3 +146,20 @@
   <li>
   </li>
 </ul>
+<ul class="inside narrow">
+  <li> one <span>two</span></li>
+  <li>internationalisation</li>
+</ul>
+<ol class="inside narrow">
+  <li> one <span>two</span></li>
+</ol>
+<ul class="inside narrow kept-together">
+  <li> one <span>two</span></li>
+</ul>
+<div class="holder">
+  <ul class="inside fitted">
+    <li>
+      one
+    </li>
+  </ul>
+</div>

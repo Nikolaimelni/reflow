@@ -7,6 +7,7 @@ import {
   inFlexOrder,
   isBlock,
   isCollapsibleWhitespace,
+  walkBoxes,
 } from '../boxtree/box.js';
 import type { AlignContent, AlignItems, ComputedStyle } from '../cascade/properties.js';
 import type { ElementNode } from '../dom/node.js';
@@ -77,6 +78,8 @@ type Context = {
   /** Every box an element made, in order, for a positioned inline that was cut in two. */
   boxesOf: ReadonlyMap<ElementNode, readonly BoxId[]>;
   elementOf: ReadonlyMap<BoxId, ElementNode>;
+  /** Elements laid out as inline boxes that are positioned, and so containing blocks. */
+  positionedInlines: ReadonlySet<ElementNode>;
 };
 
 /** An out of flow box, parked until the containing block it belongs to has a size. */
@@ -135,6 +138,8 @@ type BlockResult = {
   collapsedThrough: boolean;
   /** Last line box baseline, measured from the border-box top, for an atomic inline. */
   baseline: number | null;
+  /** The first, which is the one a flex line lines its items up by. */
+  firstBaseline: number | null;
 };
 
 type Horizontal = {
@@ -249,7 +254,14 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   // A positioned box is the containing block for the absolute boxes under it, so it collects
   // them on the way down and places them once its own size is known.
   const positioned = isRoot || style.position !== 'static';
-  const mine = positioned ? [] : input.absolutes;
+  // The block around what cut a positioned inline in two belongs to the inline, and so does
+  // anything absolutely positioned inside it: the inline is its containing block, not a block
+  // further out.
+  const cut =
+    !positioned && box.element !== null && context.positionedInlines.has(box.element)
+      ? box.element
+      : null;
+  const mine = positioned || cut !== null ? [] : input.absolutes;
 
   const independent = isRoot || input.independent === true || alignsContent(style);
 
@@ -336,6 +348,10 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
 
     for (const deferred of mine) layoutAbsolute(deferred, paddingBox, context);
   }
+  if (cut !== null) {
+    for (const deferred of mine)
+      input.absolutes.push({ ...deferred, inside: deferred.inside ?? cut });
+  }
 
   const ownBottom = withMargin(NO_MARGIN, margin.bottom);
 
@@ -343,8 +359,10 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
     height: fragment.rect.height,
     marginBottom: bottomEscapes ? mergeMargins(ownBottom, flow.trailing) : ownBottom,
     collapsedThrough: !isRoot && collapsesThrough(box, containing.width, containing.height),
-    // The lines moved down with the alignment, and their baseline went with them.
+    // The lines moved down with the alignment, and their baselines went with them.
     baseline: flow.baseline === null ? null : border.top + padding.top + leading + flow.baseline,
+    firstBaseline:
+      flow.firstBaseline === null ? null : border.top + padding.top + leading + flow.firstBaseline,
   };
 }
 
@@ -355,6 +373,7 @@ type FlowResult = {
   trailing: CollapsedMargin;
   /** Last baseline found among the children, measured from the content top. */
   baseline: number | null;
+  firstBaseline: number | null;
 };
 
 function layoutChildren(
@@ -374,7 +393,9 @@ function layoutChildren(
   );
 
   if (blocks.length === 0) {
-    if (box.children.length === 0) return { height: 0, trailing: NO_MARGIN, baseline: null };
+    if (box.children.length === 0) {
+      return { height: 0, trailing: NO_MARGIN, baseline: null, firstBaseline: null };
+    }
 
     const inline = layoutInlineContent({
       container: box,
@@ -402,7 +423,12 @@ function layoutChildren(
         }),
     });
 
-    return { height: inline.height, trailing: NO_MARGIN, baseline: inline.lastBaseline };
+    return {
+      height: inline.height,
+      trailing: NO_MARGIN,
+      baseline: inline.lastBaseline,
+      firstBaseline: inline.firstBaseline,
+    };
   }
 
   const collapseIntoTop = !isRoot && canCollapseTop(box.style, padding, border);
@@ -410,6 +436,7 @@ function layoutChildren(
   let pending = NO_MARGIN;
   let placed = false;
   let baseline: number | null = null;
+  let firstBaseline: number | null = null;
 
   for (const child of blocks) {
     if (!placed && collapseIntoTop) {
@@ -455,9 +482,14 @@ function layoutChildren(
     } else if (result.baseline !== null) {
       baseline = childTop - contentTop + result.baseline;
     }
+
+    // The first has no such rule: a child that clips gives its first line like any other.
+    if (firstBaseline === null && result.firstBaseline !== null) {
+      firstBaseline = childTop - contentTop + result.firstBaseline;
+    }
   }
 
-  return { height, trailing: pending, baseline };
+  return { height, trailing: pending, baseline, firstBaseline };
 }
 
 function collapseWithTrace(
@@ -992,8 +1024,10 @@ function selfAligned(box: BlockBox, room: number): Deferred['aligned'] {
  * The containing block a positioned inline makes. It starts at the padding edge of the first
  * box the element made and ends at the padding edge of its last, which on two lines is not
  * the rectangle around either of them, and when a block cut the inline in two the block
- * between the halves is one of those boxes. A half with nothing in it does not count.
- * Chromium measures it this way, and CSS 2.1 describes the two lines.
+ * between the halves is one of those boxes. A box with no height does not count, however wide
+ * it is: not an empty half, and not the block between the halves when that is empty too. A
+ * half as tall as a line counts with no width at all. Chromium measures it this way, and CSS
+ * 2.1 describes the two lines.
  */
 function inlineContainingBlock(element: ElementNode, context: Context): Rect | null {
   const all = (context.boxesOf.get(element) ?? []).flatMap((id) => {
@@ -1002,7 +1036,7 @@ function inlineContainingBlock(element: ElementNode, context: Context): Rect | n
     const rects = lines !== undefined && lines.length > 0 ? lines : fragment ? [fragment.rect] : [];
     return rects.map((rect) => ({ rect, border: fragment?.border ?? zeroEdges }));
   });
-  const drawn = all.filter(({ rect }) => rect.width > 0 || rect.height > 0);
+  const drawn = all.filter(({ rect }) => rect.height > 0);
   const used = drawn.length > 0 ? drawn : all;
 
   const first = used[0];
@@ -1016,13 +1050,20 @@ function inlineContainingBlock(element: ElementNode, context: Context): Rect | n
   return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
 }
 
-function elementsOf(root: BlockBox): Pick<Context, 'boxesOf' | 'elementOf'> {
+function elementsOf(root: BlockBox): Pick<Context, 'boxesOf' | 'elementOf' | 'positionedInlines'> {
   const boxesOf = boxesByElement(root);
   const elementOf = new Map<BoxId, ElementNode>();
   for (const [element, ids] of boxesOf) {
     for (const id of ids) elementOf.set(id, element);
   }
-  return { boxesOf, elementOf };
+
+  const positionedInlines = new Set<ElementNode>();
+  walkBoxes(root, (box) => {
+    if (box.kind === 'inline' && !box.atomic && box.style.position !== 'static') {
+      positionedInlines.add(box.element);
+    }
+  });
+  return { boxesOf, elementOf, positionedInlines };
 }
 
 function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void {
@@ -1226,6 +1267,9 @@ function layoutFlexItems(
     baselineOf: (index, main) => metrics[index]?.measure(main).baseline ?? null,
   });
 
+  /** Where each item's baseline ended up, from the content top, made up if it has none. */
+  const baselines: number[] = [];
+
   items.forEach((item, index) => {
     const placement = line.placements[index];
     const metric = metrics[index];
@@ -1234,7 +1278,7 @@ function layoutFlexItems(
     const x = containing.x + (isRow ? placement.mainStart : placement.crossStart);
     const y = contentTop + (isRow ? placement.crossStart : placement.mainStart);
 
-    layoutBlock(
+    const result = layoutBlock(
       {
         box: item,
         containing,
@@ -1252,12 +1296,32 @@ function layoutFlexItems(
       },
       context,
     );
+    baselines[index] = y - contentTop + (result.firstBaseline ?? result.height);
   });
+
+  // The container's baseline comes from the line that comes first on the page, and from the
+  // item that does: with the flow reversed that is the last one in order. One that lines up
+  // by its baseline wins over it. An inline-block holding the container sits on this one too,
+  // not on a baseline from its last line. Measured.
+  const first = line.lines[flipped ? line.lines.length - 1 : 0] ?? [];
+  const shown = reverse ? [...first].reverse() : first;
+  const byBaseline = shown.find((index) => {
+    const input = metrics[index]?.input;
+    return (
+      input !== undefined &&
+      (input.align ?? box.style.alignItems) === 'baseline' &&
+      !input.autoCrossStart &&
+      !input.autoCrossEnd
+    );
+  });
+  const chosen = byBaseline ?? shown[0];
+  const baseline = chosen === undefined ? null : (baselines[chosen] ?? null);
 
   return {
     height: isRow ? line.crossSize : line.mainSize,
     trailing: NO_MARGIN,
-    baseline: null,
+    baseline,
+    firstBaseline: baseline,
   };
 }
 
@@ -1361,7 +1425,7 @@ function itemMetrics(
 
     return {
       cross: Math.max(0, result.height - down),
-      baseline: result.baseline,
+      baseline: result.firstBaseline,
     };
   };
 

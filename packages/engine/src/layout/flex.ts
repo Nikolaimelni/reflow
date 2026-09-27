@@ -65,12 +65,17 @@ export type FlexLineResult = {
   crossSize: number;
 };
 
+export type FlexResult = FlexLineResult & {
+  /** The items on each line, as indices into the input, in the order the lines were cut. */
+  lines: number[][];
+};
+
 /**
  * Items are cut into lines, each line is solved on its own, and the lines are then stacked
  * across. A container that will not wrap is the same thing with one line in it, and it hands
  * that line its own cross size rather than letting `align-content` near it.
  */
-export function solveFlex(input: FlexLineInput): FlexLineResult {
+export function solveFlex(input: FlexLineInput): FlexResult {
   const runs = cutIntoLines(input);
   const wraps = input.wrap !== 'nowrap';
   const gaps = input.crossGap * Math.max(0, runs.length - 1);
@@ -130,6 +135,7 @@ export function solveFlex(input: FlexLineInput): FlexLineResult {
         : placements,
     mainSize: input.mainSize ?? mainSize,
     crossSize: extent,
+    lines: runs,
   };
 }
 

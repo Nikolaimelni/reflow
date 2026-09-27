@@ -29,10 +29,12 @@ export type TextBox = {
   text: string;
   style: ComputedStyle;
   /**
-   * The disc, circle or square of a list marker inside its item, which takes the room Blink
-   * gives the symbol rather than the width of the character standing in for it.
+   * Set on the text standing in for a list marker inside its item. A symbol, the disc, circle
+   * or square, takes the room Blink gives it rather than the width of the character. Either
+   * kind can be broken after, and a space after it goes the way one at the start of a line
+   * does.
    */
-  symbol: boolean;
+  listMarker: 'symbol' | 'counter' | null;
 };
 
 export type Box = BlockBox | InlineBox | TextBox;

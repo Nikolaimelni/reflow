@@ -134,6 +134,22 @@ function inlineIntrinsic(
 
   const visit = (boxes: readonly Box[]): void => {
     for (const child of boxes) {
+      if (child.kind === 'text' && child.listMarker !== null) {
+        // A marker inside its item is no content for a space to follow, so the space after it
+        // goes, as it would at the start of a line. It can be broken after all the same.
+        const font = fontOf(child.style);
+        for (const segment of segmentText(child.text, child.style.whiteSpace)) {
+          if (segment.kind === 'newline') continue;
+          addEdge(
+            child.listMarker === 'symbol'
+              ? symbolMarkerAdvance(measurer.metrics(font), font.size)
+              : measurer.advance(segment.text, font),
+          );
+        }
+        if (canWrap) endRun();
+        continue;
+      }
+
       if (child.kind === 'text') {
         const preserve = child.style.whiteSpace === 'pre';
 
@@ -143,10 +159,7 @@ function inlineIntrinsic(
             continue;
           }
 
-          const font = fontOf(child.style);
-          const width = child.symbol
-            ? symbolMarkerAdvance(measurer.metrics(font), font.size)
-            : measurer.advance(segment.text, font);
+          const width = measurer.advance(segment.text, fontOf(child.style));
 
           if (segment.kind === 'space') {
             if (preserve) add(width);
