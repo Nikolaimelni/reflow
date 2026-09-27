@@ -211,16 +211,17 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
           const within = piece.ancestors.findLast((id) => isPositioned(surrounds.get(id)));
           // Inside a line it is aligned in that line's box, or in one as tall below it when it
           // went under the line, unless that line ran over the edge, and then about the point
-          // it went to. A line with nothing on it is no line at all to Chromium, so a box there
-          // aligns about its static position, except an inline-level one that is the only
-          // thing in the block: that one does not move. Measured, not derived.
+          // it went to. One that came too late for the line has gone to such a point too. A
+          // line with nothing on it is no line at all to Chromium, so a box there aligns about
+          // its static position, except an inline-level one that is the only thing in the
+          // block: that one does not move. Measured, not derived.
           const under = !inline && behind && !late;
           const overflowed = line.width > input.available + FIT_SLACK;
           const room = line.phantom
             ? inline && alone
               ? null
               : 0
-            : under && overflowed
+            : late || (under && overflowed)
               ? 0
               : line.height;
           input.defer(deferred, x, top, room, within ?? null);

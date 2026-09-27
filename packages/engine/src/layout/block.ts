@@ -78,8 +78,11 @@ type Context = {
   /** Every box an element made, in order, for a positioned inline that was cut in two. */
   boxesOf: ReadonlyMap<ElementNode, readonly BoxId[]>;
   elementOf: ReadonlyMap<BoxId, ElementNode>;
-  /** Elements laid out as inline boxes that are positioned, and so containing blocks. */
-  positionedInlines: ReadonlySet<ElementNode>;
+  /**
+   * Elements laid out as inline boxes that are positioned, and so containing blocks, with the
+   * style their boxes carry.
+   */
+  positionedInlines: ReadonlyMap<ElementNode, ComputedStyle>;
 };
 
 /** An out of flow box, parked until the containing block it belongs to has a size. */
@@ -220,7 +223,13 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
         }
       : override.margin;
 
-  const offset = relativeOffset(style, containing);
+  // The block around what cut a positioned inline in two moves with the inline, by the offset
+  // its halves were given.
+  const owner = box.element === null ? undefined : context.positionedInlines.get(box.element);
+  const offset =
+    owner === undefined
+      ? relativeOffset(style, containing)
+      : relativeOffset(owner, { width: containing.width, height: null });
   const x = (override === null ? containing.x + margin.left : override.x) + offset.dx;
   const boxTop = top + offset.dy;
   const contentTop = boxTop + border.top + padding.top;
@@ -1057,10 +1066,10 @@ function elementsOf(root: BlockBox): Pick<Context, 'boxesOf' | 'elementOf' | 'po
     for (const id of ids) elementOf.set(id, element);
   }
 
-  const positionedInlines = new Set<ElementNode>();
+  const positionedInlines = new Map<ElementNode, ComputedStyle>();
   walkBoxes(root, (box) => {
     if (box.kind === 'inline' && !box.atomic && box.style.position !== 'static') {
-      positionedInlines.add(box.element);
+      positionedInlines.set(box.element, box.style);
     }
   });
   return { boxesOf, elementOf, positionedInlines };

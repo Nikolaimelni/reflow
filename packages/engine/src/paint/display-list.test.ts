@@ -80,6 +80,19 @@ describe('buildDisplayList', () => {
     ]);
   });
 
+  it('gives a flex item a z-index without it being positioned', () => {
+    const row = element('div', { classes: ['row'] }, [
+      element('div', { classes: ['raised'] }),
+      element('div', { classes: ['plain'] }),
+      element('div', { classes: ['sunk'] }),
+    ]);
+    const css = '.row { display: flex } .raised { z-index: 1 } .sunk { z-index: -1 }';
+
+    const laid = order(css, [row]);
+    expect(laid.painted).toEqual(['html', 'sunk', 'row', 'plain', 'raised']);
+    expect(laid.contexts.map((one) => one.box)).toEqual(['html', 'sunk', 'raised']);
+  });
+
   it('puts inline content on top of the blocks around it', () => {
     const host = element('div', { classes: ['host'] }, [
       text('loose'),

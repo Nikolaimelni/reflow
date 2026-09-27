@@ -457,6 +457,15 @@ describe('align-self on an absolute box in the block flow', () => {
     expect(placed('.out { height: 4px; align-self: center }', [text('word')])).toBe(22);
     expect(placed('.out { height: 4px; align-self: flex-end }', [text('word')])).toBe(28);
   });
+
+  it('aligns an inline-level one that came too late for a full line about the point it went to', () => {
+    const late = '.wrapper { width: 40px } .out { display: inline-block; height: 4px }';
+
+    // Sixty four wide in forty, so the line has run out and the box starts the next one, sixteen
+    // down, where there is nothing as tall as a line to be aligned in.
+    expect(placed(`${late} .out { align-self: center }`, [text('wordword ')])).toBe(14);
+    expect(placed(`${late} .out { align-self: flex-end }`, [text('wordword ')])).toBe(12);
+  });
 });
 
 describe('align-content on a block container', () => {

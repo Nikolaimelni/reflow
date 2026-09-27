@@ -39,6 +39,15 @@
     height: 10px;
     background-color: #dcf5e6;
   }
+  .moved {
+    position: relative;
+    top: 2px;
+    left: 3%;
+  }
+  .moved-further {
+    position: relative;
+    top: 5px;
+  }
 </style>
 
 <div><em class="cut"><div class="inner"></div></em></div>
@@ -62,3 +71,5 @@
   </em>
   <div class="inner"></div>
 </div>
+<div><em class="cut moved">a<div class="inner"></div>b</em></div>
+<div><em class="moved-further"><em class="moved"><div class="inner"><div class="narrow"></div></div></em></em></div>

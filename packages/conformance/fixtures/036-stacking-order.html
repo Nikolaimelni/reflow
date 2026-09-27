@@ -67,6 +67,15 @@
     width: 20px;
     white-space: nowrap;
   }
+  .behind {
+    margin-left: -30px;
+  }
+  .sunk {
+    z-index: -1;
+  }
+  .filled {
+    background-color: #e8e8e8;
+  }
 </style>
 
 <div class="rel"><div class="card rel five">five</div></div>
@@ -92,3 +101,12 @@
 <div class="card over"></div>
 <div class="spacer"></div>
 <div class="row"><div class="card spills">running over</div><div class="card item"></div></div>
+<div class="spacer"></div>
+<div class="row"><div class="card item one"></div><div class="card item behind"></div></div>
+<div class="spacer"></div>
+<div class="row filled"><div class="card item sunk"></div></div>
+<div class="spacer"></div>
+<div class="row">
+  <div class="card item two"><div class="tab rel five"></div></div>
+  <div class="card item rel three behind"></div>
+</div>

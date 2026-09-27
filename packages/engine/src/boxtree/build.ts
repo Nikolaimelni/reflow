@@ -109,15 +109,18 @@ function insideMarker(
 /**
  * Every child of a flex container becomes a block-level flex item: an inline box is
  * blockified, and a run of text gets an anonymous block of its own. A run of nothing but
- * whitespace is not rendered at all, and `white-space: pre` does not save it: a flex container
- * has no inline content of its own for the property to preserve anything in.
+ * whitespace is not rendered at all, and `white-space: pre` does not save it, unless what came
+ * before it in the flow was text. Then it is an item of its own, even one with nothing in it
+ * once its spaces collapse, and it takes its share of the gaps. That is Blink's rule for
+ * whitespace in a flex container, and a box out of the flow between the two does not count.
  */
 function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
   const items: Box[] = [];
   let run: Box[] = [];
+  let afterText = false;
 
   const flush = () => {
-    if (run.length > 0 && !run.every(isWhitespaceText)) {
+    if (run.length > 0 && (afterText || !run.every(isWhitespaceText))) {
       items.push({
         kind: 'block',
         id: ids(),
@@ -125,6 +128,7 @@ function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): 
         style: anonymousStyle(parentStyle),
         children: run,
       });
+      afterText = true;
     }
     run = [];
   };
@@ -136,6 +140,7 @@ function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): 
     }
 
     flush();
+    if (child.style.position !== 'absolute') afterText = false;
 
     items.push(
       child.kind === 'block'

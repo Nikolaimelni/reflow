@@ -27,6 +27,12 @@
   .apart {
     gap: 12px;
   }
+  .kept {
+    white-space: pre;
+  }
+  .out {
+    position: absolute;
+  }
   .apart-both-ways {
     gap: 7px 13px;
   }
@@ -189,3 +195,11 @@
   <div class="wide-item"></div>
   <div class="wide-item"></div>
 </div>
+<div class="row apart">one<span class="out"></span>  <div class="fixed"></div></div>
+<div class="row apart kept">one<span class="out"></span>  <div class="fixed"></div>  </div>
+<div class="row apart kept">
+  one
+  <div class="out"></div>
+  <div class="fixed"></div>
+</div>
+<div class="row apart kept"><div class="fixed"></div><span class="out"></span>  <div class="fixed"></div></div>

@@ -67,6 +67,7 @@ type Bucket = {
   /** Halves that paint with the first half of their element, never on their own. */
   skip: ReadonlySet<BoxId>;
   together: ReadonlyMap<BoxId, Box[]>;
+  flexItems: ReadonlySet<BoxId>;
 };
 
 type State = {
@@ -79,6 +80,8 @@ type State = {
    */
   together: Map<BoxId, Box[]>;
   followers: Set<BoxId>;
+  /** A flex item takes a z-index without being positioned. */
+  flexItems: Set<BoxId>;
 };
 
 /**
@@ -88,7 +91,13 @@ type State = {
  * missing and nothing else moves.
  */
 export function buildDisplayList(root: BlockBox): DisplayList {
-  const state: State = { items: [], contexts: [], ...cutAndPositioned(root) };
+  const flexItems = new Set<BoxId>();
+  walkBoxes(root, (box) => {
+    if (box.kind === 'block' && box.style.display === 'flex') {
+      for (const child of box.children) flexItems.add(child.id);
+    }
+  });
+  const state: State = { items: [], contexts: [], flexItems, ...cutAndPositioned(root) };
 
   state.contexts.push({ box: root.id, zIndex: 'auto', parent: null, depth: 0 });
   paint(root, state, root.id, 0, null);
@@ -117,21 +126,27 @@ function cutAndPositioned(root: BlockBox): Pick<State, 'together' | 'followers'>
 }
 
 /**
- * A positioned box with a z-index makes one, and so does anything the compositor has to hand
- * separately, which in this subset means `opacity` below one.
+ * A positioned box with a z-index makes one, and so does a flex item with one, positioned or
+ * not, and anything the compositor has to hand separately, which in this subset means
+ * `opacity` below one.
  */
-export function formsStackingContext(style: ComputedStyle): boolean {
+export function formsStackingContext(style: ComputedStyle, flexItem = false): boolean {
   if (style.opacity < 1) return true;
-  return style.position !== 'static' && style.zIndex.kind === 'integer';
+  return (style.position !== 'static' || flexItem) && style.zIndex.kind === 'integer';
 }
 
 /**
  * Painted as one unit with the positioned boxes rather than with the plain content. A box that
  * is transparent and not positioned goes where one positioned with a z-index of zero would,
- * since the compositor needs the whole of it before it can fade it.
+ * since the compositor needs the whole of it before it can fade it, and a flex item with a
+ * z-index goes where its z-index says.
  */
-function layered(style: ComputedStyle): boolean {
-  return style.position !== 'static' || style.opacity < 1;
+function layered(style: ComputedStyle, flexItem = false): boolean {
+  return (
+    style.position !== 'static' ||
+    style.opacity < 1 ||
+    (flexItem && style.zIndex.kind === 'integer')
+  );
 }
 
 function paint(
@@ -159,6 +174,7 @@ function paint(
     hoisted,
     skip: state.followers,
     together: state.together,
+    flexItems: state.flexItems,
   };
   if (holdsLines(box)) bucket.inlines.push({ box, own: false, clip: inner, part: 'lines' });
   collect(
@@ -210,7 +226,7 @@ function push(
  * atomic inline, but each paints as one piece, so it recurses without adding a level.
  */
 function descend(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
-  if (box.kind === 'text' || !formsStackingContext(box.style)) {
+  if (box.kind === 'text' || !formsStackingContext(box.style, state.flexItems.has(box.id))) {
     paint(box, state, context, depth, clip, true);
     return;
   }
@@ -238,7 +254,7 @@ function collect(
       continue;
     }
 
-    if (layered(child.style)) {
+    if (layered(child.style, items)) {
       if (!bucket.hoisted) layer(child, bucket, clip);
       continue;
     }
@@ -286,8 +302,9 @@ function painted(box: BlockBox | InlineBox): readonly Box[] {
  */
 function layer(box: Box, bucket: Bucket, clip: BoxId | null): void {
   if (box.kind === 'text' || bucket.skip.has(box.id)) return;
-  // A z-index only does anything to a box that is positioned.
-  const zIndex = box.style.position === 'static' ? AUTO : box.style.zIndex;
+  // A z-index only does anything to a box that is positioned, or to a flex item.
+  const flexItem = bucket.flexItems.has(box.id);
+  const zIndex = box.style.position === 'static' && !flexItem ? AUTO : box.style.zIndex;
 
   if (zIndex.kind === 'integer' && zIndex.value < 0) {
     bucket.negative.push({ z: zIndex.value, box, clip });
@@ -297,7 +314,7 @@ function layer(box: Box, bucket: Bucket, clip: BoxId | null): void {
     bucket.level.push({ box, clip });
   }
 
-  if (formsStackingContext(box.style)) return;
+  if (formsStackingContext(box.style, flexItem)) return;
   const inner = box.style.overflow === 'visible' ? clip : box.id;
   const group = bucket.together.get(box.id) ?? [box];
   escapes(
@@ -311,7 +328,7 @@ function layer(box: Box, bucket: Bucket, clip: BoxId | null): void {
 function escapes(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
   for (const child of children) {
     if (child.kind === 'text') continue;
-    if (layered(child.style)) layer(child, bucket, clip);
+    if (layered(child.style, bucket.flexItems.has(child.id))) layer(child, bucket, clip);
     else escapes(painted(child), bucket, clip);
   }
 }

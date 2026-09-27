@@ -127,6 +127,28 @@ describe('buildBoxTree', () => {
     expect(shape(tree(root, ''))).toEqual(['block <div>', '  block <p>', '  block <p>']);
   });
 
+  it('keeps whitespace in a flex container only after text, past what is out of the flow', () => {
+    const root = element('div', { classes: ['row'] }, [
+      text('one'),
+      element('div', { classes: ['out'] }),
+      text('  '),
+      element('div', {}),
+      text('  '),
+    ]);
+
+    // The first run of spaces follows the text with only an absolute box between them, so it
+    // is an item of its own. The last one follows a block and is nothing at all.
+    expect(shape(tree(root, '.row { display: flex } .out { position: absolute }'))).toEqual([
+      'block <div>',
+      '  anonymous block',
+      '    text "one"',
+      '  block <div>',
+      '  anonymous block',
+      '    text "  "',
+      '  block <div>',
+    ]);
+  });
+
   it('makes an inline-block atomic but still lays its children out as blocks', () => {
     const root = element('div', { classes: ['host'] }, [
       element('span', { classes: ['ib'] }, [element('p'), text('x')]),

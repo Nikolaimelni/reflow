@@ -792,6 +792,18 @@ describe('a positioned inline', () => {
     });
   });
 
+  it('moves the block that cut it along with its own offset', () => {
+    const cut = element('div', { classes: ['cut'] });
+    const anchor = element('span', { classes: ['moved'] }, [text('x'), cut]);
+    const moved = `${css} .moved { position: relative; top: 2px; left: 10% } .cut { height: 4px }`;
+
+    // Down with the halves, and across by a tenth of the block they are all in.
+    expect(page(moved, [element('p', {}, [anchor])], 100).rectOf(cut)).toMatchObject({
+      x: 10,
+      y: 18,
+    });
+  });
+
   it('runs from its first box to its last when it wraps', () => {
     const fill = element('span', { classes: ['fill'] });
     const anchor = element('span', { classes: ['anchor'] }, [text('abcd efgh'), fill]);
