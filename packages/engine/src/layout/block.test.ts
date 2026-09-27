@@ -123,6 +123,22 @@ describe('margin collapsing', () => {
     expect(rectOf(outer).height).toBe(50);
   });
 
+  it('lets a last margin out of a parent only while min and max leave it its content height', () => {
+    const run = (parent: string) => {
+      const inner = element('div', { classes: ['inner'] });
+      const outer = element('div', { classes: ['outer'] }, [inner]);
+      const after = element('div', { classes: ['after'] });
+      const css = `.outer { ${parent} } .inner { height: 5px; margin-bottom: 12px } .after { height: 1px }`;
+      const { rectOf } = page(css, [outer, after]);
+      return { height: rectOf(outer).height, after: rectOf(after).y };
+    };
+
+    expect(run('min-height: 2px')).toEqual({ height: 5, after: 17 });
+    // Once a min or a max has changed the height the margin is gone: not out, and not in.
+    expect(run('min-height: 10px')).toEqual({ height: 10, after: 10 });
+    expect(run('max-height: 3px')).toEqual({ height: 3, after: 3 });
+  });
+
   it('resolves a percentage height against the height the box ends up with', () => {
     const inner = element('div', { classes: ['share'] });
     const outer = element('div', { classes: ['floored'] }, [inner]);

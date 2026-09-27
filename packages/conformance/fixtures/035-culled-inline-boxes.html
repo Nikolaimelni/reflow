@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>inline boxes with no fragment of their own</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 180px;
+    line-height: 30px;
+  }
+  .zone {
+    border-bottom: 1px solid;
+  }
+  .tall {
+    padding: 5px 0;
+    background-color: #d8e8c8;
+  }
+  .ring {
+    display: inline;
+    border: 1px solid;
+  }
+  .shifted {
+    position: relative;
+    top: 6px;
+    background-color: #c8d8e8;
+  }
+  .kept {
+    margin-top: 1px;
+  }
+  .faded {
+    opacity: 0.5;
+  }
+  .nothing-at-all {
+    padding: 0%;
+  }
+  .large {
+    font-size: 24px;
+  }
+  .block {
+    display: inline-block;
+    width: 8px;
+    height: 40px;
+    background-color: #e8c8c8;
+  }
+  .flat {
+    padding: 7px 0;
+  }
+  .narrow {
+    width: 90px;
+  }
+</style>
+
+<div class="zone"><span>one <span class="tall">two</span></span></div>
+<div class="zone"><span class="kept">one <span class="tall">two</span></span></div>
+<div class="zone"><span class="faded">one <span class="tall">two</span></span></div>
+<div class="zone"><span class="nothing-at-all">one <span class="tall">two</span></span></div>
+<div class="zone">
+  <span>
+    <div class="ring"></div>
+  </span>
+</div>
+<div class="zone">one <span> <div class="ring"></div> </span>two</div>
+<div class="zone"><span>one <span class="shifted">two</span></span></div>
+<div class="zone"><span><span>one <span class="tall">two</span></span></span></div>
+<div class="zone"><span>one <span class="large">two</span> <span class="tall">three</span></span></div>
+<div class="zone"><span><span class="tall">one</span> <span class="block"></span></span></div>
+<div class="zone"><span>one<span class="flat"></span></span></div>
+<div class="zone"><span><span class="flat"></span>one</span></div>
+<div class="zone narrow"><span>one one <span class="tall">two two</span> three three</span></div>

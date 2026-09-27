@@ -7,6 +7,7 @@ import {
   walkBoxes,
 } from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
+import { AUTO } from '../cascade/values.js';
 import type { ElementNode } from '../dom/node.js';
 import type { Rect } from '../geometry.js';
 import type { Fragment } from '../trace/events.js';
@@ -48,24 +49,33 @@ type Entry = { box: Box; clip: BoxId | null };
 
 type Bucket = {
   negative: (Entry & { z: number })[];
-  /** `own` marks a box that paints in its step as one unit rather than handing its
-   * descendants to the buckets around it. */
-  blocks: (Entry & { own: boolean })[];
+  blocks: Entry[];
+  /** `own` marks an atomic inline, which paints in its step as one unit. */
   inlines: (Entry & { own: boolean; part: 'box' | 'lines' })[];
-  /** Positioned, but with no z-index of its own, so it paints on top of the plain content. */
+  /**
+   * Positioned with no z-index of its own, or transparent, so it paints on top of the plain
+   * content.
+   */
   level: Entry[];
   positive: (Entry & { z: number })[];
+  /**
+   * Set while painting a box that paints as one piece without being a stacking context. What
+   * is layered inside it was handed to the context when the box was, so it is not gathered
+   * again here.
+   */
+  hoisted: boolean;
   /** Halves that paint with the first half of their element, never on their own. */
   skip: ReadonlySet<BoxId>;
+  together: ReadonlyMap<BoxId, Box[]>;
 };
 
 type State = {
   items: PaintItem[];
   contexts: StackingContext[];
   /**
-   * A positioned inline that a block cut in two is still one element: its halves paint
-   * together, under the first of them, and whatever is positioned inside any half paints
-   * after all of them rather than under the next half.
+   * A layered inline that a block cut in two is still one element: its halves paint together,
+   * under the first of them, and whatever is positioned inside any half paints after all of
+   * them rather than under the next half.
    */
   together: Map<BoxId, Box[]>;
   followers: Set<BoxId>;
@@ -89,7 +99,7 @@ export function buildDisplayList(root: BlockBox): DisplayList {
 function cutAndPositioned(root: BlockBox): Pick<State, 'together' | 'followers'> {
   const byElement = new Map<ElementNode, Box[]>();
   walkBoxes(root, (box) => {
-    if (box.kind !== 'inline' || box.atomic || box.style.position === 'static') return;
+    if (box.kind !== 'inline' || box.atomic || !layered(box.style)) return;
     const seen = byElement.get(box.element);
     if (seen === undefined) byElement.set(box.element, [box]);
     else seen.push(box);
@@ -115,7 +125,23 @@ export function formsStackingContext(style: ComputedStyle): boolean {
   return style.position !== 'static' && style.zIndex.kind === 'integer';
 }
 
-function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
+/**
+ * Painted as one unit with the positioned boxes rather than with the plain content. A box that
+ * is transparent and not positioned goes where one positioned with a z-index of zero would,
+ * since the compositor needs the whole of it before it can fade it.
+ */
+function layered(style: ComputedStyle): boolean {
+  return style.position !== 'static' || style.opacity < 1;
+}
+
+function paint(
+  box: Box,
+  state: State,
+  context: BoxId,
+  depth: number,
+  clip: BoxId | null,
+  hoisted = false,
+): void {
   const group = state.together.get(box.id) ?? [box];
   for (const one of group) push(one, state, context, depth, clip);
   if (box.kind === 'text') return;
@@ -130,21 +156,23 @@ function paint(box: Box, state: State, context: BoxId, depth: number, clip: BoxI
     inlines: [],
     level: [],
     positive: [],
+    hoisted,
     skip: state.followers,
+    together: state.together,
   };
   if (holdsLines(box)) bucket.inlines.push({ box, own: false, clip: inner, part: 'lines' });
   collect(
     group.flatMap((one) => (one.kind === 'text' ? [] : painted(one))),
     bucket,
     inner,
+    box.style.display === 'flex',
   );
 
   for (const entry of [...bucket.negative].sort((a, b) => a.z - b.z)) {
     descend(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of bucket.blocks) {
-    if (entry.own) descend(entry.box, state, context, depth, entry.clip);
-    else push(entry.box, state, context, depth, entry.clip);
+    push(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of bucket.inlines) {
     if (entry.own) descend(entry.box, state, context, depth, entry.clip);
@@ -178,12 +206,12 @@ function push(
 }
 
 /**
- * A positioned box with `z-index: auto` does not start a stacking context, but it does paint
- * as one piece, so it recurses without adding a level.
+ * A positioned box with `z-index: auto` does not start a stacking context, and neither does an
+ * atomic inline, but each paints as one piece, so it recurses without adding a level.
  */
 function descend(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
   if (box.kind === 'text' || !formsStackingContext(box.style)) {
-    paint(box, state, context, depth, clip);
+    paint(box, state, context, depth, clip, true);
     return;
   }
 
@@ -195,42 +223,40 @@ function descend(box: Box, state: State, context: BoxId, depth: number, clip: Bo
 /**
  * Gathers what paints inside one stacking context. Non-positioned boxes hand their own
  * descendants over to the same buckets, which is why all the blocks come before all the
- * inline content rather than being interleaved per subtree.
+ * inline content rather than being interleaved per subtree. Flex items do not: they paint the
+ * way inline-blocks do, which `items` says these children are.
  */
-function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
+function collect(
+  children: readonly Box[],
+  bucket: Bucket,
+  clip: BoxId | null,
+  items = false,
+): void {
   for (const child of children) {
     if (child.kind === 'text') {
       bucket.inlines.push({ box: child, own: false, clip, part: 'box' });
       continue;
     }
 
-    if (child.style.opacity < 1 && child.style.position === 'static') {
-      // Transparent but not positioned. It keeps its place among the plain content, and it
-      // paints as one unit, because the compositor needs the whole subtree before it can
-      // fade it.
-      bucket.blocks.push({ box: child, own: true, clip });
+    if (layered(child.style)) {
+      if (!bucket.hoisted) layer(child, bucket, clip);
       continue;
     }
 
-    if (child.style.position !== 'static') {
-      positioned(child, bucket, clip);
-      continue;
-    }
-
-    if (child.kind === 'inline') {
+    if (child.kind === 'inline' || items) {
       // An atomic inline paints as one piece at the inline step. Handing its blocks to the
       // bucket above would paint them before it, which is to say underneath its own
       // background, and a pointer over them would find the atomic instead.
-      const atomic = child.style.display !== 'inline';
+      const atomic = items || child.style.display !== 'inline';
       bucket.inlines.push({ box: child, own: atomic, clip, part: 'box' });
       if (atomic) {
-        // It paints as one piece, but a positioned descendant is not part of that piece: it
+        // It paints as one piece, but a layered descendant is not part of that piece: it
         // belongs to the stacking context, over the top of everything in the line.
-        escapes(child.children, bucket, clip);
+        if (!bucket.hoisted) escapes(painted(child), bucket, clip);
         continue;
       }
     } else {
-      bucket.blocks.push({ box: child, own: false, clip });
+      bucket.blocks.push({ box: child, clip });
     }
 
     // A box that clips its overflow clips its descendants, whether or not it happens to be
@@ -238,7 +264,7 @@ function collect(children: readonly Box[], bucket: Bucket, clip: BoxId | null): 
     const inner = child.style.overflow === 'visible' ? clip : child.id;
     if (holdsLines(child))
       bucket.inlines.push({ box: child, own: false, clip: inner, part: 'lines' });
-    collect(painted(child), bucket, inner);
+    collect(painted(child), bucket, inner, child.style.display === 'flex');
   }
 }
 
@@ -253,9 +279,15 @@ function painted(box: BlockBox | InlineBox): readonly Box[] {
   return box.style.display === 'flex' ? inFlexOrder(box.children) : box.children;
 }
 
-function positioned(box: Box, bucket: Bucket, clip: BoxId | null): void {
-  if (bucket.skip.has(box.id)) return;
-  const zIndex = box.style.zIndex;
+/**
+ * Files a layered box under the step its z-index puts it in. One that makes no stacking
+ * context of its own only paints as one piece: what is layered inside it belongs to the same
+ * context as the box, and is sorted there by its own z-index, after the box.
+ */
+function layer(box: Box, bucket: Bucket, clip: BoxId | null): void {
+  if (box.kind === 'text' || bucket.skip.has(box.id)) return;
+  // A z-index only does anything to a box that is positioned.
+  const zIndex = box.style.position === 'static' ? AUTO : box.style.zIndex;
 
   if (zIndex.kind === 'integer' && zIndex.value < 0) {
     bucket.negative.push({ z: zIndex.value, box, clip });
@@ -264,14 +296,23 @@ function positioned(box: Box, bucket: Bucket, clip: BoxId | null): void {
   } else {
     bucket.level.push({ box, clip });
   }
+
+  if (formsStackingContext(box.style)) return;
+  const inner = box.style.overflow === 'visible' ? clip : box.id;
+  const group = bucket.together.get(box.id) ?? [box];
+  escapes(
+    group.flatMap((one) => (one.kind === 'text' ? [] : painted(one))),
+    bucket,
+    inner,
+  );
 }
 
-/** What comes out of a box that paints as one piece: its positioned descendants, and nothing else. */
+/** What comes out of a box that paints as one piece: its layered descendants, and nothing else. */
 function escapes(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
   for (const child of children) {
     if (child.kind === 'text') continue;
-    if (child.style.position === 'static') escapes(child.children, bucket, clip);
-    else positioned(child, bucket, clip);
+    if (layered(child.style)) layer(child, bucket, clip);
+    else escapes(painted(child), bucket, clip);
   }
 }
 

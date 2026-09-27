@@ -278,7 +278,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
           independent,
           mine,
         );
-  const bottomEscapes =
+  const bottomCollapses =
     !isRoot && !independent && canCollapseBottom(style, padding, border, specifiedHeight);
 
   // A trailing margin that cannot escape has to be paid for in this box's own height. A
@@ -290,8 +290,15 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
       : 0;
   const fromContent = Math.max(
     marker,
-    flow.height + (bottomEscapes ? 0 : resolveMargin(flow.trailing)),
+    flow.height + (bottomCollapses ? 0 : resolveMargin(flow.trailing)),
   );
+
+  // One that could escape only does while the min and the max leave the box the height of its
+  // content. Once they change it, Blink drops the margin: it neither leaves nor adds to the
+  // height. Measured, and not what CSS 2.1 says, which would keep it inside.
+  const bottomEscapes =
+    bottomCollapses &&
+    Math.max(0, clampSize(fromContent, minHeight, maxHeight)) === Math.max(0, fromContent);
 
   // A used height is never negative, however far a negative margin pulls the content up.
   const height = Math.max(0, clampSize(specifiedHeight ?? fromContent, minHeight, maxHeight));

@@ -66,6 +66,28 @@
     display: inline;
     margin: -12px;
   }
+  .floored {
+    min-height: 10px;
+  }
+  .barely-floored {
+    min-height: 2px;
+  }
+  .capped {
+    max-height: 3px;
+  }
+  .short-with-margin {
+    height: 5px;
+    margin-bottom: 12px;
+  }
+  .sinking {
+    margin-bottom: -12px;
+  }
+  .aligned {
+    align-content: stretch;
+  }
+  .spacer {
+    height: 20px;
+  }
 </style>
 <div class="a"></div>
 <div class="empty"></div>
@@ -84,3 +106,14 @@
     <div class="through-the-cut"></div>
   </em>
 </div>
+<div class="spacer"></div>
+<div class="barely-floored"><div class="short-with-margin"></div></div>
+<div class="spacer"></div>
+<div class="floored"><div class="short-with-margin"></div></div>
+<div class="spacer"></div>
+<div class="capped"><div class="short-with-margin"></div></div>
+<div class="spacer"></div>
+<div class="barely-floored"><div class="sinking"></div></div>
+<div class="spacer"></div>
+<div class="barely-floored"><div class="sinking aligned"></div></div>
+<div class="spacer"></div>

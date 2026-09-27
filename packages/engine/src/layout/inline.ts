@@ -1,4 +1,11 @@
-import { type BlockBox, type Box, type BoxId, type InlineBox, isBlock } from '../boxtree/box.js';
+import {
+  type BlockBox,
+  type Box,
+  type BoxId,
+  type InlineBox,
+  isBlock,
+  reportedUnion,
+} from '../boxtree/box.js';
 import type { ComputedStyle } from '../cascade/properties.js';
 import { blockByDefault } from '../cascade/ua.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
@@ -334,6 +341,9 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     extents.set(box, { left: point.x, right: point.x, top: point.y, bottom: point.y });
   }
 
+  // Every box's own rects come first, because a box Chromium culls is reported as the rects of
+  // what is inside it, and those are only known once everything inside it has been laid.
+  const own = new Map<BoxId, Rect[]>();
   for (const [box, extent] of extents) {
     const surround = surrounds.get(box);
     const onLines = perLine.get(box);
@@ -342,16 +352,31 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     // sits at the start of the first line and the end of the last, so growing the union by it
     // puts the box's left edge somewhere it never reaches, and a pointer in the gap beside a
     // short line finds the inline when it is over the block.
-    const rects =
+    own.set(
+      box,
       onLines === undefined
         ? [toRect(extent)]
         : onLines.map((line, index) =>
             surround === undefined
               ? toRect(line)
               : padded(line, surround, index === 0, index === onLines.length - 1),
-          );
+          ),
+    );
+  }
 
-    const fragment = toFragment(box, union(rects), surround);
+  // In the order Blink walks them: all of one child, then the next. A culled box with nothing
+  // inside that reached a line is left with its own rects, which is where it opened and closed.
+  const culled = culledBoxes(input.container.children, input.measurer);
+  const reported = (box: BoxId): Rect[] => {
+    const gathered = culled.get(box)?.flatMap((child) => reported(child.id)) ?? [];
+    return gathered.length > 0 ? gathered : (own.get(box) ?? []);
+  };
+
+  for (const box of own.keys()) {
+    const surround = surrounds.get(box);
+    const rects = reported(box);
+    const whole = culled.has(box) ? reportedUnion(rects) : null;
+    const fragment = toFragment(box, whole ?? union(rects), surround);
 
     input.fragments.set(box, fragment);
 
@@ -364,8 +389,9 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       t: 'size:resolved',
       box,
       fragment,
-      reason:
-        surround === undefined
+      reason: culled.has(box)
+        ? 'what is inside it, since it has no box of its own'
+        : surround === undefined
           ? 'union of the line boxes it sits on'
           : 'its line boxes, plus its own padding and border',
     });
@@ -535,6 +561,64 @@ function takesRoom(piece: Piece): boolean {
   const given = (value: typeof padding | typeof margin) =>
     (value.kind === 'percent' || value.kind === 'px') && value.value !== 0;
   return given(padding) || given(margin) || border !== 0;
+}
+
+/** The inline boxes Chromium culls, each with what is inside it. */
+function culledBoxes(
+  children: readonly Box[],
+  measurer: TextMeasurer,
+  found = new Map<BoxId, readonly Box[]>(),
+): Map<BoxId, readonly Box[]> {
+  for (const child of children) {
+    if (child.kind !== 'inline' || child.atomic) continue;
+    if (culls(child, measurer)) found.set(child.id, child.children);
+    culledBoxes(child.children, measurer, found);
+  }
+  return found;
+}
+
+/**
+ * Whether Chromium gives an inline box no fragment of its own and reports it as what is inside
+ * it instead, so that the padding of a span inside sticks out of it too. A box keeps its
+ * fragment if it draws anything, is positioned, or has a margin or padding anywhere, even one
+ * that moves nothing. It also keeps it for something directly inside it that it has to be
+ * there for: an atomic inline, whose height is not the box's, or an inline box with a margin
+ * or a font of other metrics. Measured, and it is what Blink's inline items builder does.
+ */
+function culls(box: InlineBox, measurer: TextMeasurer): boolean {
+  const style = box.style;
+  const border = usedBorderWidths(style);
+  const padding = [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
+
+  if (
+    style.backgroundColor.a > 0 ||
+    style.opacity < 1 ||
+    style.position !== 'static' ||
+    border.top + border.right + border.bottom + border.left > 0 ||
+    padding.some((side) => side.value !== 0) ||
+    hasMargin(style)
+  ) {
+    return false;
+  }
+
+  const metrics = measurer.metrics(fontOf(style));
+  return box.children.every((child) => {
+    if (child.kind !== 'inline') return true;
+    if (child.atomic) return false;
+
+    const inner = measurer.metrics(fontOf(child.style));
+    return (
+      !hasMargin(child.style) &&
+      inner.ascent === metrics.ascent &&
+      inner.descent === metrics.descent
+    );
+  });
+}
+
+function hasMargin(style: ComputedStyle): boolean {
+  return [style.marginTop, style.marginRight, style.marginBottom, style.marginLeft].some(
+    (side) => side.kind === 'auto' || side.value !== 0,
+  );
 }
 
 /** The inline boxes that both begin and end on this line, which is all of an empty one. */

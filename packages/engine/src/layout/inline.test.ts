@@ -461,6 +461,52 @@ describe('inline boxes', () => {
     expect(rect.x).toBe(0);
   });
 
+  it('reports a span that draws nothing as what is inside it', () => {
+    const build = (classes: string[]) =>
+      element('span', { classes }, [
+        text('a'),
+        element('span', { classes: ['tall'] }, [text('b')]),
+      ]);
+    const css = 'p { margin: 0 } .tall { padding: 5px 0 } .kept { margin-top: 1px }';
+    const bare = build([]);
+    const kept = build(['kept']);
+
+    // With no box of its own the outer span is its text and the span inside, padding and all.
+    // A margin that moves nothing still gives it a box, and a box is as tall as its font.
+    expect(page(css, [element('p', {}, [bare])]).rectOf(bare)).toMatchObject({ y: -5, height: 26 });
+    expect(page(css, [element('p', {}, [kept])]).rectOf(kept)).toMatchObject({ y: 0, height: 16 });
+  });
+
+  it('reports a span with nothing but an empty bordered box in it as that box', () => {
+    const ring = element('div', { classes: ['ring'] });
+    const span = element('span', {}, [text('\n  '), ring, text('\n')]);
+    const css = 'p { margin: 0 } .ring { display: inline; border: 1px solid }';
+
+    expect(page(css, [element('p', {}, [span])]).rectOf(span)).toMatchObject({
+      x: 0,
+      y: -1,
+      width: 2,
+      height: 18,
+    });
+  });
+
+  it('keeps a box for a span whose content needs one', () => {
+    const tall = () => element('span', { classes: ['tall'] }, [text('b')]);
+    const css =
+      'p { margin: 0 } .tall { padding: 5px 0 } .ib { display: inline-block; width: 4px; height: 4px } .big { font-size: 20px } .apart { margin-left: 2px }';
+    const heightOf = (inside: DomNode) => {
+      const span = element('span', {}, [tall(), inside]);
+      return page(css, [element('p', {}, [span])]).rectOf(span).height;
+    };
+
+    // An atomic inline, a font of other metrics and a margin each keep the span a box of its
+    // own, which is only as tall as its font.
+    expect(heightOf(element('span', { classes: ['ib'] }))).toBe(16);
+    expect(heightOf(element('span', { classes: ['big'] }, [text('c')]))).toBe(16);
+    expect(heightOf(element('span', { classes: ['apart'] }, [text('c')]))).toBe(16);
+    expect(heightOf(text('c'))).toBe(26);
+  });
+
   it('floors the half leading and lets the descent take the rest', () => {
     const box = element('span', { classes: ['tall'] });
     const p = element('p', {}, [box, text('x')]);

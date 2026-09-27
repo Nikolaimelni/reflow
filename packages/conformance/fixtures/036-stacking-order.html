@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>what paints over what</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  .card {
+    height: 30px;
+    background-color: #d8d8d8;
+  }
+  .rel {
+    position: relative;
+  }
+  .over {
+    margin-top: -15px;
+    background-color: #c8d8e8;
+  }
+  .spacer {
+    height: 20px;
+  }
+  .one {
+    z-index: 1;
+  }
+  .two {
+    z-index: 2;
+  }
+  .three {
+    z-index: 3;
+  }
+  .five {
+    z-index: 5;
+  }
+  .lots {
+    z-index: 999;
+  }
+  .below {
+    z-index: -1;
+    top: 10px;
+    background-color: #e8c8c8;
+  }
+  .shrunk {
+    display: inline-block;
+    width: 80px;
+    height: 30px;
+    background-color: #e8d8c8;
+  }
+  .tab {
+    height: 25px;
+    background-color: #c8e8c8;
+  }
+  .unplaced {
+    z-index: 10;
+  }
+  .faded {
+    opacity: 0.9;
+  }
+  .row {
+    display: flex;
+  }
+  .item {
+    width: 60px;
+  }
+  .spills {
+    width: 20px;
+    white-space: nowrap;
+  }
+</style>
+
+<div class="rel"><div class="card rel five">five</div></div>
+<div class="card rel one over">one</div>
+<div class="spacer"></div>
+<div class="card rel"><div class="card rel below"></div></div>
+<div class="spacer"></div>
+<div>
+  <span class="shrunk"><div class="tab rel three"></div></span>
+</div>
+<div class="card rel two over"></div>
+<div class="spacer"></div>
+<div class="card unplaced"></div>
+<div class="card rel over"></div>
+<div class="spacer"></div>
+<div class="rel one"><div class="card rel lots"></div></div>
+<div class="card rel two over"></div>
+<div class="spacer"></div>
+<div class="faded"><div class="card rel five"></div></div>
+<div class="card rel one over"></div>
+<div class="spacer"></div>
+<div class="row"><div class="card item">item</div></div>
+<div class="card over"></div>
+<div class="spacer"></div>
+<div class="row"><div class="card spills">running over</div><div class="card item"></div></div>

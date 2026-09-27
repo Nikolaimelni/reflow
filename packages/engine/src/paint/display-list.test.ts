@@ -64,6 +64,22 @@ describe('buildDisplayList', () => {
     expect(painted.indexOf('out')).toBeGreaterThan(painted.lastIndexOf('anchor'));
   });
 
+  it('paints a flex item as one piece, the way an inline-block paints', () => {
+    const row = element('div', { classes: ['row'] }, [
+      element('div', { classes: ['first'] }, [text('words')]),
+      element('div', { classes: ['second'] }),
+    ]);
+
+    // The first item's text comes before the second item, not after every block.
+    expect(order('.row { display: flex }', [row]).painted).toEqual([
+      'html',
+      'row',
+      'first',
+      '"words"',
+      'second',
+    ]);
+  });
+
   it('puts inline content on top of the blocks around it', () => {
     const host = element('div', { classes: ['host'] }, [
       text('loose'),
@@ -95,6 +111,45 @@ describe('buildDisplayList', () => {
     const css = '.lifted { position: relative }';
 
     expect(order(css, [lifted, after]).painted).toEqual(['html', 'after', 'lifted']);
+  });
+
+  it('lifts a transparent box the way a z-index of zero would', () => {
+    const faded = element('div', { classes: ['faded'] });
+    const after = element('div', { classes: ['after'] });
+    const shifted = element('div', { classes: ['shifted'] });
+    const css = '.faded { opacity: 0.5 } .shifted { position: relative }';
+
+    // Over the plain content, and in tree order with what is positioned.
+    expect(order(css, [faded, after, shifted]).painted).toEqual([
+      'html',
+      'after',
+      'faded',
+      'shifted',
+    ]);
+  });
+
+  it('sorts a z-index inside a positioned box with none in the context around both', () => {
+    const outer = element('div', { classes: ['outer'] }, [element('div', { classes: ['high'] })]);
+    const later = element('div', { classes: ['later'] });
+    const css =
+      '.outer, .high, .later { position: relative } .high { z-index: 5 } .later { z-index: 1 }';
+
+    // The outer box makes no context of its own, so five is compared with one, not with it.
+    expect(order(css, [outer, later]).painted).toEqual(['html', 'outer', 'later', 'high']);
+  });
+
+  it('paints what is positioned inside an inline-block once, with the context', () => {
+    const shrunk = element('span', { classes: ['shrunk'] }, [
+      element('span', { classes: ['rel'] }),
+    ]);
+    const css = '.shrunk { display: inline-block } .rel { position: relative }';
+
+    expect(order(css, [element('div', {}, [shrunk])]).painted).toEqual([
+      'html',
+      'div',
+      'shrunk',
+      'rel',
+    ]);
   });
 
   it('drops a negative z-index below the plain content', () => {

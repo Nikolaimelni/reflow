@@ -126,6 +126,11 @@ export function reportedRect(
     return rect === undefined ? [] : [rect];
   });
 
+  return reportedUnion(rects);
+}
+
+/** The union Blink takes, in which an empty rect only counts while nothing else has. */
+export function reportedUnion(rects: readonly Rect[]): Rect | null {
   let union: Rect | null = null;
 
   for (const rect of rects) {
