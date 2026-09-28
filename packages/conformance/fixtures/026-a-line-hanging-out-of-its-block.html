@@ -30,6 +30,28 @@
   .short {
     width: 90px;
   }
+  .stubby {
+    width: 100px;
+    white-space: nowrap;
+  }
+  .tall-lines {
+    width: 100px;
+    height: 10px;
+    line-height: 40px;
+    background-color: #f0e2c8;
+  }
+  .flat {
+    display: inline-block;
+    width: 80px;
+    height: 4px;
+    background-color: #c8c8d8;
+  }
+  .pulled-back {
+    position: relative;
+    left: -150px;
+    padding: 0 60px;
+    background-color: #d8e8c8;
+  }
 </style>
 
 <div class="crowded">one <span class="fat"></span></div>
@@ -39,4 +61,8 @@
 <div class="crowded righted">one two <span class="fat short"></span></div>
 <div class="kept"></div>
 <div class="crowded">one two three four five six seven eight nine ten eleven</div>
+<div class="kept"></div>
+<div class="stubby">xx<span class="pulled-back">yy</span></div>
+<div class="kept"></div>
+<div class="tall-lines">ab <span class="flat"></span></div>
 <div class="kept"></div>

@@ -256,6 +256,46 @@ describe('hitTest', () => {
     expect(at(40, 26)).toBe('fat');
   });
 
+  it('clips to the padding box, and leaves alone what is placed against a block outside', () => {
+    const at = pointer(
+      '.clip { overflow: hidden; border: 10px solid; width: 100px; height: 40px } .wide { width: 200px; height: 80px } .out { position: absolute; width: 200px; height: 20px }',
+      [
+        element('div', { classes: ['clip'] }, [element('div', { classes: ['wide'] })]),
+        element('div', { classes: ['clip'] }, [element('div', { classes: ['out'] })]),
+      ],
+    );
+
+    // The first clip's border runs from 110 to 120 across, and over it the clip is on top. The
+    // box in the second belongs to the page, not to the clip, so it shows past the clip's edge.
+    expect(at(115, 30)).toBe('clip');
+    expect(at(150, 75)).toBe('out');
+  });
+
+  it('finds a block through a line only as far as the block reaches from where the line starts', () => {
+    const along = pointer(
+      '.stubby { width: 100px; white-space: nowrap } .back { position: relative; left: -150px; padding: 0 60px }',
+      [
+        element('div', { classes: ['stubby'] }, [
+          text('xx'),
+          element('span', { classes: ['back'] }, [text('yy')]),
+        ]),
+      ],
+    );
+    const down = pointer(
+      '.low { width: 100px; height: 10px; line-height: 40px } .ib { display: inline-block; width: 80px; height: 4px }',
+      [element('div', { classes: ['low'] }, [text('ab '), element('span', { classes: ['ib'] })])],
+    );
+
+    // The line runs out to 152, but the block is a hundred wide, and past that the page is
+    // what is found, with the span that made the line so long drawn back at its start.
+    expect(along(120, 8)).toBe('html');
+    expect(along(50, 8)).toBe('stubby');
+    // The second line runs from 40 to 80 under a block ten tall, so its first ten find the block
+    // and below that there is nothing, which a browser answers with the root.
+    expect(down(40, 45)).toBe('low');
+    expect(down(40, 55)).toBe('nothing');
+  });
+
   it('lets a later line cover a padded box that hangs down into it', () => {
     const at = pointer('.host { width: 60px; line-height: 30px } .deep { padding-bottom: 12px }', [
       element('div', { classes: ['host'] }, [

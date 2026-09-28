@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>what overflow: hidden clips, and where</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 300px;
+  }
+  .clip {
+    overflow: hidden;
+    border: 10px solid #999;
+    width: 100px;
+    height: 40px;
+    margin-bottom: 30px;
+  }
+  .placed {
+    position: relative;
+  }
+  .wide {
+    width: 200px;
+    height: 80px;
+    background-color: #d8d8d8;
+  }
+  .out {
+    position: absolute;
+    width: 200px;
+    height: 20px;
+    background-color: #e8c8c8;
+  }
+  .shifted {
+    position: relative;
+    width: 200px;
+    height: 80px;
+    background-color: #c8d8e8;
+  }
+</style>
+
+<div class="clip"><div class="wide"></div></div>
+<div class="clip"><div class="out"></div></div>
+<div class="clip"><div class="shifted"></div></div>
+<div class="clip placed"><div class="out"></div></div>
+<div class="clip"><div><div class="out"></div></div></div>
+<div class="clip"><div class="placed"><div class="out"></div></div></div>

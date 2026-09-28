@@ -18,12 +18,16 @@ export type PaintItem = {
   /**
    * The box itself, or the line boxes of a block that holds inline content. Those have
    * nothing to draw, but they are hit tested where that content paints, over the backgrounds
-   * of the blocks that come after, so a line hanging out of its block still finds the block.
+   * of the blocks that come after, so a line hanging out of its block still finds the block,
+   * as far out as the block paints anything.
    */
   part: 'box' | 'lines';
   /** `visibility: hidden` keeps a box's space but takes it out of painting and hit testing. */
   visible: boolean;
-  /** The nearest ancestor that clips its overflow, if there is one. */
+  /**
+   * The box whose clip this one is inside, if any: the nearest ancestor that clips its
+   * overflow, or for an absolutely positioned box the one that clips its containing block.
+   */
   clippedBy: BoxId | null;
   /** Position in the flat list, which is the order a painter would draw in. */
   order: number;
@@ -69,6 +73,7 @@ type Bucket = {
   skip: ReadonlySet<BoxId>;
   together: ReadonlyMap<BoxId, Box[]>;
   flexItems: ReadonlySet<BoxId>;
+  absoluteClips: ReadonlyMap<BoxId, BoxId | null>;
 };
 
 type State = {
@@ -83,6 +88,12 @@ type State = {
   followers: Set<BoxId>;
   /** A flex item takes a z-index without being positioned. */
   flexItems: Set<BoxId>;
+  /**
+   * The clip an absolutely positioned box is under, which is the one around its containing
+   * block. A box that clips between the two does not clip it: the box is not inside it in
+   * the sense that counts.
+   */
+  absoluteClips: Map<BoxId, BoxId | null>;
 };
 
 /**
@@ -98,12 +109,40 @@ export function buildDisplayList(root: BlockBox): DisplayList {
       for (const child of box.children) flexItems.add(child.id);
     }
   });
-  const state: State = { items: [], contexts: [], flexItems, ...cutAndPositioned(root) };
+  const state: State = {
+    items: [],
+    contexts: [],
+    flexItems,
+    absoluteClips: clipsOfAbsolutes(root),
+    ...cutAndPositioned(root),
+  };
 
   state.contexts.push({ box: root.id, zIndex: 'auto', parent: null, depth: 0 });
   paint(root, state, root.id, 0, null);
 
   return { items: state.items, contexts: state.contexts };
+}
+
+function clipsOfAbsolutes(root: BlockBox): Map<BoxId, BoxId | null> {
+  const found = new Map<BoxId, BoxId | null>();
+
+  // `clip` is what an in-flow child is under, `placed` what an absolutely positioned one is:
+  // the clip in force inside the nearest positioned ancestor, which is its containing block.
+  const walk = (box: Box, clip: BoxId | null, placed: BoxId | null): void => {
+    if (box.kind === 'text') return;
+    for (const child of box.children) {
+      if (child.kind === 'text') continue;
+      const own = child.style.position === 'absolute' ? placed : clip;
+      if (child.style.position === 'absolute') found.set(child.id, own);
+
+      const inner = child.style.overflow === 'visible' ? own : child.id;
+      walk(child, inner, child.style.position === 'static' ? placed : inner);
+    }
+  };
+
+  const inner = root.style.overflow === 'visible' ? null : root.id;
+  walk(root, inner, inner);
+  return found;
 }
 
 function cutAndPositioned(root: BlockBox): Pick<State, 'together' | 'followers'> {
@@ -176,6 +215,7 @@ function paint(
     skip: state.followers,
     together: state.together,
     flexItems: state.flexItems,
+    absoluteClips: state.absoluteClips,
   };
   if (holdsLines(box)) bucket.inlines.push({ box, own: false, clip: inner, part: 'lines' });
   collect(
@@ -301,8 +341,10 @@ function painted(box: BlockBox | InlineBox): readonly Box[] {
  * context of its own only paints as one piece: what is layered inside it belongs to the same
  * context as the box, and is sorted there by its own z-index, after the box.
  */
-function layer(box: Box, bucket: Bucket, clip: BoxId | null): void {
+function layer(box: Box, bucket: Bucket, around: BoxId | null): void {
   if (box.kind === 'text' || bucket.skip.has(box.id)) return;
+  const clip =
+    box.style.position === 'absolute' ? (bucket.absoluteClips.get(box.id) ?? null) : around;
   // A z-index only does anything to a box that is positioned, or to a flex item.
   const flexItem = bucket.flexItems.has(box.id);
   const zIndex = box.style.position === 'static' && !flexItem ? AUTO : box.style.zIndex;
@@ -357,7 +399,10 @@ export function hitTest(
     const item = list.items[i];
     if (item === undefined || !item.visible || !accept(item.box)) continue;
 
-    if (item.clippedBy !== null && !inside(geometry.fragments.get(item.clippedBy)?.rect, x, y)) {
+    if (
+      item.clippedBy !== null &&
+      !inside(paddingBox(geometry.fragments.get(item.clippedBy)), x, y)
+    ) {
       continue;
     }
 
@@ -368,7 +413,9 @@ export function hitTest(
         : (geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]));
 
     for (const rect of rects) {
-      if (inside(rect, x, y) && !underLaterLine(rect)) return item.box;
+      if (!inside(rect, x, y) || underLaterLine(rect)) continue;
+      if (item.part === 'lines' && !within(asBigAsTheBlock(rect, fragment), x, y)) continue;
+      return item.box;
     }
   }
 
@@ -385,6 +432,37 @@ export function hitTest(
     const later = geometry.lineBoxes.get(line.block)?.slice(line.after) ?? [];
     return later.some((box) => inside(box, x, y));
   }
+}
+
+/**
+ * Blink only takes a point on a line box when it is also inside a rectangle as big as the
+ * block, laid from the line's own corner. So a line that hangs out of its block finds the block
+ * for as far as the block itself reaches from where the line starts: the first few pixels of a
+ * second line under a block ten pixels tall, and nothing past the block's width along a line
+ * that runs over. It looks like a check meant for rounded borders, given the line's position
+ * and the block's size. Measured, and it covers every arrangement tried.
+ */
+function asBigAsTheBlock(line: Rect, block: Fragment | undefined): Rect | undefined {
+  if (block === undefined) return undefined;
+  return { x: line.x, y: line.y, width: block.rect.width, height: block.rect.height };
+}
+
+/** What a box clips to, which is inside its border and not at the edge of it. */
+function paddingBox(fragment: Fragment | undefined): Rect | undefined {
+  if (fragment === undefined) return undefined;
+  const { rect, border } = fragment;
+  return {
+    x: rect.x + border.left,
+    y: rect.y + border.top,
+    width: rect.width - border.left - border.right,
+    height: rect.height - border.top - border.bottom,
+  };
+}
+
+/** Like `inside`, but a point on the far edges counts, which is how that rectangle is tested. */
+function within(rect: Rect | undefined, x: number, y: number): boolean {
+  if (rect === undefined) return false;
+  return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
 }
 
 function inside(rect: Rect | undefined, x: number, y: number): boolean {
