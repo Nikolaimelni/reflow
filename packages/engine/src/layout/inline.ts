@@ -29,6 +29,13 @@ export type AtomicSize = {
   baseline: number | null;
 };
 
+/**
+ * The line a rect sits on: the block the line belongs to, and the index of the first of that
+ * block's line boxes that comes after it. A later line is hit tested over an earlier one, so
+ * a padded box that hangs down into it is covered there by that line's box.
+ */
+export type LineRef = { block: BoxId; after: number };
+
 export type InlineResult = {
   height: number;
   /** The first and last lines' baselines, measured from the content top. */
@@ -51,6 +58,8 @@ export type InlineInput = {
   lines: Map<BoxId, Rect[]>;
   /** The line boxes themselves, filed under the block they belong to. */
   lineBoxes: Map<BoxId, Rect[]>;
+  /** The line each rect in `pieces` sits on. */
+  lineOf: Map<Rect, LineRef>;
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
@@ -143,6 +152,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
   let lastBaseline: number | null = null;
   const extents = new Map<BoxId, Extent>();
   const perLine = new Map<BoxId, Extent[]>();
+  const extentLine = new Map<Extent, LineRef>();
   /** Where a box was left on a line with no height, in case that is the only place it is. */
   const stranded = new Map<BoxId, { x: number; y: number }>();
 
@@ -155,6 +165,11 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
     });
 
     const offset = alignmentOffset(input.containerStyle, input.available, line.width);
+    const recorded = input.lineBoxes.get(input.container.id)?.length ?? 0;
+    const onLine: LineRef = {
+      block: input.container.id,
+      after: line.height > 0 ? recorded + 1 : recorded,
+    };
     // A line with nothing on it is treated as not being there for anything but placing what
     // is in it, and a baseline is one of those other things.
     if (!line.phantom) {
@@ -280,7 +295,10 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       // a pointer has to land on, so it does not record a piece of its own. The inline boxes
       // around it are not recorded here either: they get one rect per line further down, and
       // that rect covers this one with the padding this one does not know about.
-      if (piece.source === null) record(input.pieces, piece.box, rect);
+      if (piece.source === null) {
+        record(input.pieces, piece.box, rect);
+        input.lineOf.set(rect, onLine);
+      }
 
       if (piece.source !== null) {
         // Laid out once to measure it and again where the line put it. The second pass is
@@ -330,6 +348,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       const seen = perLine.get(box);
       if (seen === undefined) perLine.set(box, [extent]);
       else seen.push(extent);
+      extentLine.set(extent, onLine);
     }
 
     // As wide as what is on it and no wider, starting where the alignment put it.
@@ -364,11 +383,15 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
       box,
       onLines === undefined
         ? [toRect(extent)]
-        : onLines.map((line, index) =>
-            surround === undefined
-              ? toRect(line)
-              : padded(line, surround, index === 0, index === onLines.length - 1),
-          ),
+        : onLines.map((line, index) => {
+            const rect =
+              surround === undefined
+                ? toRect(line)
+                : padded(line, surround, index === 0, index === onLines.length - 1);
+            const ref = extentLine.get(line);
+            if (ref !== undefined) input.lineOf.set(rect, ref);
+            return rect;
+          }),
     );
   }
 
@@ -1073,11 +1096,39 @@ function breakIntoLines(
         return start < at - 1 && content ? start : at;
       }
 
-      if (boundaries.has(at) && current.slice(0, at).some(({ piece }) => holdsALine(piece))) {
+      if (
+        boundaries.has(at) &&
+        current.slice(0, at).some(({ piece }) => holdsALine(piece)) &&
+        !heldTogether(at)
+      ) {
         return at;
       }
     }
     return -1;
+  };
+
+  /**
+   * Whether the opening edge of a box whose tag is a block by default stands at a boundary.
+   * Chromium does not break straight after one, nor in front of one unless a space or an
+   * atomic inline is what comes before it: the tag behaves like a character glued to its
+   * neighbour. The edges of a box that may hang count for nothing either way, and so does a box
+   * out of the flow. Measured, not found in a spec.
+   */
+  const heldTogether = (at: number): boolean => {
+    const passedOver = (piece: Piece | undefined) =>
+      piece !== undefined &&
+      ((isEdge(piece.kind) && piece.mayHang) || piece.kind === 'out-of-flow');
+    let before = at - 1;
+    while (before >= 0 && passedOver(current[before]?.piece)) before--;
+    let after = at;
+    while (after < current.length && passedOver(current[after]?.piece)) after++;
+
+    const opensTag = (piece: Piece | undefined) => piece?.kind === 'edge-start' && !piece.mayHang;
+    const previous = current[before]?.piece;
+    if (opensTag(previous)) return true;
+    return (
+      opensTag(current[after]?.piece) && previous?.kind !== 'atomic' && previous?.kind !== 'space'
+    );
   };
 
   /**
@@ -1131,7 +1182,11 @@ function breakIntoLines(
     }
 
     if (entry.kind === 'boundary') {
-      boundaries.add(current.length);
+      // An opening edge belongs with what comes after it, even when a space that vanished at
+      // the start of the line was all that stood between them.
+      let at = current.length;
+      while (at > 0 && current[at - 1]?.piece.kind === 'edge-start') at--;
+      boundaries.add(at);
       afterBreak = true;
       continue;
     }

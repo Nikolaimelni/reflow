@@ -10,6 +10,7 @@ import type { ComputedStyle } from '../cascade/properties.js';
 import { AUTO } from '../cascade/values.js';
 import type { ElementNode } from '../dom/node.js';
 import type { Rect } from '../geometry.js';
+import type { LineRef } from '../layout/inline.js';
 import type { Fragment } from '../trace/events.js';
 
 export type PaintItem = {
@@ -345,6 +346,8 @@ export function hitTest(
     /** Per line rects, used in place of the union for anything that sits on several lines. */
     pieces: ReadonlyMap<BoxId, readonly Rect[]>;
     lineBoxes: ReadonlyMap<BoxId, readonly Rect[]>;
+    /** The line a piece sits on. A later line's box is hit tested over it. */
+    lineOf?: ReadonlyMap<Rect, LineRef>;
   },
   x: number,
   y: number,
@@ -365,11 +368,23 @@ export function hitTest(
         : (geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]));
 
     for (const rect of rects) {
-      if (inside(rect, x, y)) return item.box;
+      if (inside(rect, x, y) && !underLaterLine(rect)) return item.box;
     }
   }
 
   return null;
+
+  /**
+   * Chromium hit tests a block's lines from the last to the first, and a point inside a line's
+   * box stops there. So a padded box that hangs down from one line into the box of the next is
+   * not found where that box is, even though nothing else is drawn there.
+   */
+  function underLaterLine(rect: Rect): boolean {
+    const line = geometry.lineOf?.get(rect);
+    if (line === undefined) return false;
+    const later = geometry.lineBoxes.get(line.block)?.slice(line.after) ?? [];
+    return later.some((box) => inside(box, x, y));
+  }
 }
 
 function inside(rect: Rect | undefined, x: number, y: number): boolean {

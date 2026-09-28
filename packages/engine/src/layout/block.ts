@@ -14,7 +14,7 @@ import type { ElementNode } from '../dom/node.js';
 import { type Edges, type Rect, zeroEdges } from '../geometry.js';
 import type { Fragment, LayoutEvent } from '../trace/events.js';
 import { type FlexItemInput, solveFlex } from './flex.js';
-import { type AtomicSize, hasOutsideMarker, layoutInlineContent } from './inline.js';
+import { type AtomicSize, hasOutsideMarker, type LineRef, layoutInlineContent } from './inline.js';
 import { intrinsicContentWidths, shrinkToFit } from './intrinsic.js';
 import {
   type CollapsedMargin,
@@ -55,6 +55,8 @@ export type LayoutResult = {
    * pointer that lands in one finds the block, even where the line hangs over something else.
    */
   lineBoxes: Map<BoxId, Rect[]>;
+  /** The line each rect in `pieces` sits on, for a later line to be hit tested over it. */
+  lineOf: Map<Rect, LineRef>;
   trace: LayoutEvent[];
 };
 
@@ -70,6 +72,7 @@ type Context = {
   pieces: Map<BoxId, Rect[]>;
   lines: Map<BoxId, Rect[]>;
   lineBoxes: Map<BoxId, Rect[]>;
+  lineOf: Map<Rect, LineRef>;
   trace: LayoutEvent[];
   measurer: TextMeasurer;
   devicePixelRatio: number;
@@ -163,6 +166,7 @@ export function layoutDocument(
     pieces: new Map(),
     lines: new Map(),
     lineBoxes: new Map(),
+    lineOf: new Map(),
     trace: [],
     measurer,
     icb,
@@ -180,6 +184,7 @@ export function layoutDocument(
     pieces: context.pieces,
     lines: context.lines,
     lineBoxes: context.lineBoxes,
+    lineOf: context.lineOf,
     trace: context.trace,
   };
 }
@@ -418,6 +423,7 @@ function layoutChildren(
       pieces: context.pieces,
       lines: context.lines,
       lineBoxes: context.lineBoxes,
+      lineOf: context.lineOf,
       trace: context.trace,
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
@@ -486,7 +492,13 @@ function layoutChildren(
     // edge, whatever lines it holds and wherever that edge is, even above the box's top when
     // a negative margin put it there. It is the last one that counts, so it wins over any
     // line in front of it.
-    if (child.style.overflow !== 'visible') {
+    // A flex container that clips keeps a baseline of its own instead, no lower than its bottom
+    // border edge, and one with nothing in it to give a baseline gives none.
+    if (child.style.overflow !== 'visible' && child.style.display === 'flex') {
+      if (result.baseline !== null) {
+        baseline = childTop - contentTop + Math.min(result.baseline, result.height);
+      }
+    } else if (child.style.overflow !== 'visible') {
       baseline = childTop - contentTop + result.height + resolveMargin(result.marginBottom);
     } else if (result.baseline !== null) {
       baseline = childTop - contentTop + result.baseline;
@@ -747,6 +759,7 @@ function measureFlow(
     pieces: new Map(),
     lines: new Map(),
     lineBoxes: new Map(),
+    lineOf: new Map(),
     trace: [],
   };
   const flow = layoutChildren(box, containing, contentTop, border, padding, scratch, true, []);
@@ -802,6 +815,7 @@ function measureAtomic(
     pieces: new Map(),
     lines: new Map(),
     lineBoxes: new Map(),
+    lineOf: new Map(),
     trace: [],
   };
   const margin = atomicMargin(box, available);
@@ -1196,6 +1210,7 @@ function measureAbsolute(
     pieces: new Map(),
     lines: new Map(),
     lineBoxes: new Map(),
+    lineOf: new Map(),
     trace: [],
   };
   const border = usedBorderWidths(box.style);
@@ -1414,6 +1429,7 @@ function itemMetrics(
       pieces: new Map(),
       lines: new Map(),
       lineBoxes: new Map(),
+      lineOf: new Map(),
       trace: [],
     };
     const result = layoutBlock(

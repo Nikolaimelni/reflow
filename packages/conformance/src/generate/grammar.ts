@@ -85,6 +85,9 @@ const declarations = fc.record(
     order: fc.integer({ min: -2, max: 2 }).map(String),
     'list-style-type': fc.constantFrom('disc', 'circle', 'square', 'decimal', 'none'),
     'list-style-position': fc.constantFrom('outside', 'inside'),
+    // Nothing to do with geometry, but everything to do with what the pointer lands on.
+    'z-index': fc.constantFrom('auto', '-1', '0', '1', '3'),
+    opacity: fc.constantFrom('1', '0.5'),
     gap: fc.oneof(
       px,
       percent,

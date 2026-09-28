@@ -2,26 +2,12 @@ import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, test } from '@playwright/test';
-import {
-  type Box,
-  type BoxId,
-  buildBoxTree,
-  buildDisplayList,
-  computeStyles,
-  type DomNode,
-  hitTest,
-  layoutDocument,
-  type Rect,
-} from '@reflow/engine';
+import { buildBoxTree, computeStyles, layoutDocument } from '@reflow/engine';
 import { buildTree, COMPARED_PROPERTIES } from './compare.js';
-import { extractPage, hitTestInPage, measureInPage } from './extract.js';
+import { extractPage, measureInPage } from './extract.js';
+import { compareHits } from './hit.js';
 import { measurementRequests, tableMeasurer } from './measurer.js';
 
-/**
- * The paint order has no geometry to compare, but it does decide what the pointer lands on,
- * and `document.elementFromPoint` asks the browser the same question. Sampling points and
- * comparing the answers checks the display list against Chromium without drawing anything.
- */
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(here, '..', 'fixtures');
 const reportDir = join(here, '..', 'report');
@@ -46,52 +32,21 @@ test.describe('hit testing against Chromium', () => {
 
       const measurements = await page.evaluate(measureInPage, measurementRequests(boxTree));
       const layout = layoutDocument(boxTree, extracted.viewport, tableMeasurer(measurements));
-      const list = buildDisplayList(boxTree);
 
-      const indexOf = new Map<DomNode, number>();
-      nodes.forEach((node, index) => {
-        indexOf.set(node, index);
-      });
+      // A pixel either side of every edge is left out: the fixtures are laid out to agree to
+      // the half pixel, and it is the paint order in between that is being asked about.
+      const { compared, matched, misses } = await compareHits(
+        page,
+        boxTree,
+        layout,
+        nodes,
+        extracted.nodes,
+        extracted.viewport,
+        1,
+      );
 
-      // Every box answers with the nearest element that owns it, which covers text runs,
-      // anonymous boxes, and content that overflows its block such as a nowrap line poking
-      // out the side.
-      const elementOf = new Map<BoxId, number>();
-      const claim = (box: Box, owner: number | null): void => {
-        const own =
-          box.kind !== 'text' && box.element !== null ? (indexOf.get(box.element) ?? owner) : owner;
-        if (own !== null) elementOf.set(box.id, own);
-        if (box.kind === 'text') return;
-        for (const child of box.children) claim(child, own);
-      };
-      claim(boxTree, null);
-
-      const points = samplePoints(layout, extracted.viewport, elementOf);
-      const theirs = await page.evaluate(hitTestInPage, points);
-
-      let matched = 0;
-      const misses: string[] = [];
-
-      points.forEach((point, i) => {
-        const hit = hitTest(list, layout, point.x, point.y, (box) => elementOf.has(box));
-        // Below the root element's own box the browser still answers with the root, because
-        // the root paints the whole canvas. Nothing else fills that space, so nothing found
-        // means the root.
-        const ours = hit === null ? 0 : (elementOf.get(hit) ?? -1);
-        const expected = theirs[i] ?? -1;
-
-        if (ours === expected) {
-          matched++;
-        } else {
-          misses.push(
-            `(${point.x}, ${point.y}): engine ${describe(extracted, ours)},` +
-              ` chromium ${describe(extracted, expected)}`,
-          );
-        }
-      });
-
-      results.set(fixture, { matched, compared: points.length });
-      expect(points.length, 'nothing was sampled').toBeGreaterThan(0);
+      results.set(fixture, { matched, compared });
+      expect(compared, 'nothing was sampled').toBeGreaterThan(0);
       expect(misses).toEqual([]);
     });
   }
@@ -118,80 +73,3 @@ test.describe('hit testing against Chromium', () => {
     expect(matched).toBe(compared);
   });
 });
-
-/**
- * Quarter points of every box, where overlaps actually decide something, plus a coarse grid
- * to catch the gaps between them. Two kinds of point are dropped: anything below the fold,
- * because `elementFromPoint` works in viewport coordinates and would answer null, and
- * anything within a pixel of a box edge, because Chromium rounds an inline box to whole
- * pixels and the engine does not. A hit exactly on an edge is decided by that rounding, not
- * by the paint order this is meant to check.
- */
-function samplePoints(
-  geometry: {
-    fragments: ReadonlyMap<BoxId, { rect: Rect }>;
-    pieces: ReadonlyMap<BoxId, readonly Rect[]>;
-    lineBoxes: ReadonlyMap<BoxId, readonly Rect[]>;
-  },
-  viewport: { width: number; height: number },
-  elementOf: ReadonlyMap<BoxId, number>,
-): { x: number; y: number }[] {
-  const rects: Rect[] = [];
-  for (const box of elementOf.keys()) {
-    const pieces = geometry.pieces.get(box);
-    if (pieces !== undefined) rects.push(...pieces);
-    const lineBoxes = geometry.lineBoxes.get(box);
-    if (lineBoxes !== undefined) rects.push(...lineBoxes);
-    const fragment = geometry.fragments.get(box);
-    if (fragment !== undefined) rects.push(fragment.rect);
-  }
-
-  const nearEdge = (x: number, y: number) =>
-    rects.some(
-      (rect) =>
-        Math.abs(x - rect.x) <= 1 ||
-        Math.abs(x - (rect.x + rect.width)) <= 1 ||
-        Math.abs(y - rect.y) <= 1 ||
-        Math.abs(y - (rect.y + rect.height)) <= 1,
-    );
-
-  const points: { x: number; y: number }[] = [];
-  const seen = new Set<string>();
-
-  const add = (x: number, y: number) => {
-    const key = `${x},${y}`;
-    if (seen.has(key)) return;
-    if (x < 0 || y < 0 || x >= viewport.width || y >= viewport.height) return;
-    if (nearEdge(x, y)) return;
-    seen.add(key);
-    points.push({ x, y });
-  };
-
-  for (const rect of rects) {
-    if (rect.width <= 2 || rect.height <= 2) continue;
-    for (const fx of [0.25, 0.5, 0.75]) {
-      for (const fy of [0.25, 0.5, 0.75]) {
-        add(Math.round(rect.x + rect.width * fx), Math.round(rect.y + rect.height * fy));
-      }
-    }
-  }
-
-  for (let y = 5; y < viewport.height; y += 37) {
-    for (let x = 5; x < viewport.width; x += 53) add(x, y);
-  }
-
-  return points;
-}
-
-function describe(
-  extracted: {
-    nodes: readonly ({ kind: 'element'; tag: string; classes: string[] } | { kind: 'text' })[];
-  },
-  index: number,
-): string {
-  if (index < 0) return 'nothing';
-  const node = extracted.nodes[index];
-  if (node === undefined || node.kind !== 'element') return `#${index}`;
-  const classes = node.classes.length === 0 ? '' : `.${node.classes.join('.')}`;
-  return `<${node.tag}${classes}>`;
-}

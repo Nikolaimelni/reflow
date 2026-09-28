@@ -588,6 +588,20 @@ describe('atomic inlines', () => {
     expect(keeps.rectOf(span).height).toBe(16);
   });
 
+  it('holds the opening of a div to what comes before it, unless that is a space or an atomic', () => {
+    const lines = (before: DomNode[]) => {
+      const opened = element('div', { classes: ['inl'] }, [element('span', { classes: ['over'] })]);
+      return page(css, [element('p', {}, [...before, opened])], 100).lines.length;
+    };
+
+    // Not after a word, and not after an empty div either, but a space or an inline-block in
+    // front of it is somewhere to break.
+    expect(lines([text('x')])).toBe(1);
+    expect(lines([element('div', { classes: ['inl'] })])).toBe(1);
+    expect(lines([text('x ')])).toBe(2);
+    expect(lines([element('span', { classes: ['block'] })])).toBe(2);
+  });
+
   it('starts the next line for an inline box out of the flow that comes after a full one', () => {
     const late = element('span', { classes: ['out'] });
     const onTime = element('span', { classes: ['out'] });
@@ -692,6 +706,25 @@ describe('an inline-block whose last child clips', () => {
     // The child ends twelve above the inline-block's top, so that is its baseline, and the
     // inline-block sits twelve below the line's baseline: the line is that much deeper.
     expect(page(css, [p]).rectOf(p).height).toBeCloseTo(12.8 + 12);
+  });
+
+  it('takes its own baseline from a flex container that clips, no lower than its bottom', () => {
+    const baselineOf = (inside: DomNode[]) => {
+      const mark = element('span', { classes: ['mark'] });
+      const box = element('span', { classes: ['box'] }, inside);
+      const laid = page(
+        'p { margin: 0 } .mark { display: inline-block } .box { display: inline-block } .row { display: flex; overflow: hidden; height: 6px; margin-bottom: 5px }',
+        [element('p', {}, [mark, box])],
+      );
+      return laid.rectOf(mark).y - laid.rectOf(box).y;
+    };
+    const row = (inside: DomNode[] = []) => element('div', { classes: ['row'] }, inside);
+
+    // The word's baseline is 12.8 down, and the six pixel row cuts it off at its bottom border
+    // edge rather than at the margin under it. An empty row gives no baseline at all, so the
+    // line above it keeps its own.
+    expect(baselineOf([row([element('div', {}, [text('x')])])])).toBe(6);
+    expect(baselineOf([element('div', {}, [text('x')]), row()])).toBeCloseTo(12.8);
   });
 });
 

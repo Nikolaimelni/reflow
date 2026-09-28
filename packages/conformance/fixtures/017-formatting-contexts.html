@@ -54,6 +54,13 @@
     height: 4px;
     background-color: #444;
   }
+  .clipped-last .clipping.row {
+    display: flex;
+  }
+  .clipped-last .short {
+    height: 6px;
+    margin-bottom: 5px;
+  }
 </style>
 
 <div class="plain">
@@ -89,5 +96,18 @@
 <div>
   <div class="clipped-last">
     <div class="clipping tall">text</div>
+  </div>
+</div>
+
+<div>
+  x
+  <div class="clipped-last">
+    <div class="clipping row"></div>
+  </div>
+  <div class="clipped-last">
+    <div class="clipping row"><div>text</div></div>
+  </div>
+  <div class="clipped-last">
+    <div class="clipping row short"><div>text</div></div>
   </div>
 </div>

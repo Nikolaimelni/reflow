@@ -69,6 +69,23 @@
     padding: 22px;
     border: 2px solid;
   }
+  .framed-empty {
+    display: inline;
+    border: 1px solid;
+  }
+  .opened {
+    display: inline;
+    padding-left: 10px;
+  }
+  .pushed {
+    padding-left: 10px;
+  }
+  .small-atomic {
+    display: inline-block;
+    width: 20px;
+    height: 10px;
+    background-color: #e8d8c8;
+  }
 </style>
 
 <div>a<span class="wide"></span></div>
@@ -107,3 +124,14 @@
 <div><span class="wide-start">three</span><span class="short-start">
     one
   </span></div>
+<div><div class="framed-empty"></div><div class="opened"><span class="wide"></span></div></div>
+<div><div class="framed-empty"></div><span class="pushed"><span class="wide"></span></span></div>
+<div>
+  <div class="opened">
+    <span class="wide"></span>
+  </div>
+</div>
+<div><div class="framed-empty"></div><span><div class="opened"><span class="wide"></span></div></span></div>
+<div>x<div class="opened"><span class="wide"></span></div></div>
+<div>x<span class="pushed"><span class="wide"></span></span></div>
+<div><span class="small-atomic"></span><div class="opened"><span class="wide"></span></div></div>

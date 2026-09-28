@@ -90,6 +90,7 @@
         fragments: session.frame,
         pieces: session.result.layout.pieces,
         lineBoxes: session.result.layout.lineBoxes,
+        lineOf: session.result.layout.lineOf,
       },
       (event.clientX - bounds.left) / scale,
       (event.clientY - bounds.top) / scale,

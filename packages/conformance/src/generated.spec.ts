@@ -41,6 +41,7 @@ test('generated documents agree with Chromium', async ({ page }) => {
 
   let documentsTried = 0;
   let edgesCompared = 0;
+  let pointsCompared = 0;
 
   const result = await fc.check(
     fc.asyncProperty(documents, async (generated: GeneratedDocument) => {
@@ -49,6 +50,7 @@ test('generated documents agree with Chromium', async ({ page }) => {
 
       documentsTried++;
       edgesCompared += check.compared;
+      pointsCompared += check.points;
 
       return check.misses.length === 0;
     }),
@@ -101,6 +103,7 @@ test('generated documents agree with Chromium', async ({ page }) => {
         // Includes the documents fast-check laid out while shrinking a counterexample.
         documents: documentsTried,
         compared: edgesCompared,
+        points: pointsCompared,
         found,
         seed: result.seed,
       },

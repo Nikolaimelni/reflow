@@ -255,4 +255,19 @@ describe('hitTest', () => {
     expect(at(90, 18)).toBe('kept');
     expect(at(40, 26)).toBe('fat');
   });
+
+  it('lets a later line cover a padded box that hangs down into it', () => {
+    const at = pointer('.host { width: 60px; line-height: 30px } .deep { padding-bottom: 12px }', [
+      element('div', { classes: ['host'] }, [
+        element('span', { classes: ['deep'] }, [text('abcdef')]),
+        text(' gh'),
+      ]),
+    ]);
+
+    // The span's text ends at 23 and its padding at 35, inside the second line, which starts at
+    // 30 and is as wide as "gh". Over that word the line is on top, even where the word itself
+    // is not drawn yet, and beside it the span still shows.
+    expect(at(4, 32)).toBe('host');
+    expect(at(30, 32)).toBe('deep');
+  });
 });
