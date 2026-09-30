@@ -772,6 +772,18 @@ describe('list markers', () => {
     expect(laid.rectOf(word).x).toBe(21);
   });
 
+  it('lets the space after a number hang when nothing follows it', () => {
+    const empty = element('li', {});
+    const full = element('li', {}, [text('x')]);
+    const css =
+      'ol { margin: 0; padding: 0; list-style: decimal inside } li { position: absolute }';
+
+    // "1." is sixteen wide and the space after it eight, which only counts once there is
+    // something for it to stand in front of.
+    expect(page(css, [element('ol', {}, [empty])]).rectOf(empty).width).toBe(16);
+    expect(page(css, [element('ol', {}, [full])]).rectOf(full).width).toBe(32);
+  });
+
   it('drops the space after it and can break straight after it', () => {
     const word = element('span', {}, [text('ab')]);
     const css = 'ul { margin: 0; padding: 0; list-style: decimal inside }';

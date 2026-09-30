@@ -136,15 +136,18 @@ function inlineIntrinsic(
     for (const child of boxes) {
       if (child.kind === 'text' && child.listMarker !== null) {
         // A marker inside its item is no content for a space to follow, so the space after it
-        // goes, as it would at the start of a line. It can be broken after all the same.
+        // goes, as it would at the start of a line. It can be broken after all the same. The
+        // space at the end of a number is its own, and hangs unless something follows it.
         const font = fontOf(child.style);
         for (const segment of segmentText(child.text, child.style.whiteSpace)) {
           if (segment.kind === 'newline') continue;
-          addEdge(
+          const width =
             child.listMarker === 'symbol'
               ? symbolMarkerAdvance(measurer.metrics(font), font.size)
-              : measurer.advance(segment.text, font),
-          );
+              : measurer.advance(segment.text, font);
+          if (segment.kind !== 'space') addEdge(width);
+          else if (canWrap) gap = width;
+          else glue = width;
         }
         if (canWrap) endRun();
         continue;

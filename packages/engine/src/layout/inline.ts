@@ -1001,9 +1001,12 @@ function breakIntoLines(
     let at = current.length;
     while (at > 0 && isMarker(current[at - 1]?.piece.kind ?? 'glyphs')) at--;
 
+    // The space a number inside its item ends with hangs too, though the marker is `pre`.
     const last = at > 0 ? current[at - 1] : undefined;
     const space = last?.piece;
-    return space !== undefined && space.kind === 'space' && space.style.whiteSpace !== 'pre'
+    return space !== undefined &&
+      space.kind === 'space' &&
+      (space.style.whiteSpace !== 'pre' || space.listMarker)
       ? at - 1
       : -1;
   };
