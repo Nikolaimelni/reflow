@@ -490,6 +490,21 @@ describe('inline boxes', () => {
     });
   });
 
+  it('keeps a box for a span a block cut in two', () => {
+    const span = element('span', {}, [
+      text(' '),
+      element('div', {}),
+      text(' '),
+      element('span', { classes: ['ring'] }),
+      text(' '),
+    ]);
+    const css = 'p { margin: 0 } .ring { border: 1px solid }';
+
+    // The half after the block is a box of its own, as tall as its font, rather than the
+    // bordered span inside it.
+    expect(page(css, [element('p', {}, [span])]).rectOf(span)).toMatchObject({ y: 0, height: 16 });
+  });
+
   it('keeps a box for a span whose content needs one', () => {
     const tall = () => element('span', { classes: ['tall'] }, [text('b')]);
     const css =

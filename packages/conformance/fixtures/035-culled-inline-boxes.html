@@ -48,6 +48,9 @@
   .narrow {
     width: 90px;
   }
+  .made-inline {
+    display: inline;
+  }
 </style>
 
 <div class="zone"><span>one <span class="tall">two</span></span></div>
@@ -67,3 +70,11 @@
 <div class="zone"><span>one<span class="flat"></span></span></div>
 <div class="zone"><span><span class="flat"></span>one</span></div>
 <div class="zone narrow"><span>one one <span class="tall">two two</span> three three</span></div>
+<div class="zone">
+  <div class="made-inline">
+    <div></div>
+    <div class="ring"></div>
+  </div>
+</div>
+<div class="zone"><span>one<div></div><span class="tall">two</span></span></div>
+<div class="zone"><span><span>one<div></div><span class="tall">two</span></span></span></div>

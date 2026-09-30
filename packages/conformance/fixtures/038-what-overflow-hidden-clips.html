@@ -34,6 +34,14 @@
     height: 80px;
     background-color: #c8d8e8;
   }
+  .holder {
+    position: relative;
+    height: 40px;
+  }
+  .nothing-wide {
+    position: absolute;
+    overflow: hidden;
+  }
 </style>
 
 <div class="clip"><div class="wide"></div></div>
@@ -42,3 +50,5 @@
 <div class="clip placed"><div class="out"></div></div>
 <div class="clip"><div><div class="out"></div></div></div>
 <div class="clip"><div class="placed"><div class="out"></div></div></div>
+<div class="holder"><div class="nothing-wide"><div class="nothing-wide">one</div></div></div>
+<div class="clip"><div class="clip"><div class="wide"></div></div></div>

@@ -62,6 +62,8 @@ export type InlineInput = {
   lineOf: Map<Rect, LineRef>;
   trace: LayoutEvent[];
   layoutAtomic: (box: InlineBox, available: number) => AtomicSize;
+  /** Whether a block cut this inline box's element in two, which always leaves it a box. */
+  cut: (box: InlineBox) => boolean;
   placeAtomic: (box: InlineBox, x: number, y: number) => void;
   /**
    * Hands an out of flow box back with the static position it had in the line, and how tall
@@ -397,7 +399,7 @@ export function layoutInlineContent(input: InlineInput): InlineResult {
 
   // In the order Blink walks them: all of one child, then the next. A culled box with nothing
   // inside that reached a line is left with its own rects, which is where it opened and closed.
-  const culled = culledBoxes(input.container.children, input.measurer);
+  const culled = culledBoxes(input.container.children, input);
   const reported = (box: BoxId): Rect[] => {
     const gathered = culled.get(box)?.flatMap((child) => reported(child.id)) ?? [];
     return gathered.length > 0 ? gathered : (own.get(box) ?? []);
@@ -597,13 +599,13 @@ function takesRoom(piece: Piece): boolean {
 /** The inline boxes Chromium culls, each with what is inside it. */
 function culledBoxes(
   children: readonly Box[],
-  measurer: TextMeasurer,
+  input: Pick<InlineInput, 'measurer' | 'cut'>,
   found = new Map<BoxId, readonly Box[]>(),
 ): Map<BoxId, readonly Box[]> {
   for (const child of children) {
     if (child.kind !== 'inline' || child.atomic) continue;
-    if (culls(child, measurer)) found.set(child.id, child.children);
-    culledBoxes(child.children, measurer, found);
+    if (!input.cut(child) && culls(child, input.measurer)) found.set(child.id, child.children);
+    culledBoxes(child.children, input, found);
   }
   return found;
 }

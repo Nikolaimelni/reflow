@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>flex lines inside a container's min and max height</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    width: 200px;
+  }
+  .row {
+    display: flex;
+    border: 1px solid;
+    margin-bottom: 10px;
+  }
+  .row > div {
+    background-color: #d8e8c8;
+  }
+  .floored {
+    min-height: 28px;
+  }
+  .capped {
+    max-height: 10px;
+  }
+  .wraps {
+    flex-wrap: wrap;
+  }
+  .centred {
+    align-content: center;
+  }
+  .deep-floor {
+    min-height: 40px;
+  }
+  .deeper-floor {
+    min-height: 60px;
+  }
+  .narrow {
+    width: 30px;
+  }
+  .narrow > div {
+    width: 30px;
+  }
+  .column {
+    flex-direction: column;
+  }
+  .out-of-place {
+    max-width: 0;
+    flex-direction: row-reverse;
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+  }
+</style>
+
+<div class="row floored"><div>x</div></div>
+<div class="row capped"><div>x</div></div>
+<div class="row deep-floor wraps centred"><div>x</div></div>
+<div class="row deep-floor wraps"><div>x</div></div>
+<div class="row deeper-floor wraps narrow"><div>x</div><div>y</div></div>
+<div class="row capped wraps centred"><div>x</div></div>
+<div class="row deep-floor column"><div>x</div></div>
+<div class="row floored out-of-place centred"><div>one</div></div>

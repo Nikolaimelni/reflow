@@ -43,6 +43,13 @@ export type FlexLineInput = {
   crossGap: number;
   /** Cross content size the container pins, null when it comes from the items. */
   crossSize: number | null;
+  /**
+   * The container's min and max on the cross axis, which still hold a size that comes from the
+   * items. A line that will not wrap is clamped between them, and lines that will wrap share
+   * out whatever the clamp adds or takes away.
+   */
+  crossMin: number;
+  crossMax: number | null;
   items: readonly FlexItemInput[];
   /** Cross content size of an item once its main size is settled. */
   crossOf: (index: number, main: number) => number;
@@ -91,14 +98,24 @@ export function solveFlex(input: FlexLineInput): FlexResult {
 
   // A line in a container that wraps is as big across as the items in it, even when that is
   // more than the container has: it is the container that overflows, not the items that
-  // shrink. A container that does not wrap hands its own size down instead.
-  const natural = runs.map((run) => solve(run, wraps ? null : input.crossSize));
+  // shrink. A container that does not wrap hands its own size down instead, and when it has
+  // none, the size the line comes to is still held between the container's min and max.
+  const first = runs.map((run) => solve(run, wraps ? null : input.crossSize));
+  const natural =
+    !wraps && input.crossSize === null
+      ? first.map((line, index) => {
+          const held = clamp(line.crossSize, input.crossMin, input.crossMax);
+          return held === line.crossSize ? line : solve(runs[index] ?? [], held);
+        })
+      : first;
   const content = natural.reduce((sum, line) => sum + line.crossSize, gaps);
 
   // `align-content` shares out the cross space the lines left over. Its initial value is
-  // `normal`, which in a flex container stretches them to fill it.
+  // `normal`, which in a flex container stretches them to fill it. With no size of its own the
+  // container is as big as its lines, until its min or max says otherwise.
   const packing = input.alignContent === 'normal' ? 'stretch' : input.alignContent;
-  const free = wraps && input.crossSize !== null ? input.crossSize - content : 0;
+  const used = input.crossSize ?? clamp(content, input.crossMin, input.crossMax);
+  const free = wraps ? used - content : 0;
   const spare = packing === 'stretch' && free > 0 ? free / runs.length : 0;
 
   const lines =
@@ -131,7 +148,7 @@ export function solveFlex(input: FlexLineInput): FlexResult {
   return {
     placements:
       input.wrap === 'wrap-reverse'
-        ? turnOver(placements, input, input.crossSize ?? extent)
+        ? turnOver(placements, input, input.crossSize ?? used)
         : placements,
     mainSize: input.mainSize ?? mainSize,
     crossSize: extent,

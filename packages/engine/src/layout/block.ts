@@ -293,7 +293,10 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
 
   const flow =
     style.display === 'flex'
-      ? layoutFlexItems(box, childContaining, contentTop, context, mine)
+      ? layoutFlexItems(box, childContaining, contentTop, context, mine, {
+          min: minHeight ?? 0,
+          max: maxHeight,
+        })
       : layoutChildren(
           box,
           childContaining,
@@ -427,6 +430,7 @@ function layoutChildren(
       trace: context.trace,
       layoutAtomic: (child, available) =>
         measureAtomic(child, available, containing.height, context),
+      cut: (child) => (context.boxesOf.get(child.element)?.length ?? 1) > 1,
       placeAtomic: (child, x, y) => placeAtomic(child, x, y, containing, context, absolutes),
       defer: (child, x, y, room, within) =>
         absolutes.push({
@@ -1232,12 +1236,18 @@ function measureAbsolute(
   return Math.max(0, result.height - border.top - border.bottom - padding.top - padding.bottom);
 }
 
+/**
+ * `heights` is the container's own min and max height, as content. Across a row they still
+ * hold the lines when the container has no height of its own. Down a column the cross axis
+ * is the width, which is always settled by the time the items are laid out.
+ */
 function layoutFlexItems(
   box: BlockBox,
   containing: ContainingBlock,
   contentTop: number,
   context: Context,
   absolutes: Deferred[],
+  heights: { min: number; max: number | null },
 ): FlowResult {
   const direction = box.style.flexDirection;
   const isRow = direction === 'row' || direction === 'row-reverse';
@@ -1278,6 +1288,8 @@ function layoutFlexItems(
     wrap: box.style.flexWrap,
     mainSize: isRow ? containing.width : containing.height,
     crossSize: isRow ? containing.height : containing.width,
+    crossMin: isRow ? heights.min : 0,
+    crossMax: isRow ? heights.max : null,
     mainGap: isRow ? columnGap : rowGap,
     crossGap: isRow ? rowGap : columnGap,
     justify: box.style.justifyContent,

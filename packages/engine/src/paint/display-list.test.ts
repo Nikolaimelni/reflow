@@ -296,6 +296,21 @@ describe('hitTest', () => {
     expect(down(40, 55)).toBe('nothing');
   });
 
+  it('clips by every clip around a box, not only the nearest one', () => {
+    const at = pointer(
+      '.outer { position: absolute; overflow: hidden } .inner { position: absolute; overflow: hidden }',
+      [
+        element('div', { classes: ['outer'] }, [
+          element('div', { classes: ['inner'] }, [text('one')]),
+        ]),
+      ],
+    );
+
+    // Nothing in the outer box is in the flow, so it has no size, and it clips the inner box
+    // away along with the word inside it, which the inner box's own clip would have let through.
+    expect(at(5, 5)).toBe('nothing');
+  });
+
   it('lets a later line cover a padded box that hangs down into it', () => {
     const at = pointer('.host { width: 60px; line-height: 30px } .deep { padding-bottom: 12px }', [
       element('div', { classes: ['host'] }, [
@@ -309,5 +324,22 @@ describe('hitTest', () => {
     // is not drawn yet, and beside it the span still shows.
     expect(at(4, 32)).toBe('host');
     expect(at(30, 32)).toBe('deep');
+  });
+
+  it('does not cover a box with a layer of its own with a later line', () => {
+    const at = (layered: string) =>
+      pointer(
+        `.host { width: 60px; line-height: 30px } .deep { padding-bottom: 12px; ${layered} }`,
+        [
+          element('div', { classes: ['host'] }, [
+            element('span', { classes: ['deep'] }, [text('abcdef')]),
+            text(' gh'),
+          ]),
+        ],
+      )(4, 32);
+
+    // Transparent or positioned, the span is tested before the lines of the block it sits in.
+    expect(at('opacity: 0.5')).toBe('deep');
+    expect(at('position: relative')).toBe('deep');
   });
 });

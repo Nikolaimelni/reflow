@@ -31,6 +31,8 @@ function line(overrides: Partial<FlexLineInput> = {}) {
   const input: FlexLineInput = {
     mainSize: 300,
     crossSize: null,
+    crossMin: 0,
+    crossMax: null,
     justify: 'flex-start',
     align: 'stretch',
     alignContent: 'normal',
@@ -276,6 +278,39 @@ describe('the other way round', () => {
     // The first item starts at the far end, and the auto margin on its right takes all the
     // free space, which pushes it back until it meets the second.
     expect(starts(line({ items, reverse: true }))).toEqual([10, 0]);
+  });
+});
+
+describe('a container with a min or max across', () => {
+  const crosses = (overrides: Partial<FlexLineInput>) => {
+    const result = line({ items: [item({ crossSize: null })], crossOf: () => 18, ...overrides });
+    return { start: result.placements[0]?.crossStart, size: result.placements[0]?.crossSize };
+  };
+
+  it('holds a line that will not wrap between them, and stretches its items to it', () => {
+    expect(crosses({ crossMin: 28 })).toEqual({ start: 0, size: 28 });
+    expect(crosses({ crossMax: 10 })).toEqual({ start: 0, size: 10 });
+  });
+
+  it('shares out what the min adds to lines that wrap, and what the max takes away', () => {
+    const wrapping = { wrap: 'wrap' as const };
+    expect(crosses({ ...wrapping, crossMin: 40, alignContent: 'center' })).toEqual({
+      start: 11,
+      size: 18,
+    });
+    expect(crosses({ ...wrapping, crossMin: 40 })).toEqual({ start: 0, size: 40 });
+    expect(crosses({ ...wrapping, crossMax: 10, alignContent: 'center' })).toEqual({
+      start: -4,
+      size: 18,
+    });
+  });
+
+  it('turns lines that wrap the other way over the size the min gave the container', () => {
+    // Packed against the start, which with wrap-reverse is the bottom of the forty.
+    expect(crosses({ wrap: 'wrap-reverse', crossMin: 40, alignContent: 'flex-start' })).toEqual({
+      start: 22,
+      size: 18,
+    });
   });
 });
 

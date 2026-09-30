@@ -33,6 +33,12 @@ export type PaintItem = {
   order: number;
   /** The stacking context this box paints inside. */
   context: BoxId;
+  /**
+   * The box painting as one piece that this item is drawn as part of: the root, a stacking
+   * context, a positioned box, an atomic inline or a flex item. A block's lines only cover
+   * what is drawn in the same piece as them.
+   */
+  unit: BoxId;
   /** How deep that context sits, which is what the layers view spreads out. */
   depth: number;
 };
@@ -198,7 +204,7 @@ function paint(
   hoisted = false,
 ): void {
   const group = state.together.get(box.id) ?? [box];
-  for (const one of group) push(one, state, context, depth, clip);
+  for (const one of group) push(one, state, context, depth, clip, box.id);
   if (box.kind === 'text') return;
 
   // Anything but visible overflow clips what is inside it, and the clip travels down
@@ -229,11 +235,11 @@ function paint(
     descend(entry.box, state, context, depth, entry.clip);
   }
   for (const entry of bucket.blocks) {
-    push(entry.box, state, context, depth, entry.clip);
+    push(entry.box, state, context, depth, entry.clip, box.id);
   }
   for (const entry of bucket.inlines) {
     if (entry.own) descend(entry.box, state, context, depth, entry.clip);
-    else push(entry.box, state, context, depth, entry.clip, entry.part);
+    else push(entry.box, state, context, depth, entry.clip, box.id, entry.part);
   }
   for (const entry of bucket.level) {
     descend(entry.box, state, context, depth, entry.clip);
@@ -249,6 +255,7 @@ function push(
   context: BoxId,
   depth: number,
   clip: BoxId | null,
+  unit: BoxId,
   part: PaintItem['part'] = 'box',
 ): void {
   state.items.push({
@@ -258,6 +265,7 @@ function push(
     clippedBy: clip,
     order: state.items.length,
     context,
+    unit,
     depth,
   });
 }
@@ -395,16 +403,22 @@ export function hitTest(
   y: number,
   accept: (box: BoxId) => boolean = () => true,
 ): BoxId | null {
+  // A block's lines only cover what is drawn in the same piece as them. A box in a layer of
+  // its own, a transparent one or a positioned one, is tested before any of them.
+  const linesUnit = new Map<BoxId, BoxId>();
+  for (const item of list.items) if (item.part === 'lines') linesUnit.set(item.box, item.unit);
+
+  // A clip is itself inside whatever clips it, so a point has to get through every one of them.
+  const clipOf = new Map<BoxId, BoxId | null>();
+  for (const item of list.items) {
+    if (item.part === 'box' && !clipOf.has(item.box)) clipOf.set(item.box, item.clippedBy);
+  }
+
   for (let i = list.items.length - 1; i >= 0; i--) {
     const item = list.items[i];
     if (item === undefined || !item.visible || !accept(item.box)) continue;
 
-    if (
-      item.clippedBy !== null &&
-      !inside(paddingBox(geometry.fragments.get(item.clippedBy)), x, y)
-    ) {
-      continue;
-    }
+    if (clippedOut(item.clippedBy)) continue;
 
     const fragment = geometry.fragments.get(item.box);
     const rects =
@@ -413,7 +427,7 @@ export function hitTest(
         : (geometry.pieces.get(item.box) ?? (fragment === undefined ? [] : [fragment.rect]));
 
     for (const rect of rects) {
-      if (!inside(rect, x, y) || underLaterLine(rect)) continue;
+      if (!inside(rect, x, y) || underLaterLine(rect, item.unit)) continue;
       if (item.part === 'lines' && !within(asBigAsTheBlock(rect, fragment), x, y)) continue;
       return item.box;
     }
@@ -426,9 +440,16 @@ export function hitTest(
    * box stops there. So a padded box that hangs down from one line into the box of the next is
    * not found where that box is, even though nothing else is drawn there.
    */
-  function underLaterLine(rect: Rect): boolean {
+  function clippedOut(clip: BoxId | null): boolean {
+    for (let at = clip; at !== null; at = clipOf.get(at) ?? null) {
+      if (!inside(paddingBox(geometry.fragments.get(at)), x, y)) return true;
+    }
+    return false;
+  }
+
+  function underLaterLine(rect: Rect, unit: BoxId): boolean {
     const line = geometry.lineOf?.get(rect);
-    if (line === undefined) return false;
+    if (line === undefined || linesUnit.get(line.block) !== unit) return false;
     const later = geometry.lineBoxes.get(line.block)?.slice(line.after) ?? [];
     return later.some((box) => inside(box, x, y));
   }
