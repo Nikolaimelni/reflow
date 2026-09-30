@@ -76,6 +76,21 @@
   .filled {
     background-color: #e8e8e8;
   }
+  .pulls-up {
+    margin-bottom: -12px;
+  }
+  .no-width {
+    display: inline-block;
+    width: 0;
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+  }
+  .wide-line {
+    white-space: nowrap;
+  }
 </style>
 
 <div class="rel"><div class="card rel five">five</div></div>
@@ -110,3 +125,9 @@
   <div class="card item two"><div class="tab rel five"></div></div>
   <div class="card item rel three behind"></div>
 </div>
+<div class="spacer"></div>
+<span><div class="card pulls-up"></div></span>
+<div class="no-width"></div>
+<div class="spacer"></div>
+<div class="stack">one<div class="wide-line">one one one one one one a internationalisation one one</div></div>
+<div class="spacer"></div>

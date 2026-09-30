@@ -296,6 +296,36 @@ describe('hitTest', () => {
     expect(down(40, 55)).toBe('nothing');
   });
 
+  it('goes through an anonymous block to what is under it', () => {
+    const at = pointer(
+      '.lifting { height: 4px; margin-bottom: -12px } .ib { display: inline-block }',
+      [
+        element('span', {}, [element('div', { classes: ['lifting'] })]),
+        element('span', { classes: ['ib'] }),
+      ],
+    );
+
+    // The block after the first one is anonymous, pulled up over it by the negative margin.
+    // It has nothing of its own to be found, so the block under it is.
+    expect(at(90, 2)).toBe('lifting');
+  });
+
+  it('finds a run of text in a flex container, which is a box of its own', () => {
+    const at = pointer(
+      '.col { display: flex; flex-direction: column; flex-wrap: wrap } .wide { white-space: nowrap }',
+      [
+        element('div', { classes: ['col'] }, [
+          text('ab'),
+          element('div', { classes: ['wide'] }, [text('x'.repeat(60))]),
+        ]),
+      ],
+    );
+
+    // The wide item makes the column 480 across, and the item around "ab" is stretched to it,
+    // out past the page. Unlike an anonymous block among blocks, that item is a box to be found.
+    expect(at(420, 8)).toBe('anonymous');
+  });
+
   it('clips by every clip around a box, not only the nearest one', () => {
     const at = pointer(
       '.outer { position: absolute; overflow: hidden } .inner { position: absolute; overflow: hidden }',

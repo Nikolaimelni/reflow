@@ -19,11 +19,18 @@ export type PaintItem = {
    * The box itself, or the line boxes of a block that holds inline content. Those have
    * nothing to draw, but they are hit tested where that content paints, over the backgrounds
    * of the blocks that come after, so a line hanging out of its block still finds the block,
-   * as far out as the block paints anything.
+   * as far out as the block itself would reach from where the line starts.
    */
   part: 'box' | 'lines';
   /** `visibility: hidden` keeps a box's space but takes it out of painting and hit testing. */
   visible: boolean;
+  /**
+   * A block no element asked for, around a run of inline content that sits among blocks.
+   * Chromium keeps that content as lines of the block around it rather than as a box, so a
+   * pointer goes straight through this one, though not through the lines inside it. A run of
+   * text in a flex container is a box of its own in Chromium too, and does not count.
+   */
+  anonymous: boolean;
   /**
    * The box whose clip this one is inside, if any: the nearest ancestor that clips its
    * overflow, or for an absolutely positioned box the one that clips its containing block.
@@ -262,6 +269,7 @@ function push(
     box: box.id,
     part,
     visible: box.style.visibility === 'visible',
+    anonymous: box.kind === 'block' && box.element === null && !state.flexItems.has(box.id),
     clippedBy: clip,
     order: state.items.length,
     context,
@@ -418,6 +426,7 @@ export function hitTest(
     const item = list.items[i];
     if (item === undefined || !item.visible || !accept(item.box)) continue;
 
+    if (item.part === 'box' && item.anonymous) continue;
     if (clippedOut(item.clippedBy)) continue;
 
     const fragment = geometry.fragments.get(item.box);

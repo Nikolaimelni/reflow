@@ -617,6 +617,20 @@ describe('atomic inlines', () => {
     expect(lines([element('span', { classes: ['block'] })])).toBe(2);
   });
 
+  it('breaks in front of a div that opens past the end and then breaks, but not a span', () => {
+    const top = (tag: string) => {
+      const opened = element(tag, { classes: ['inl', 'forced'] }, [text('\nyy')]);
+      const wide = `${css} .forced { white-space: pre; padding-left: 40px }`;
+      return page(wide, [element('p', {}, [text('xxxxxxxxxx '), opened])], 100).rectOf(opened).y;
+    };
+
+    // Eighty of text, a space, and forty of padding in a hundred. The space in front of the
+    // span goes with the forced break, so there is nowhere to break and the padding hangs
+    // over the end. In front of the div the space stays, and the div starts the next line.
+    expect(top('span')).toBe(0);
+    expect(top('div')).toBe(16);
+  });
+
   it('starts the next line for an inline box out of the flow that comes after a full one', () => {
     const late = element('span', { classes: ['out'] });
     const onTime = element('span', { classes: ['out'] });

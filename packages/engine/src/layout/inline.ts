@@ -1082,13 +1082,20 @@ function breakIntoLines(
    * of it on the line: content, or the edge of a box whose tag is a block by default, which
    * Chromium will leave on a line of its own where it keeps an empty span with what follows.
    */
-  const opportunity = (): number => {
+  const opportunity = (forced = false): number => {
     for (let at = current.length - 1; at > 0; at--) {
       // Only content is worth a new line. A space would vanish at the start of it, and a box
       // out of the flow takes no room: where a full line sends one is its static position's
-      // business, not the break's.
+      // business, not the break's. In front of a forced break, what is carried makes a line of
+      // its own whatever it is, unless it is nothing but edges that may hang. Then the space in
+      // front of them goes along with the break, and it is no place to break at.
       const behind = current.slice(at);
-      if (!behind.some(({ piece }) => !isMarker(piece.kind) && piece.kind !== 'space')) continue;
+      const worth = forced
+        ? behind.some(
+            ({ piece }) => !(isEdge(piece.kind) && piece.mayHang) && piece.kind !== 'out-of-flow',
+          )
+        : behind.some(({ piece }) => !isMarker(piece.kind) && piece.kind !== 'space');
+      if (!worth) continue;
 
       const before = current[at - 1]?.piece;
       if (before?.kind === 'space' && wraps(before.style.whiteSpace)) {
@@ -1165,10 +1172,10 @@ function breakIntoLines(
     for (const at of ahead) boundaries.add(at - dropped.filter((index) => index < at).length);
   };
 
-  const rewind = () => {
+  const rewind = (forced = false) => {
     // A line always keeps what it has: a space at the start is not drawn and is not a place
     // to break either, so what overflows simply hangs over the edge.
-    const from = opportunity();
+    const from = opportunity(forced);
     if (from < 0) return;
 
     // A closing edge stays put, and so does a box out of the flow: neither of them is what
@@ -1182,6 +1189,9 @@ function breakIntoLines(
 
   for (const entry of intoEntries(items)) {
     if (entry.kind === 'newline') {
+      // An opening edge that was waiting for its content gets a forced break instead, so
+      // whether it fits is decided here, the same way its content would have decided it.
+      if (width - hangs(true) > input.available + FIT_SLACK) rewind(true);
       flush(true);
       continue;
     }
