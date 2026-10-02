@@ -3,6 +3,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import fc from 'fast-check';
+import { env } from './env.js';
 import { checkDocument } from './generate/check.js';
 import { documents, type GeneratedDocument, render } from './generate/grammar.js';
 
@@ -10,16 +11,17 @@ import { documents, type GeneratedDocument, render } from './generate/grammar.js
  * How many documents to try. A soak run raises it from the command line; CI wants the suite
  * to finish, and sixty is enough to catch a whole class of mistake on the way in.
  */
-const RUNS = Number.parseInt(process.env.REFLOW_RUNS ?? '60', 10);
+const RUNS = env.REFLOW_RUNS;
 
 /**
  * Looser than the half pixel the curated fixtures hold to, and deliberately so. Every whole
  * pixel of disagreement the generator turned up was a real rule the engine was missing, and
  * each of those is fixed. What is left under a pixel is baseline arithmetic inside nested
  * inline-blocks, which is written down as open rather than papered over with a smaller
- * number here.
+ * number here. It used to be a pixel and a half; of 600 documents that agreed at that, none
+ * disagreed at one.
  */
-const TOLERANCE = 1.5;
+const TOLERANCE = 1;
 
 const here = dirname(fileURLToPath(import.meta.url));
 
