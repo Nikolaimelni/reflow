@@ -40,7 +40,9 @@ export function parseColour(value: readonly Token[]): Colour | null {
   if (first === undefined) return null;
 
   if (meaningful.length === 1 && first.type === 'ident') {
-    return NAMED[first.value.toLowerCase()] ?? null;
+    // Own keys only, or `color: constructor` finds Object's and hands back a function.
+    const name = first.value.toLowerCase();
+    return Object.hasOwn(NAMED, name) ? (NAMED[name] ?? null) : null;
   }
 
   if (meaningful.length === 1 && first.type === 'hash') {
@@ -64,18 +66,22 @@ export function formatColour(colour: Colour): string {
  * The shortest run of digits that lands back on the same eight bit alpha, which is what the
  * colour spec asks for and what a browser prints. `#1b3f5c80` is 128/255, or 0.50196, and it
  * comes back as 0.5 because 0.5 rounds to 128 as well.
+ *
+ * The digits come from the byte, not from what was written: `0.3%` is stored as 1/255 and
+ * Chromium prints 0.004.
  */
 function serialiseAlpha(alpha: number): string {
   const byte = Math.round(alpha * 255);
+  const stored = byte / 255;
 
   for (const digits of [1, 2, 3]) {
-    const candidate = alpha.toFixed(digits);
+    const candidate = stored.toFixed(digits);
     if (Math.round(Number.parseFloat(candidate) * 255) === byte) {
       return String(Number.parseFloat(candidate));
     }
   }
 
-  return String(trim(alpha));
+  return String(trim(stored));
 }
 
 /** For a canvas or a stylesheet, where the alpha always belongs in the string. */
@@ -112,27 +118,28 @@ function fromHex(digits: string): Colour | null {
 
 /** Both the comma form and the space form, and a percentage alpha after a slash. */
 function fromRgb(tokens: readonly Token[]): Colour | null {
-  const numbers: number[] = [];
+  const values: { value: number; percent: boolean }[] = [];
 
   for (const token of tokens) {
-    if (token.type === 'number') numbers.push(token.value);
-    else if (token.type === 'percentage') numbers.push((token.value / 100) * 255);
-    else if (token.type === 'comma' || token.type === 'rparen') continue;
+    if (token.type === 'number' || token.type === 'percentage') {
+      values.push({ value: token.value, percent: token.type === 'percentage' });
+    } else if (token.type === 'comma' || token.type === 'rparen') continue;
     else if (token.type === 'delim' && token.value === '/') continue;
     else return null;
   }
 
-  const [r, g, b, a] = numbers;
-  if (r === undefined || g === undefined || b === undefined) return null;
+  const [r, g, b, a] = values;
+  if (r === undefined || g === undefined || b === undefined || values.length > 4) return null;
 
-  // The alpha arrives as a fraction of one, so undo the percentage scaling if it came that way.
-  const alpha = a === undefined ? 1 : a > 1 ? a / 255 : a;
+  // A percentage is of 255 for a channel and of 1 for the alpha.
+  const scaled = (part: { value: number; percent: boolean }, whole: number) =>
+    clamp(part.percent ? (part.value / 100) * whole : part.value, whole);
 
   return {
-    r: clamp(r, 255),
-    g: clamp(g, 255),
-    b: clamp(b, 255),
-    a: clamp(alpha, 1),
+    r: scaled(r, 255),
+    g: scaled(g, 255),
+    b: scaled(b, 255),
+    a: a === undefined ? 1 : scaled(a, 1),
   };
 }
 

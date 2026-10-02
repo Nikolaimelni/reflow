@@ -199,22 +199,38 @@ function parseAnB(tokens: readonly Token[]): { a: number; b: number } | null {
     return { a: 0, b: first.value };
   }
 
+  // A name runs on through dashes and digits, so `2n-1` arrives as a 2 with the unit `n-1`
+  // and `-n-1` as one identifier. The minus, and sometimes b itself, can be inside the n.
   let a: number;
-  if (first.type === 'dimension' && first.unit === 'n') a = first.value;
-  else if (first.type === 'ident' && first.value.toLowerCase() === 'n') a = 1;
-  else if (first.type === 'ident' && first.value.toLowerCase() === '-n') a = -1;
-  else return null;
-
-  const second = tokens[1];
-  if (second === undefined) return { a, b: 0 };
-
-  if (second.type === 'number' && tokens.length === 2) return { a, b: second.value };
-
-  const third = tokens[2];
-  if (second.type === 'delim' && third?.type === 'number' && tokens.length === 3) {
-    if (second.value === '+') return { a, b: third.value };
-    if (second.value === '-') return { a, b: -third.value };
+  let n: string;
+  if (first.type === 'dimension') {
+    a = first.value;
+    n = first.unit;
+  } else if (first.type === 'ident') {
+    const name = first.value.toLowerCase();
+    a = name.startsWith('-') ? -1 : 1;
+    n = name.startsWith('-') ? name.slice(1) : name;
+  } else {
+    return null;
   }
 
-  return null;
+  const second = tokens[1];
+  const third = tokens[2];
+
+  if (n === 'n') {
+    if (second === undefined) return { a, b: 0 };
+    if (second.type === 'number' && tokens.length === 2) return { a, b: second.value };
+    if (second.type === 'delim' && third?.type === 'number' && tokens.length === 3) {
+      if (second.value === '+') return { a, b: third.value };
+      if (second.value === '-') return { a, b: -third.value };
+    }
+    return null;
+  }
+
+  if (n === 'n-' && second?.type === 'number' && tokens.length === 2) {
+    return { a, b: -second.value };
+  }
+
+  const glued = /^n-(\d+)$/.exec(n)?.[1];
+  return glued !== undefined && tokens.length === 1 ? { a, b: -Number(glued) } : null;
 }

@@ -48,6 +48,11 @@ describe('parseSelector', () => {
     ['li:nth-child(3)', { a: 0, b: 3 }],
     ['li:nth-child(-n+3)', { a: -1, b: 3 }],
     ['li:nth-child(2n - 1)', { a: 2, b: -1 }],
+    ['li:nth-child(2n-1)', { a: 2, b: -1 }],
+    ['li:nth-child(2n- 1)', { a: 2, b: -1 }],
+    ['li:nth-child(n-2)', { a: 1, b: -2 }],
+    ['li:nth-child(-n-2)', { a: -1, b: -2 }],
+    ['li:nth-child(-N+3)', { a: -1, b: 3 }],
   ])('parses %s', (text, expected) => {
     expect(one(text).key.pseudoClasses[0]).toEqual({ name: 'nth-child', ...expected });
   });
