@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** The viewport input holds to the same range, or it could make links that do not open. */
+export const WIDTH = { min: 120, max: 4000 } as const;
+
 /**
  * The URL is the one input here that a stranger controls, so it gets a schema. Everything
  * else in the app comes from the engine or from the editors.
@@ -7,7 +10,7 @@ import { z } from 'zod';
 const sharedSchema = z.object({
   html: z.string().max(40_000),
   css: z.string().max(40_000),
-  width: z.number().int().min(120).max(4000),
+  width: z.number().int().min(WIDTH.min).max(WIDTH.max),
 });
 
 export type Shared = z.infer<typeof sharedSchema>;

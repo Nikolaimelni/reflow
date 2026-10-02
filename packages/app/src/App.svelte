@@ -2,7 +2,7 @@
   import BoxesView from './boxes/BoxesView.svelte';
   import LiveFrame from './compare/LiveFrame.svelte';
   import CodeEditor from './editor/CodeEditor.svelte';
-  import { decode, encode } from './engine-run/permalink.js';
+  import { decode, encode, WIDTH } from './engine-run/permalink.js';
   import { Session } from './engine-run/session.svelte.js';
   import Inspector from './inspector/Inspector.svelte';
   import ReflowLab from './lab/ReflowLab.svelte';
@@ -89,12 +89,12 @@
       viewport
       <input
         type="number"
-        min="120"
-        max="2000"
+        min={WIDTH.min}
+        max={WIDTH.max}
         value={session.viewport.width}
         oninput={(event) => {
-          const width = event.currentTarget.valueAsNumber;
-          if (Number.isFinite(width) && width >= 120) {
+          const width = Math.round(event.currentTarget.valueAsNumber);
+          if (width >= WIDTH.min && width <= WIDTH.max) {
             session.viewport = { ...session.viewport, width };
           }
         }}

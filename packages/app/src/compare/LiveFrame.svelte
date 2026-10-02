@@ -2,21 +2,9 @@
   import { type BoxId, type ElementNode, reportedRect } from '@reflow/engine';
   import { compareRects } from './divergence.js';
   import type { Session } from '../engine-run/session.svelte.js';
+  import { SKIP } from '../host/parse-html.js';
 
   const { session }: { session: Session } = $props();
-
-/**
-   * Half a CSS pixel is the line the conformance harness draws, because Chromium lays out in
-   * sixty-fourths of a pixel and it runs at one device pixel per CSS pixel.
-   *
-   * A real screen is not so tidy. At 1.25 the browser snaps each border to whole device
-   * pixels, so `border: 2px` is painted 1.6px wide, and a box with a border on both sides
-   * comes out 0.8px shorter than the engine says. Two device pixels is the honest line here,
-   * and the epsilon is there because 41.6 minus 40.8 is not 0.8 in binary.
-   */
-  const tolerance = $derived(Math.max(0.5, 2 / window.devicePixelRatio) + 1e-6);
-
-  const SKIP = new Set(['head', 'style', 'script', 'link', 'meta', 'title', 'base']);
 
   let frame: HTMLIFrameElement | undefined = $state();
 
@@ -136,9 +124,12 @@
     </ul>
   {/if}
 
+  <!-- The source may have come in on someone else's link, so it gets no scripts. It keeps
+       the same origin because compare() reads the layout out of it. -->
   <iframe
     bind:this={frame}
     title="the same source laid out by the browser"
+    sandbox="allow-same-origin"
     srcdoc={document_}
     width={session.viewport.width + gutter}
     onload={compare}

@@ -6,9 +6,18 @@ import { type DomNode, type ElementNode, element, text } from '@reflow/engine';
  * copied into the engine's own node tree.
  *
  * Head content is dropped: those elements generate no boxes, and the stylesheet is handed to
- * the engine separately.
+ * the engine separately. The live comparison skips the same set, because it pairs elements by
+ * document order.
  */
-const SKIP = new Set(['head', 'style', 'script', 'link', 'meta', 'title', 'base']);
+export const SKIP: ReadonlySet<string> = new Set([
+  'head',
+  'style',
+  'script',
+  'link',
+  'meta',
+  'title',
+  'base',
+]);
 
 export function parseHtml(source: string): ElementNode | null {
   const parsed = new DOMParser().parseFromString(source, 'text/html');

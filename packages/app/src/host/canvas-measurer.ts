@@ -33,12 +33,15 @@ export function canvasMeasurer(): TextMeasurer {
     },
 
     metrics(font) {
+      // The probe's answer is snapped to device pixels, so it goes stale when the window moves
+      // to another screen or the page is zoomed.
       const face = fontString(font);
-      const known = metrics.get(face);
+      const key = `${window.devicePixelRatio} ${face}`;
+      const known = metrics.get(key);
       if (known !== undefined) return known;
 
       const measured = probe(face);
-      metrics.set(face, measured);
+      metrics.set(key, measured);
       return measured;
     },
   };
