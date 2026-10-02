@@ -112,7 +112,9 @@ function readDeclaration(tokens: readonly Token[]): Declaration | null {
 
   let important = false;
   const last = value.at(-1);
-  const bang = value.at(-2);
+  // `! important` is as valid as `!important`.
+  const gap = value.at(-2)?.type === 'whitespace' ? 1 : 0;
+  const bang = value.at(-2 - gap);
   if (
     last?.type === 'ident' &&
     last.value.toLowerCase() === 'important' &&
@@ -120,7 +122,7 @@ function readDeclaration(tokens: readonly Token[]): Declaration | null {
     bang.value === '!'
   ) {
     important = true;
-    value.splice(-2);
+    value.splice(-2 - gap);
     while (value.at(-1)?.type === 'whitespace') value.pop();
   }
 

@@ -17,6 +17,13 @@ describe('parseStylesheet', () => {
     expect(rule?.declarations[0]?.value).toEqual([{ type: 'ident', value: 'red' }]);
   });
 
+  it('allows space between the bang and important', () => {
+    const [rule] = parseStylesheet('p { color: red ! IMPORTANT }');
+
+    expect(rule?.declarations[0]?.important).toBe(true);
+    expect(rule?.declarations[0]?.value).toEqual([{ type: 'ident', value: 'red' }]);
+  });
+
   it('drops a rule whose selector is unsupported but keeps the next one', () => {
     const rules = parseStylesheet('p::before { content: "x" } p { width: 1px }');
 

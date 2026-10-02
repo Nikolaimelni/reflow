@@ -67,6 +67,13 @@ export function tokenize(input: string): Token[] {
       i += 2;
       while (isDigit(at())) i++;
     }
+    if (at() === 'e' || at() === 'E') {
+      const sign = at(1) === '+' || at(1) === '-' ? 1 : 0;
+      if (isDigit(at(1 + sign))) {
+        i += 1 + sign;
+        while (isDigit(at())) i++;
+      }
+    }
     return Number(input.slice(start, i));
   };
 
