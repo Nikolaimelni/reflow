@@ -6,7 +6,6 @@ import {
   toContentBox,
   usedBorderWidths,
   usedMargin,
-  usedMaxSize,
   usedPadding,
   usedSize,
 } from './used.js';
@@ -51,7 +50,7 @@ function outerIntrinsic(box: Box, measurer: TextMeasurer): Intrinsic {
     definite === null ? contentIntrinsic(box, measurer) : { min: definite, max: definite };
 
   const min = toContentBox(style.boxSizing, usedSize(style.minWidth, null), surround);
-  const max = toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, null), surround);
+  const max = toContentBox(style.boxSizing, usedSize(style.maxWidth, null), surround);
   const extra = margins + (definite !== null && style.boxSizing === 'border-box' ? 0 : surround);
 
   return {

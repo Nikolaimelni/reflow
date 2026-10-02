@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { computeStyles } from '../cascade/cascade.js';
+import { AUTO, NONE, percent, px } from '../cascade/values.js';
 import { type ElementNode, element } from '../dom/node.js';
-import { usedBorderWidths } from './used.js';
+import { usedBorderWidths, usedSize } from './used.js';
 
 function styleOf(css: string, node: ElementNode = element('div')) {
   const style = computeStyles(node, css).get(node);
@@ -26,5 +27,18 @@ describe('usedBorderWidths', () => {
   it('works per side', () => {
     const css = 'div { border: 2px solid; border-left-style: none }';
     expect(usedBorderWidths(styleOf(css))).toEqual({ top: 2, right: 2, bottom: 2, left: 0 });
+  });
+});
+
+describe('usedSize', () => {
+  it('truncates a percentage to a sixty-fourth, the way Blink stores it', () => {
+    expect(usedSize(percent(33.3), 400)).toBe(133.1875);
+    expect(usedSize(px(10.3), null)).toBe(10.296875);
+  });
+
+  it('is null for auto, none, and a percentage of nothing', () => {
+    expect(usedSize(AUTO, 400)).toBeNull();
+    expect(usedSize(NONE, 400)).toBeNull();
+    expect(usedSize(percent(50), null)).toBeNull();
   });
 });

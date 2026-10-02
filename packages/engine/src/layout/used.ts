@@ -35,19 +35,14 @@ export function usedLength(value: LengthPercentage, basis: number): number {
 }
 
 /**
- * null means auto. A percentage against an unknown basis is also auto, which is the rule
- * that keeps `height: 50%` inside an auto-height parent from looping forever.
+ * null means auto, or none for a max size. A percentage against an unknown basis is also
+ * auto, which is the rule that keeps `height: 50%` inside an auto-height parent from looping
+ * forever.
  */
-export function usedSize(value: Size, basis: number | null): number | null {
-  if (value.kind === 'auto') return null;
-  if (value.kind === 'px') return value.value;
-  return basis === null ? null : (value.value / 100) * basis;
-}
-
-export function usedMaxSize(value: MaxSize, basis: number | null): number | null {
-  if (value.kind === 'none') return null;
-  if (value.kind === 'px') return value.value;
-  return basis === null ? null : (value.value / 100) * basis;
+export function usedSize(value: Size | MaxSize, basis: number | null): number | null {
+  if (value.kind === 'auto' || value.kind === 'none') return null;
+  if (value.kind === 'percent' && basis === null) return null;
+  return usedLength(value, basis ?? 0);
 }
 
 export function usedMargin(value: Margin, basis: number): number | null {

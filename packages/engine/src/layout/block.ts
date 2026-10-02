@@ -32,7 +32,6 @@ import {
   usedGap,
   usedInset,
   usedMargin,
-  usedMaxSize,
   usedPadding,
   usedSize,
 } from './used.js';
@@ -246,7 +245,7 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
   );
   const maxHeight = toContentBox(
     style.boxSizing,
-    usedMaxSize(style.maxHeight, containing.height),
+    usedSize(style.maxHeight, containing.height),
     down,
   );
 
@@ -552,7 +551,7 @@ function resolveHorizontal(
   const clamped = clampSize(
     first.contentWidth,
     toContentBox(style.boxSizing, usedSize(style.minWidth, containingWidth), surround),
-    toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, containingWidth), surround),
+    toContentBox(style.boxSizing, usedSize(style.maxWidth, containingWidth), surround),
   );
 
   if (clamped === first.contentWidth) {
@@ -938,7 +937,7 @@ function atomicContentWidth(box: InlineBox, available: number, context: Context)
   return clampSize(
     inner,
     toContentBox(style.boxSizing, usedSize(style.minWidth, available), surround),
-    toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, available), surround),
+    toContentBox(style.boxSizing, usedSize(style.maxWidth, available), surround),
   );
 }
 
@@ -1125,7 +1124,7 @@ function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void
   const width = clampSize(
     wide.size,
     toContentBox(style.boxSizing, usedSize(style.minWidth, containing.width), across),
-    toContentBox(style.boxSizing, usedMaxSize(style.maxWidth, containing.width), across),
+    toContentBox(style.boxSizing, usedSize(style.maxWidth, containing.width), across),
   );
   const horizontal = alignStatic(
     width === wide.size ? wide : acrossAxis(width),
@@ -1161,7 +1160,7 @@ function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void
   const height = clampSize(
     tall.size,
     toContentBox(style.boxSizing, usedSize(style.minHeight, containing.height), down),
-    toContentBox(style.boxSizing, usedMaxSize(style.maxHeight, containing.height), down),
+    toContentBox(style.boxSizing, usedSize(style.maxHeight, containing.height), down),
   );
   const vertical = alignStatic(
     height === tall.size ? tall : downAxis(height),
@@ -1415,7 +1414,7 @@ function itemMetrics(
     ) ?? 0;
   const maxCross = toContentBox(
     style.boxSizing,
-    usedMaxSize(isRow ? style.maxHeight : style.maxWidth, crossBasis),
+    usedSize(isRow ? style.maxHeight : style.maxWidth, crossBasis),
     crossSurround,
   );
   const crossSize = givenCross === null ? null : clampSize(givenCross, minCross, maxCross);
@@ -1493,7 +1492,7 @@ function itemMetrics(
   const basis_ = isRow ? containing.width : containing.height;
   const maxMain = toContentBox(
     style.boxSizing,
-    usedMaxSize(isRow ? style.maxWidth : style.maxHeight, basis_),
+    usedSize(isRow ? style.maxWidth : style.maxHeight, basis_),
     along,
   );
   const content =

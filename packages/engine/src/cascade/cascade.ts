@@ -41,12 +41,13 @@ type Candidate = {
   order: number;
 };
 
-type MatchableDeclaration = Candidate & { selector: ComplexSelector };
+/** One selector of a rule with every longhand the rule declares, so it is matched once. */
+type MatchableRule = { selector: ComplexSelector; candidates: Candidate[] };
 
-let userAgentRules: StyleRule[] | null = null;
+let userAgentRules: MatchableRule[] | null = null;
 
-function userAgentSheet(): StyleRule[] {
-  userAgentRules ??= parseStylesheet(USER_AGENT_CSS);
+function userAgentSheet(): MatchableRule[] {
+  userAgentRules ??= flatten(parseStylesheet(USER_AGENT_CSS), 'user-agent', 0);
   return userAgentRules;
 }
 
@@ -55,10 +56,7 @@ export function computeStyles(
   authorCss: string,
   devicePixelRatio = 1,
 ): StyleMap {
-  const declarations = [
-    ...flatten(userAgentSheet(), 'user-agent', 0),
-    ...flatten(parseStylesheet(authorCss), 'author', 1_000_000),
-  ];
+  const rules = [...userAgentSheet(), ...flatten(parseStylesheet(authorCss), 'author', 1_000_000)];
 
   const styles: StyleMap = new Map();
 
@@ -67,7 +65,7 @@ export function computeStyles(
     root,
     null,
     false,
-    declarations,
+    rules,
     properties.fontSize.initial,
     devicePixelRatio,
   );
@@ -78,7 +76,7 @@ export function computeStyles(
       node,
       parent,
       fontSizeSpecified,
-      declarations,
+      rules,
       rootComputed.style.fontSize,
       devicePixelRatio,
     );
@@ -95,30 +93,30 @@ export function computeStyles(
   return styles;
 }
 
-function flatten(
-  rules: readonly StyleRule[],
-  origin: Origin,
-  startOrder: number,
-): MatchableDeclaration[] {
-  const flat: MatchableDeclaration[] = [];
+function flatten(rules: readonly StyleRule[], origin: Origin, startOrder: number): MatchableRule[] {
+  const flat: MatchableRule[] = [];
   let order = startOrder;
 
   for (const rule of rules) {
+    const longhands: Omit<Candidate, 'origin' | 'inline' | 'specificity'>[] = [];
     for (const declaration of rule.declarations) {
       for (const longhand of toLonghands(declaration)) {
-        for (const selector of rule.selectors) {
-          flat.push({
-            selector,
-            specificity: specificity(selector),
-            origin,
-            inline: false,
-            important: declaration.important,
-            order,
-            ...longhand,
-          });
-        }
+        longhands.push({ ...longhand, important: declaration.important, order });
         order++;
       }
+    }
+
+    for (const selector of rule.selectors) {
+      const weight = specificity(selector);
+      flat.push({
+        selector,
+        candidates: longhands.map((longhand) => ({
+          ...longhand,
+          origin,
+          inline: false,
+          specificity: weight,
+        })),
+      });
     }
   }
 
@@ -137,7 +135,7 @@ function computeFor(
   node: ElementNode,
   parent: ComputedStyle | null,
   parentSpecifiedFontSize: boolean,
-  declarations: readonly MatchableDeclaration[],
+  rules: readonly MatchableRule[],
   rootFontSize: number,
   devicePixelRatio: number,
 ) {
@@ -150,8 +148,9 @@ function computeFor(
     }
   };
 
-  for (const declaration of declarations) {
-    if (matches(declaration.selector, node)) offer(declaration);
+  for (const rule of rules) {
+    if (!matches(rule.selector, node)) continue;
+    for (const candidate of rule.candidates) offer(candidate);
   }
 
   const inline = node.attributes.style;
