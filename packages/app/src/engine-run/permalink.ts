@@ -32,8 +32,7 @@ export type Shared = z.infer<typeof sharedSchema>;
 export async function encode(shared: Shared): Promise<string | null> {
   if (!sharedSchema.safeParse(shared).success) return null;
 
-  const bytes = new TextEncoder().encode(JSON.stringify(shared));
-  const stream = new Blob([bytes as BlobPart])
+  const stream = new Blob([JSON.stringify(shared)])
     .stream()
     .pipeThrough(new CompressionStream('deflate-raw'));
   return toBase64Url(new Uint8Array(await new Response(stream).arrayBuffer()));
@@ -53,8 +52,8 @@ export async function decode(fragment: string): Promise<Shared | null> {
   }
 }
 
-async function inflate(bytes: Uint8Array): Promise<string | null> {
-  const reader = new Blob([bytes as BlobPart])
+async function inflate(bytes: Uint8Array<ArrayBuffer>): Promise<string | null> {
+  const reader = new Blob([bytes])
     .stream()
     .pipeThrough(new DecompressionStream('deflate-raw'))
     .getReader();
@@ -81,7 +80,7 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }
 
-function fromBase64Url(text: string): Uint8Array {
+function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
   const binary = atob(text.replaceAll('-', '+').replaceAll('_', '/'));
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);

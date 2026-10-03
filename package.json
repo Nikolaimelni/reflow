@@ -9,7 +9,7 @@
   "scripts": {
     "lint": "biome check .",
     "format": "biome check --write .",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm -F @reflow/engine build && pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
     "prepare": "husky"

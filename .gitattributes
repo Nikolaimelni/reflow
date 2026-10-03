@@ -1,0 +1,4 @@
+# Biome wants LF, and Git for Windows checks out CRLF by default, which fails lint on every
+# file of a fresh clone.
+* text=auto eol=lf
+*.png binary
