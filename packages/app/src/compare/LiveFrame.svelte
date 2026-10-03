@@ -25,17 +25,19 @@
    * document order lines them up without needing ids.
    */
   function compare(): void {
-    const host = frame?.contentDocument;
-    if (host === undefined || host === null || session.result.status !== 'ok') return;
+    // Between one srcdoc and the next the frame can hold a document with no element in it yet.
+    // The load event runs this again once there is one.
+    const root = frame?.contentDocument?.documentElement;
+    if (root === undefined || root === null || session.result.status !== 'ok') return;
 
-    const measured = (frame?.clientWidth ?? 0) - host.documentElement.clientWidth;
+    const measured = (frame?.clientWidth ?? 0) - root.clientWidth;
     if (measured >= 0 && measured < 40 && measured !== gutter) {
       gutter = measured;
       return;
     }
 
     const run = session.result;
-    const theirs = collectElements(host.documentElement);
+    const theirs = collectElements(root);
     const ours = collectNodes(run.root);
     const diverging = new Map<BoxId, string>();
 

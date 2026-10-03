@@ -1,0 +1,9 @@
+# The comparison frame is srcdoc, so it runs under this policy too. The source it lays out
+# brings its stylesheet as an inline <style>, which is why styles allow 'unsafe-inline' and
+# scripts do not.
+/*
+  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin

@@ -28,10 +28,11 @@ function convert(node: Element): ElementNode | null {
   const tag = node.tagName.toLowerCase();
   if (SKIP.has(tag)) return null;
 
-  const attributes: Record<string, string> = {};
-  for (const attribute of Array.from(node.attributes)) {
-    attributes[attribute.name] = attribute.value;
-  }
+  // fromEntries defines own properties, so an attribute called __proto__ is kept as one
+  // instead of going to the prototype setter.
+  const attributes = Object.fromEntries(
+    Array.from(node.attributes, (attribute) => [attribute.name, attribute.value]),
+  );
 
   const children: DomNode[] = [];
   for (const child of Array.from(node.childNodes)) {
