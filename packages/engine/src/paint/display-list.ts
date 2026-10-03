@@ -444,11 +444,7 @@ export function hitTest(
 
   return null;
 
-  /**
-   * Chromium hit tests a block's lines from the last to the first, and a point inside a line's
-   * box stops there. So a padded box that hangs down from one line into the box of the next is
-   * not found where that box is, even though nothing else is drawn there.
-   */
+  // Every clip around the box, not just the nearest: each clipping box is under clips of its own.
   function clippedOut(clip: BoxId | null): boolean {
     for (let at = clip; at !== null; at = clipOf.get(at) ?? null) {
       if (!inside(paddingBox(geometry.fragments.get(at)), x, y)) return true;
@@ -456,6 +452,11 @@ export function hitTest(
     return false;
   }
 
+  /**
+   * Chromium hit tests a block's lines from the last to the first, and a point inside a line's
+   * box stops there. So a padded box that hangs down from one line into the box of the next is
+   * not found where that box is, even though nothing else is drawn there.
+   */
   function underLaterLine(rect: Rect, unit: BoxId): boolean {
     const line = geometry.lineOf?.get(rect);
     if (line === undefined || linesUnit.get(line.block) !== unit) return false;

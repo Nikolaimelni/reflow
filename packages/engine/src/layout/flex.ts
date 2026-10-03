@@ -360,15 +360,14 @@ function resolveCross(
     const margined = item.autoCrossStart || item.autoCrossEnd;
     return resolved === 'baseline' && margined ? 'flex-start' : resolved;
   });
-  // Border and padding across the line, which is the surround without its margins.
-  const inner = (item: FlexItemInput) =>
+  const borderAndPadding = (item: FlexItemInput) =>
     item.crossSurround - item.marginCrossStart - item.marginCrossEnd;
 
   // An item with no line of text in it has its baseline made up at the bottom of its border
   // box, which is where the ascent is measured to.
   const ascents = input.items.map((item, i) =>
     aligns[i] === 'baseline'
-      ? (input.baselineOf(i, mains[i] ?? 0) ?? (sizes[i] ?? 0) + inner(item))
+      ? (input.baselineOf(i, mains[i] ?? 0) ?? (sizes[i] ?? 0) + borderAndPadding(item))
       : 0,
   );
 

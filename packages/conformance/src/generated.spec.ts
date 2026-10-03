@@ -8,8 +8,8 @@ import { checkDocument } from './generate/check.js';
 import { documents, type GeneratedDocument, render } from './generate/grammar.js';
 
 /**
- * How many documents to try. A soak run raises it from the command line; CI wants the suite
- * to finish, and sixty is enough to catch a whole class of mistake on the way in.
+ * How many documents to try. Sixty by default, which is enough to catch a whole class of
+ * mistake on the way in. CI runs twice that, and a soak run raises it from the command line.
  */
 const RUNS = env.REFLOW_RUNS;
 

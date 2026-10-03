@@ -952,11 +952,6 @@ function asBlock(box: InlineBox): BlockBox {
 }
 
 /**
- * An absolutely positioned box is out of the flow, so nothing about it is known until the
- * containing block it hangs from has a size. Both axes go through the same solver; the
- * horizontal one has to finish first, because the height depends on the width.
- */
-/**
  * Where the only item of this flex container would go, in each physical axis. `justify-content`
  * places it along the line and `align-self` across it, and the values that distribute space
  * fall back the way they do for one item. Stretch has nothing to stretch here, so it starts.
@@ -1092,6 +1087,11 @@ function elementsOf(root: BlockBox): Pick<Context, 'boxesOf' | 'elementOf' | 'po
   return { boxesOf, elementOf, positionedInlines };
 }
 
+/**
+ * An absolutely positioned box is out of the flow, so nothing about it is known until the
+ * containing block it hangs from has a size. Both axes go through the same solver; the
+ * horizontal one has to finish first, because the height depends on the width.
+ */
 function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void {
   const containing =
     deferred.inside === null ? given : (inlineContainingBlock(deferred.inside, context) ?? given);

@@ -970,18 +970,18 @@ function intoEntries(items: readonly Item[]): Entry[] {
 }
 
 /**
- * The lines, and the boxes out of the flow that sit where the line could have broken: right
- * after a space or beside an atomic inline, with nothing but the edges of boxes in between.
- * One of those goes to the next line when it comes too late for this one. One written inside
- * a run that cannot break stays where it is, however far over the edge that is.
- */
-/**
  * How far past the end a line may run and still count as fitting: one LayoutUnit. Blink adds
  * it to the width it tests against, so that a width rounded down on the way in does not push
  * a word that measured exactly that wide onto the next line.
  */
 const FIT_SLACK = 1 / 64;
 
+/**
+ * The lines, and the boxes out of the flow that sit where the line could have broken: right
+ * after a space or beside an atomic inline, with nothing but the edges of boxes in between.
+ * One of those goes to the next line when it comes too late for this one. One written inside
+ * a run that cannot break stays where it is, however far over the edge that is.
+ */
 function breakIntoLines(
   items: readonly Item[],
   input: InlineInput,

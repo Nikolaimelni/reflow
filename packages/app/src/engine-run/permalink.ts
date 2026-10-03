@@ -28,7 +28,10 @@ const sharedSchema = z.object({
 
 export type Shared = z.infer<typeof sharedSchema>;
 
-export async function encode(shared: Shared): Promise<string> {
+/** null when decode would turn the link down, rather than a link that opens the sample. */
+export async function encode(shared: Shared): Promise<string | null> {
+  if (!sharedSchema.safeParse(shared).success) return null;
+
   const bytes = new TextEncoder().encode(JSON.stringify(shared));
   const stream = new Blob([bytes as BlobPart])
     .stream()

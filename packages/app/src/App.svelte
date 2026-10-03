@@ -18,6 +18,8 @@
   ] as const;
 
   let copied = $state(false);
+  let shareable = $state(true);
+  let encoding = 0;
 
   /**
    * The whole example lives in the fragment, so a specific case can go in a chat message
@@ -40,8 +42,15 @@
       width: session.viewport.width,
     };
 
+    // A long source takes longer to squeeze than the short one typed after it, so only the
+    // newest answer gets to write the URL.
+    const ticket = ++encoding;
     void encode(shared).then((fragment) => {
-      window.history.replaceState(null, '', `#${fragment}`);
+      if (ticket !== encoding) return;
+      shareable = fragment !== null;
+      // Over the limit, the old fragment would share a source the page no longer shows.
+      const target = fragment === null ? window.location.pathname : `#${fragment}`;
+      window.history.replaceState(null, '', target);
     });
   });
 
@@ -107,8 +116,12 @@
       compare with the browser
     </label>
 
-    <button type="button" class="share" onclick={copyLink}>
-      {copied ? 'copied' : 'copy link'}
+    <button type="button" class="share" onclick={copyLink} disabled={!shareable}>
+      {#if !shareable}
+        too long to share
+      {:else}
+        {copied ? 'copied' : 'copy link'}
+      {/if}
     </button>
   </header>
 
@@ -224,8 +237,13 @@
     cursor: pointer;
   }
 
-  .share:hover {
+  .share:hover:not(:disabled) {
     background: var(--surface-2);
+  }
+
+  .share:disabled {
+    color: var(--ink-3);
+    cursor: default;
   }
 
   .tabs {
