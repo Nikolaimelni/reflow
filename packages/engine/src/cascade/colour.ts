@@ -58,8 +58,8 @@ export function parseColour(value: readonly Token[]): Colour | null {
 }
 
 export function formatColour(colour: Colour): string {
-  const channels = `${round(colour.r)}, ${round(colour.g)}, ${round(colour.b)}`;
-  return colour.a >= 1 ? `rgb(${channels})` : `rgba(${channels}, ${serialiseAlpha(colour.a)})`;
+  const rgb = channels(colour);
+  return colour.a >= 1 ? `rgb(${rgb})` : `rgba(${rgb}, ${serialiseAlpha(colour.a)})`;
 }
 
 /**
@@ -86,7 +86,11 @@ function serialiseAlpha(alpha: number): string {
 
 /** For a canvas or a stylesheet, where the alpha always belongs in the string. */
 export function toCss(colour: Colour): string {
-  return `rgba(${round(colour.r)}, ${round(colour.g)}, ${round(colour.b)}, ${trim(colour.a)})`;
+  return `rgba(${channels(colour)}, ${trim(colour.a)})`;
+}
+
+function channels(colour: Colour): string {
+  return `${Math.round(colour.r)}, ${Math.round(colour.g)}, ${Math.round(colour.b)}`;
 }
 
 function fromHex(digits: string): Colour | null {
@@ -145,10 +149,6 @@ function fromRgb(tokens: readonly Token[]): Colour | null {
 
 function clamp(value: number, top: number): number {
   return Math.min(Math.max(0, value), top);
-}
-
-function round(value: number): number {
-  return Math.round(value);
 }
 
 function trim(value: number): number {
