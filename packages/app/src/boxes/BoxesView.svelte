@@ -44,7 +44,7 @@
       frame: session.frame,
       lines: session.result.status === 'ok' ? session.result.layout.lines : new Map(),
       labels: session.result.status === 'ok' ? session.result.labels : new Map(),
-      highlight: session.hovered,
+      highlight: session.hovered ?? session.active,
       selected: session.selected,
       diverging: session.diverging,
       dirty: session.dirty,

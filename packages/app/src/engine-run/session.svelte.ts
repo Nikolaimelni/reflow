@@ -33,6 +33,13 @@ export class Session {
   trace = $derived(this.result.status === 'ok' ? this.result.layout.trace : []);
   frame = $derived(frameAt(this.trace, this.cursor));
 
+  // The box the latest event was about, while the trace is still being stepped through.
+  active = $derived.by((): BoxId | null => {
+    const event = this.trace[this.cursor - 1];
+    if (event === undefined || this.cursor >= this.trace.length) return null;
+    return 'box' in event ? event.box : null;
+  });
+
   /** Paint order, filtered to the boxes the current frame actually has geometry for. */
   order = $derived(
     this.result.status === 'ok'

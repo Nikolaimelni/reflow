@@ -39,7 +39,7 @@
   }
 
   const details = $derived.by(() => {
-    const box = session.hovered;
+    const box = session.hovered ?? session.active;
     if (box === null || session.result.status !== 'ok') return null;
     return detailsFor(session.trace, session.cursor, box, session.result.labels.get(box) ?? '');
   });

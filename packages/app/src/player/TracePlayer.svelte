@@ -3,8 +3,10 @@
 
   const { session }: { session: Session } = $props();
 
-  /** A whole trace plays in about this long, whatever its length. */
-  const DURATION = 4000;
+  // Events a second. A fixed rate rather than a fixed length, so a long trace is no faster to
+  // watch than a short one.
+  const RATES = [3, 8, 30];
+  let rate = $state(8);
 
   const total = $derived(session.trace.length);
   const current = $derived(session.trace[session.cursor - 1]);
@@ -12,19 +14,23 @@
   $effect(() => {
     if (!session.playing || total === 0) return;
 
+    const perSecond = rate;
     let last = performance.now();
+    let owed = 0;
     let handle = 0;
 
     const tick = (now: number) => {
-      const events = ((now - last) / DURATION) * total;
+      owed += ((now - last) / 1000) * perSecond;
       last = now;
+
+      const steps = Math.floor(owed);
+      owed -= steps;
+      if (steps > 0) session.seek(session.cursor + steps);
 
       if (session.cursor >= total) {
         session.playing = false;
         return;
       }
-
-      session.seek(session.cursor + Math.max(1, Math.round(events)));
       handle = requestAnimationFrame(tick);
     };
 
@@ -64,6 +70,12 @@
     />
 
     <span class="count">{session.cursor} / {total}</span>
+
+    <select bind:value={rate} title="events a second">
+      {#each RATES as option (option)}
+        <option value={option}>{option}/s</option>
+      {/each}
+    </select>
   </div>
 
   <p class="event">
@@ -119,6 +131,15 @@
     flex: 1;
     min-width: 80px;
     accent-color: var(--accent);
+  }
+
+  select {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink);
   }
 
   .count {
