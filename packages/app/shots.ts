@@ -60,7 +60,7 @@ for (const { name: view, height } of VIEWS) {
   if (view === 'lab') {
     const canvas = page.locator('canvas').first();
     const box = await canvas.boundingBox();
-    if (box !== null) await page.mouse.click(box.x + 40, box.y + 210);
+    if (box !== null) await page.mouse.click(box.x + 200, box.y + 352);
     await page.getByRole('button', { name: 'height', exact: true }).click();
     await page.waitForTimeout(900);
   }

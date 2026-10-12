@@ -123,6 +123,7 @@
     sandbox="allow-same-origin"
     srcdoc={document_}
     width={session.viewport.width + gutter}
+    height={session.viewport.height}
     onload={compare}
   ></iframe>
 </div>
@@ -131,7 +132,6 @@
   .live {
     display: flex;
     flex-direction: column;
-    min-height: 0;
     border: 1px solid var(--rule);
     background: var(--surface);
   }
@@ -177,7 +177,5 @@
   iframe {
     border: none;
     background: #fff;
-    flex: 1;
-    min-height: 240px;
   }
 </style>
