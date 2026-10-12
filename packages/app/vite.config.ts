@@ -4,7 +4,9 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [svelte()],
-  build: { target: 'es2023' },
+  // The bundle carries CodeMirror, Svelte and Zod, whose MIT licenses ask for their notices to
+  // travel with them, and minifying strips every one out of the code.
+  build: { target: 'es2023', license: { fileName: 'licenses.md' } },
   resolve: {
     alias: {
       // Straight at the engine's source rather than its dist. Through the dist the app runs

@@ -1,6 +1,7 @@
 {
   "name": "reflow",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.0.0",
   "engines": {
