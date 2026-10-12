@@ -182,8 +182,11 @@
     opacity: 0.55;
   }
 
+  /* The gutter is kept even with nothing to scroll. Without it a scrollbar narrows the canvas,
+     the canvas gets shorter, the scrollbar goes, and round it goes under a still pointer. */
   .surface {
     overflow: auto;
+    scrollbar-gutter: stable;
     padding: 0;
   }
 

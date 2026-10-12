@@ -196,7 +196,7 @@
 
   .bar {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 14px;
     padding: 11px 16px;
     border-bottom: 1px solid var(--rule);

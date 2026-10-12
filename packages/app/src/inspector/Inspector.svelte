@@ -53,47 +53,47 @@
 <div class="inspector">
   <span class="title">inspector</span>
 
-  {#if details === null}
-    <p class="hint">Point at a box.</p>
-  {:else}
-    <p class="what">{details.label}</p>
+  <p class={details === null ? 'hint' : 'what'}>{details?.label ?? 'Point at a box.'}</p>
 
-    <dl>
-      <dt>given</dt>
-      <dd>
-        {#if details.constraint === null}
-          not measured yet
-        {:else}
-          {round(details.constraint.availableWidth)}px wide,
-          {details.constraint.availableHeight === null
-            ? 'height unresolved'
-            : `${round(details.constraint.availableHeight)}px tall`}
-        {/if}
-      </dd>
-
-      <dt>came out</dt>
-      <dd>
-        {#if details.fragment === null}
-          no size yet
-        {:else}
-          {round(details.fragment.rect.width)} &times; {round(details.fragment.rect.height)}
-          at {round(details.fragment.rect.x)}, {round(details.fragment.rect.y)}
-        {/if}
-      </dd>
-
-      <dt>because</dt>
-      <dd>{details.reason ?? 'the engine has not got here yet'}</dd>
-
-      {#if details.fragment !== null}
-        <dt>edges</dt>
-        <dd class="edges">
-          <span class="margin">margin {edgeList(details.fragment.margin)}</span>
-          <span class="border">border {edgeList(details.fragment.border)}</span>
-          <span class="padding">padding {edgeList(details.fragment.padding)}</span>
-        </dd>
+  <!-- Laid out with nothing under the pointer too, hidden, so pointing at a box does not make
+       the panel taller and squeeze the canvas above it. -->
+  <dl class:idle={details === null}>
+    <dt>given</dt>
+    <dd>
+      {#if details?.constraint == null}
+        not measured yet
+      {:else}
+        {round(details.constraint.availableWidth)}px wide,
+        {details.constraint.availableHeight === null
+          ? 'height unresolved'
+          : `${round(details.constraint.availableHeight)}px tall`}
       {/if}
-    </dl>
-  {/if}
+    </dd>
+
+    <dt>came out</dt>
+    <dd>
+      {#if details?.fragment == null}
+        no size yet
+      {:else}
+        {round(details.fragment.rect.width)} &times; {round(details.fragment.rect.height)}
+        at {round(details.fragment.rect.x)}, {round(details.fragment.rect.y)}
+      {/if}
+    </dd>
+
+    <dt>because</dt>
+    <dd>{details?.reason ?? 'the engine has not got here yet'}</dd>
+
+    <dt>edges</dt>
+    <dd class="edges">
+      {#if details?.fragment == null}
+        <span>not laid out yet</span><span>&nbsp;</span><span>&nbsp;</span>
+      {:else}
+        <span class="margin">margin {edgeList(details.fragment.margin)}</span>
+        <span class="border">border {edgeList(details.fragment.border)}</span>
+        <span class="padding">padding {edgeList(details.fragment.padding)}</span>
+      {/if}
+    </dd>
+  </dl>
 </div>
 
 <style>
@@ -116,7 +116,11 @@
   .what {
     margin: 6px 0 0;
     font-size: 13px;
+    line-height: 20px;
     color: var(--ink-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .what {
@@ -131,6 +135,10 @@
     gap: 3px 10px;
     margin: 9px 0 0;
     font-size: 12.5px;
+  }
+
+  dl.idle {
+    visibility: hidden;
   }
 
   dt {
