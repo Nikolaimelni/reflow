@@ -134,6 +134,7 @@
     flex-direction: column;
     border: 1px solid var(--rule);
     background: var(--surface);
+    overflow-x: auto;
   }
 
   .head {

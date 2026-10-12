@@ -1,4 +1,5 @@
 import { type BoxId, frameAt, type PropertyName } from '@reflow/engine';
+import { WIDTH } from './permalink.js';
 import { run, type Viewport } from './run.js';
 import { SAMPLE_CSS, SAMPLE_HTML } from './sample.js';
 
@@ -8,7 +9,11 @@ export class Session {
   css = $state(SAMPLE_CSS);
   source = $state({ html: SAMPLE_HTML, css: SAMPLE_CSS });
 
-  viewport = $state<Viewport>({ width: 420, height: 720 });
+  // A phone gets a page as wide and as tall as it can show, up to the 420 by 720 of a desktop.
+  viewport = $state<Viewport>({
+    width: Math.min(420, Math.max(WIDTH.min, window.innerWidth - 40)),
+    height: Math.min(720, Math.max(360, window.innerHeight - 120)),
+  });
   devicePixelRatio = $state(window.devicePixelRatio);
   cursor = $state(0);
   playing = $state(false);

@@ -190,8 +190,9 @@
 
   .bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 14px;
+    gap: 8px 14px;
     padding: 11px 16px;
     border-bottom: 1px solid var(--rule);
     background: var(--surface);
@@ -206,7 +207,7 @@
 
   .tagline {
     margin: 0;
-    flex: 1;
+    flex: 1 1 14rem;
     font-size: 13px;
     color: var(--ink-3);
   }
@@ -219,6 +220,7 @@
     font-family: var(--mono);
     font-size: 11.5px;
     color: var(--ink-2);
+    white-space: nowrap;
   }
 
   .share {
@@ -320,6 +322,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-width: 0;
     overflow: auto;
   }
 
@@ -334,7 +337,18 @@
     }
 
     .source {
-      grid-template-rows: 320px 320px;
+      grid-template-rows: repeat(2, clamp(180px, 40svh, 320px));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .bar {
+      padding: 10px 12px;
+    }
+
+    .panes {
+      gap: 10px;
+      padding: 10px;
     }
   }
 </style>
