@@ -1,7 +1,5 @@
-/**
- * The slice of the browser default stylesheet that changes layout. Without it a `div` would
- * compute to `display: inline` and every fixture would disagree with Chromium on line one.
- */
+// The slice of the browser default stylesheet that changes layout. Without it a `div` would
+// compute to `display: inline` and every fixture would disagree with Chromium on line one.
 const BLOCK_TAGS = [
   'html',
   'body',
@@ -60,11 +58,8 @@ const INLINE_TAGS = [
 ];
 
 /**
- * Whether the browser would make this a block if nothing else said otherwise. It survives the
- * cascade because Chromium keeps using it after `display` has been set to something else: a
- * preserved newline at the end of an element is content in a `<div>` and not in a `<span>`,
- * even when both are `display: inline`. A tag nobody knows is inline, which is what a custom
- * element does too.
+ * Chromium still asks this after `display` is set: a preserved newline at the end is content in
+ * a `<div>` and not in a `<span>`, even with both inline. Unknown tags are inline.
  */
 export function blockByDefault(tag: string): boolean {
   return BLOCK_TAGS.includes(tag);

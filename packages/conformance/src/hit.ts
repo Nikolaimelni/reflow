@@ -13,16 +13,8 @@ import { type ExtractedNode, hitTestInPage } from './extract.js';
 
 export type Hits = { compared: number; matched: number; misses: string[] };
 
-/**
- * The paint order has no geometry to compare, but it does decide what the pointer lands on,
- * and `document.elementFromPoint` asks the browser the same question. Sampling points and
- * comparing the answers checks the display list against Chromium without drawing anything.
- *
- * `margin` is how close to a box edge a point may come. Chromium rounds an inline box to
- * whole pixels and the engine does not, so a hit right on an edge is decided by rounding
- * rather than by the paint order, and where the boxes themselves may be a little apart it has
- * to be wider than that.
- */
+// `margin` keeps points off box edges, where Chromium's whole-pixel inline boxes decide a hit
+// by rounding rather than by paint order.
 export async function compareHits(
   page: Page,
   boxTree: BlockBox,
@@ -61,10 +53,6 @@ export async function compareHits(
   return { compared: points.length, matched, misses };
 }
 
-/**
- * Every box answers with the nearest element that owns it, which covers text runs, anonymous
- * boxes, and content that overflows its block such as a nowrap line poking out the side.
- */
 function elementsOf(boxTree: Box, nodes: readonly DomNode[]): Map<BoxId, number> {
   const indexOf = new Map<DomNode, number>();
   nodes.forEach((node, index) => {
@@ -84,12 +72,7 @@ function elementsOf(boxTree: Box, nodes: readonly DomNode[]): Map<BoxId, number>
   return elementOf;
 }
 
-/**
- * Quarter points of every box, where overlaps actually decide something, plus a coarse grid
- * to catch the gaps between them. Anything below the fold is dropped, because
- * `elementFromPoint` works in viewport coordinates and would answer null, and so is anything
- * within the margin of a box edge.
- */
+// Quarter points of every box plus a coarse grid, minus anything off screen or near an edge.
 function samplePoints(
   geometry: {
     fragments: ReadonlyMap<BoxId, { rect: Rect }>;

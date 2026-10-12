@@ -4,16 +4,11 @@
 
   const { session }: { session: Session } = $props();
 
-  /** Distance between planes, in the same pixels the page is measured in. */
   const GAP = 90;
 
-  /** Room for the label chip hanging off the top left corner of each plane. */
   const LABEL = 26;
 
-  /**
-   * A thousand planes of CSS 3D will put the compositor on the floor, so the view stops and
-   * says so rather than quietly getting slower.
-   */
+  // CSS 3D falls over on a thousand planes, so the view stops here and says so.
   const LIMIT = 350;
 
   type Placed = {
@@ -101,12 +96,8 @@
     };
   });
 
-  /**
-   * The stack is rotated before it is scaled, so fitting it to the stage means projecting its
-   * corners first. A fudge factor on the page width was wrong at every angle except the one I
-   * happened to be looking at. Perspective is left out: it can only magnify by the depth over
-   * the perspective distance, which the margin below covers.
-   */
+  // Rotated before it is scaled, so it is fitted by projecting its corners. A fudge factor on
+  // the page width was right at exactly one angle.
   const footprint = $derived.by(() => {
     const half = { x: page.width / 2 + LABEL, y: page.height / 2 + LABEL };
     const far = ((built.planes.length - 1) * GAP) / 2;

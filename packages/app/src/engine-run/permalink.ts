@@ -4,22 +4,15 @@ import { z } from 'zod';
 // 'unsafe-eval', so every page load would report a violation.
 z.config({ jitless: true });
 
-/** The viewport input holds to the same range, or it could make links that do not open. */
+// The viewport input holds to the same range, or it could make links that do not open.
 export const WIDTH = { min: 120, max: 4000 } as const;
 
 const MAX_SOURCE = 40_000;
 
-/**
- * The most a valid link inflates to: both sources at the limit, every character escaped to
- * six bytes by JSON.stringify. A few kilobytes of deflate can claim gigabytes, so inflating
- * stops here rather than after the schema has had a look.
- */
+// Both sources at the limit, every character escaped to six bytes. A few kilobytes of deflate
+// can claim gigabytes, so inflating stops here.
 const MAX_JSON_BYTES = 2 * MAX_SOURCE * 6 + 1024;
 
-/**
- * The URL is the one input here that a stranger controls, so it gets a schema. Everything
- * else in the app comes from the engine or from the editors.
- */
 const sharedSchema = z.object({
   html: z.string().max(MAX_SOURCE),
   css: z.string().max(MAX_SOURCE),
@@ -28,7 +21,7 @@ const sharedSchema = z.object({
 
 export type Shared = z.infer<typeof sharedSchema>;
 
-/** null when decode would turn the link down, rather than a link that opens the sample. */
+// null rather than a link decode would turn down.
 export async function encode(shared: Shared): Promise<string | null> {
   if (!sharedSchema.safeParse(shared).success) return null;
 

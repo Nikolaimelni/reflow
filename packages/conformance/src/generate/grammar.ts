@@ -12,11 +12,7 @@ export type GeneratedDocument = {
   roots: GeneratedNode[];
 };
 
-/**
- * Only properties the engine claims to support, so a failure is a bug rather than a gap.
- * Values are deliberately awkward: zero, negative margins, percentages that do not divide
- * cleanly, and the auto that has a different meaning on every property it appears on.
- */
+// Only what the engine supports, so a failure is a bug. The values are picked to be awkward.
 const px = fc.integer({ min: 0, max: 90 }).map((n) => `${String(n)}px`);
 const percent = fc.integer({ min: 0, max: 100 }).map((n) => `${String(n)}%`);
 const size = fc.oneof(px, percent, fc.constant('auto'));
@@ -109,10 +105,8 @@ const text = fc.oneof(
   },
 );
 
-/**
- * Shallow and narrow on purpose. Deep trees make slow pages and long shrinking runs without
- * finding anything a three level tree does not already find.
- */
+// Shallow and narrow on purpose. Deep trees make slow pages and long shrinking runs without
+// finding anything a three level tree does not already find.
 const node: fc.Arbitrary<GeneratedNode> = fc.letrec<{ node: GeneratedNode }>((tie) => ({
   node: fc.record({
     tag: fc.constantFrom('div', 'p', 'span', 'section', 'em', 'li'),
@@ -132,10 +126,7 @@ export const documents: fc.Arbitrary<GeneratedDocument> = fc.record({
 
 export type Rendered = { html: string; css: string; document: string };
 
-/**
- * The family is pinned on the body so both sides measure the same font, and the body margin
- * is zeroed so a difference shows up where it happened rather than shifted by eight pixels.
- */
+// A pinned family, and no body margin so a difference shows up where it happened.
 export function render(generated: GeneratedDocument): Rendered {
   const rules: string[] = [
     `body { margin: 0; font-family: Arial, sans-serif; width: ${String(generated.width)}px }`,

@@ -7,7 +7,7 @@ import type { Fragment } from '../trace/events.js';
 import { layoutDocument } from './block.js';
 import { fixedAdvanceMeasurer } from './text.js';
 
-/** Half an em per character, so "hello" is 40px at the default 16px font size. */
+// Half an em per character, so "hello" is 40px at the default 16px font size.
 const measurer = fixedAdvanceMeasurer();
 
 function page(css: string, children: DomNode[], width = 400) {

@@ -34,19 +34,13 @@ export type Run =
 
 const measurer = canvasMeasurer();
 
-/**
- * The whole pipeline, from two strings to geometry and a trace. Anything thrown on the way
- * is caught here, because this is the boundary that can do something about it: show the
- * message instead of blanking the page.
- */
+// Anything thrown is caught here, so the page shows the message instead of going blank.
 export function run(html: string, css: string, viewport: Viewport, devicePixelRatio: number): Run {
   try {
     const root = parseHtml(html);
     if (root === null) return { status: 'empty' };
 
-    // The browser snaps border widths to the screen grid, so the engine is told what screen
-    // it is on and does the same. Moving a window between displays changes the answer, which
-    // is why the ratio is an input here and not read from the global.
+    // Borders snap to device pixels, so the ratio is passed in rather than read from window.
     const boxTree = buildBoxTree(root, computeStyles(root, css, devicePixelRatio));
     if (boxTree === null) return { status: 'empty' };
 

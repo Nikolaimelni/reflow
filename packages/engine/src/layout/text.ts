@@ -19,11 +19,7 @@ export type FontMetrics = {
   lineHeight: number;
 };
 
-/**
- * The engine cannot measure text on its own, and writing a shaper is a different project.
- * The host passes one of these in: the app backs it with `canvas.measureText`, the unit
- * tests back it with fixed numbers so they stay deterministic.
- */
+/** Supplied by the host: canvas in the app, fixed numbers in the unit tests. */
 export type TextMeasurer = {
   advance(text: string, font: FontSpec): number;
   metrics(font: FontSpec): FontMetrics;
@@ -45,11 +41,7 @@ export type Segment =
 
 const SPACE = /[ \t\n\r\f]/;
 
-/**
- * Splits a text run into the pieces a line can be built from. Under `white-space: normal` a
- * run of spaces, tabs and newlines becomes one space, which is why source indentation does
- * not show up on the page. Under `pre` everything survives and newlines break the line.
- */
+/** Collapses whitespace runs to one space, except under `pre`, where newlines break the line. */
 export function segmentText(text: string, whiteSpace: WhiteSpace): Segment[] {
   const segments: Segment[] = [];
   const collapse = whiteSpace !== 'pre';
@@ -113,10 +105,7 @@ export function wraps(whiteSpace: WhiteSpace): boolean {
   return whiteSpace === 'normal';
 }
 
-/**
- * A measurer with made-up but stable numbers, for tests and for anything running where no
- * canvas exists. Every character is the same width, which is wrong and predictable.
- */
+/** Every character the same width: wrong, but predictable enough for tests. */
 export function fixedAdvanceMeasurer(
   options: { advance?: number; ascent?: number; descent?: number } = {},
 ): TextMeasurer {

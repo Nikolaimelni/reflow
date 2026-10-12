@@ -8,16 +8,13 @@ import {
 } from '@reflow/engine';
 import type { Measurements, MeasureRequest } from './extract.js';
 
-/** The canvas font shorthand, which is the CSS one: style, weight, size, family. */
 export function fontString(font: FontSpec): string {
   const slant = font.style === 'normal' ? '' : `${font.style} `;
   return `${slant}${font.weight} ${font.size}px ${font.family.join(', ')}`;
 }
 
-/**
- * The engine only ever measures whole segments, so the harness can ask the engine's own
- * segmentation what strings it will need and measure exactly those in the page.
- */
+// The engine only ever measures whole segments, so the harness can ask the engine's own
+// segmentation what strings it will need and measure exactly those in the page.
 export function measurementRequests(boxTree: Box): MeasureRequest[] {
   const byFont = new Map<string, Set<string>>();
 
@@ -35,7 +32,7 @@ export function measurementRequests(boxTree: Box): MeasureRequest[] {
   return [...byFont].map(([font, texts]) => ({ font, texts: [...texts] }));
 }
 
-/** Throws on a miss rather than guessing, so a gap in the table is loud. */
+// Throws on a miss rather than guessing, so a gap in the table is loud.
 export function tableMeasurer(measurements: Measurements): TextMeasurer {
   return {
     advance(text, font) {

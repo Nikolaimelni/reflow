@@ -4,12 +4,8 @@ import type { PropertyName } from '../cascade/properties.js';
 export type Invalidation = 'layout' | 'paint' | 'composite';
 
 /**
- * What changing one property costs. The type is a full `Record`, so adding a property to the
- * cascade without deciding this is a compile error rather than a quiet omission.
- *
- * Almost everything is layout, which is the honest answer for a subset made of the box model.
- * The interesting rows are the last four: a colour only repaints, and an opacity is handed to
- * the compositor, which is why fading something in is cheap and resizing it is not.
+ * A full Record, so a new property without a cost here is a compile error. Nearly all of them
+ * are layout; colour only repaints and opacity goes to the compositor.
  */
 export const INVALIDATION: Record<PropertyName, Invalidation> = {
   display: 'layout',
@@ -87,17 +83,14 @@ export const INVALIDATION: Record<PropertyName, Invalidation> = {
 
 export type DirtyResult = {
   invalidation: Invalidation;
-  /** Every box that has to be done again. */
   dirty: Set<BoxId>;
   /** The ancestors the change climbed to, nearest first. */
   climbs: BoxId[];
 };
 
 /**
- * What one declaration costs on one box. A composite change touches nothing but the box
- * itself. A paint change takes the subtree with it. A layout change also pushes everything
- * that comes after it in the flow, and climbs to any ancestor whose height was coming from
- * its content, which is how a single word can move the bottom of the page.
+ * Composite touches the box, paint its subtree, and layout also what follows it in the flow and
+ * every ancestor whose height came from its content.
  */
 export function dirtyBoxes(root: BlockBox, target: BoxId, property: PropertyName): DirtyResult {
   const invalidation = INVALIDATION[property];

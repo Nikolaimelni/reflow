@@ -62,7 +62,7 @@ export type LayoutResult = {
 type ContainingBlock = {
   x: number;
   width: number;
-  /** null when the containing block's own height is still auto. */
+  // null when the containing block's own height is still auto.
   height: number | null;
 };
 
@@ -75,75 +75,67 @@ type Context = {
   trace: LayoutEvent[];
   measurer: TextMeasurer;
   devicePixelRatio: number;
-  /** The initial containing block, which is what an absolute box falls back to. */
+  // The initial containing block, which is what an absolute box falls back to.
   icb: Rect;
-  /** Every box an element made, in order, for a positioned inline that was cut in two. */
+  // Every box an element made, in order, for a positioned inline that was cut in two.
   boxesOf: ReadonlyMap<ElementNode, readonly BoxId[]>;
   elementOf: ReadonlyMap<BoxId, ElementNode>;
-  /**
-   * Elements laid out as inline boxes that are positioned, and so containing blocks, with the
-   * style their boxes carry.
-   */
+  // Elements laid out as inline boxes that are positioned, and so containing blocks, with the
+  // style their boxes carry.
   positionedInlines: ReadonlyMap<ElementNode, ComputedStyle>;
 };
 
-/** An out of flow box, parked until the containing block it belongs to has a size. */
+// An out of flow box, parked until the containing block it belongs to has a size.
 type Deferred = {
   box: BlockBox;
   staticX: number;
   staticY: number;
-  /**
-   * A child of a flex container takes its static position as if it were the only item in
-   * it, so it is aligned inside the container's content box rather than parked at its start.
-   * One that came out of a line or the block flow is aligned in a rectangle that starts at
-   * its static position instead: a line tall, or no size at all.
-   */
+  // A child of a flex container takes its static position as if it were the only item in
+  // it, so it is aligned inside the container's content box rather than parked at its start.
+  // One that came out of a line or the block flow is aligned in a rectangle that starts at
+  // its static position instead: a line tall, or no size at all.
   aligned: { within: BoxId | { width: number; height: number }; x: Placement; y: Placement } | null;
-  /** A positioned inline that is the containing block, rather than the block it was given. */
+  // A positioned inline that is the containing block, rather than the block it was given.
   inside: ElementNode | null;
 };
 
 type Placement = 'start' | 'center' | 'end';
 
-/** Absolute positioning solves width, position and margins together, so it hands them over. */
+// Absolute positioning solves width, position and margins together, so it hands them over.
 type Override = {
   x: number;
   contentWidth: number;
   margin: Edges;
   contentHeight: number | null;
-  /**
-   * Whether that height is a size the box was given rather than one it worked out from its
-   * content. A percentage height inside only has something to resolve against when it is.
-   */
+  // Whether that height is a size the box was given rather than one it worked out from its
+  // content. A percentage height inside only has something to resolve against when it is.
   definite?: boolean;
 };
 
 type BlockInput = {
   box: BlockBox;
   containing: ContainingBlock;
-  /** Where the border box goes in the flow, before any relative offset. */
+  // Where the border box goes in the flow, before any relative offset.
   top: number;
   absolutes: Deferred[];
   isRoot: boolean;
-  /** What this box's own percentage edges resolve against, when it is not the given width. */
+  // What this box's own percentage edges resolve against, when it is not the given width.
   basis?: number;
-  /**
-   * A box that is a formatting context root because of where it sits rather than because of
-   * anything in its own style, which is what a flex item is. Nothing inside it collapses out.
-   */
+  // A box that is a formatting context root because of where it sits rather than because of
+  // anything in its own style, which is what a flex item is. Nothing inside it collapses out.
   independent?: boolean;
   override: Override | null;
 };
 
 type BlockResult = {
-  /** Border-box height, margins excluded. */
+  // Border-box height, margins excluded.
   height: number;
-  /** What is left adjoining the bottom edge and may still collapse with what follows. */
+  // What is left adjoining the bottom edge and may still collapse with what follows.
   marginBottom: CollapsedMargin;
   collapsedThrough: boolean;
-  /** Last line box baseline, measured from the border-box top, for an atomic inline. */
+  // Last line box baseline, measured from the border-box top, for an atomic inline.
   baseline: number | null;
-  /** The first, which is the one a flex line lines its items up by. */
+  // The first, which is the one a flex line lines its items up by.
   firstBaseline: number | null;
 };
 
@@ -188,10 +180,8 @@ export function layoutDocument(
   };
 }
 
-/**
- * `top` is the final position of the border box. The caller already knows it, because every
- * margin that could still move the box has been collapsed on the way in.
- */
+// `top` is the final position of the border box. The caller already knows it, because every
+// margin that could still move the box has been collapsed on the way in.
 function layoutBlock(input: BlockInput, context: Context): BlockResult {
   const { box, containing, top, isRoot, override } = input;
   const style = box.style;
@@ -383,11 +373,11 @@ function layoutBlock(input: BlockInput, context: Context): BlockResult {
 }
 
 type FlowResult = {
-  /** Height taken by the children inside the content box. */
+  // Height taken by the children inside the content box.
   height: number;
-  /** Margins still adjoining the bottom of the content, not yet committed to the height. */
+  // Margins still adjoining the bottom of the content, not yet committed to the height.
   trailing: CollapsedMargin;
-  /** Last baseline found among the children, measured from the content top. */
+  // Last baseline found among the children, measured from the content top.
   baseline: number | null;
   firstBaseline: number | null;
 };
@@ -611,7 +601,7 @@ function describeWidth(style: ComputedStyle, specified: number | null, clamped: 
   return `width ${specified}px from the style`;
 }
 
-/** A root of its own formatting context keeps its children's margins to itself. */
+// A root of its own formatting context keeps its children's margins to itself.
 function establishesBfc(style: ComputedStyle): boolean {
   return (
     style.overflow !== 'visible' ||
@@ -622,7 +612,7 @@ function establishesBfc(style: ComputedStyle): boolean {
   );
 }
 
-/** Nothing may sit between two margins for them to touch: no border, no padding. */
+// Nothing may sit between two margins for them to touch: no border, no padding.
 function canCollapseTop(style: ComputedStyle, padding: Edges, border: Edges): boolean {
   return !establishesBfc(style) && padding.top === 0 && border.top === 0;
 }
@@ -641,10 +631,8 @@ function canCollapseBottom(
   );
 }
 
-/**
- * The margins adjoining the top edge of a box, including the ones escaping from inside it.
- * Read from styles alone, so a parent can place a child before laying it out.
- */
+// The margins adjoining the top edge of a box, including the ones escaping from inside it.
+// Read from styles alone, so a parent can place a child before laying it out.
 function adjoiningTopMargins(box: BlockBox, containingWidth: number): CollapsedMargin {
   const border = usedBorderWidths(box.style);
   const padding = usedPadding(box.style, containingWidth);
@@ -687,7 +675,7 @@ function adjoiningBottomMargins(box: BlockBox, containingWidth: number): Collaps
   return collapsed;
 }
 
-/** A box with nothing between its own two margins lets them meet, and takes no height. */
+// A box with nothing between its own two margins lets them meet, and takes no height.
 function collapsesThrough(
   box: BlockBox,
   containingWidth: number,
@@ -711,11 +699,9 @@ function collapsesThrough(
   );
 }
 
-/**
- * Whether an inline child puts anything on a line. An empty `<span>` does not, and a box that
- * holds nothing else is as empty as one with no children at all, which is what lets a margin
- * collapse straight through the anonymous block around it.
- */
+// Whether an inline child puts anything on a line. An empty `<span>` does not, and a box that
+// holds nothing else is as empty as one with no children at all, which is what lets a margin
+// collapse straight through the anonymous block around it.
 function makesALine(box: Box, containingWidth: number): boolean {
   if (box.kind === 'text') return !isCollapsibleWhitespace(box);
   // Out of the flow, so it takes no room on the line it would have been on.
@@ -738,16 +724,13 @@ function makesALine(box: Box, containingWidth: number): boolean {
   return box.children.some((child) => makesALine(child, containingWidth));
 }
 
-/**
- * `align-content` on a block container aligns everything in the flow as one group, which it
- * can only do as a formatting context of its own: a margin that escaped would move the group
- * it was measured as part of.
- */
+// `align-content` on a block container aligns everything in the flow as one group, which it
+// can only do as a formatting context of its own: a margin that escaped would move the group
+// it was measured as part of.
 function alignsContent(style: ComputedStyle): boolean {
   return style.display !== 'flex' && style.alignContent !== 'normal';
 }
 
-/** How tall the content is, before knowing where it goes. */
 function measureFlow(
   box: BlockBox,
   containing: ContainingBlock,
@@ -769,11 +752,9 @@ function measureFlow(
   return flow.height + resolveMargin(flow.trailing);
 }
 
-/**
- * One group has nothing to distribute between, so the distribution values fall back to what
- * the spec gives them: `space-between` to the start, the other two to the centre. Content
- * taller than the box stays where it is rather than being pushed off the top.
- */
+// One group has nothing to distribute between, so the distribution values fall back to what
+// the spec gives them: `space-between` to the start, the other two to the centre. Content
+// taller than the box stays where it is rather than being pushed off the top.
 function alignmentLeading(align: AlignContent, free: number): number {
   if (free <= 0) return 0;
 
@@ -789,11 +770,9 @@ function alignmentLeading(align: AlignContent, free: number): number {
   }
 }
 
-/**
- * A text box carries its parent's whole computed style so it inherits the font, which means a
- * run of text inside an absolutely positioned box looks absolutely positioned itself. It is
- * not: only an element is ever taken out of the flow.
- */
+// A text box carries its parent's whole computed style so it inherits the font, which means a
+// run of text inside an absolutely positioned box looks absolutely positioned itself. It is
+// not: only an element is ever taken out of the flow.
 function inFlowChildren(box: BlockBox): Box[] {
   return box.children.filter(
     (child) =>
@@ -802,10 +781,8 @@ function inFlowChildren(box: BlockBox): Box[] {
   );
 }
 
-/**
- * An inline-block lays its own children out as blocks, so it goes through the block path in
- * a throwaway context first just to find out how big it is.
- */
+// An inline-block lays its own children out as blocks, so it goes through the block path in
+// a throwaway context first just to find out how big it is.
 function measureAtomic(
   box: InlineBox,
   available: number,
@@ -855,7 +832,7 @@ function measureAtomic(
   };
 }
 
-/** An atomic inline takes its place in the line as a margin box, not a border box. */
+// An atomic inline takes its place in the line as a margin box, not a border box.
 function atomicMargin(box: InlineBox, available: number): Edges {
   return {
     top: usedMargin(box.style.marginTop, available) ?? 0,
@@ -899,11 +876,9 @@ function placeAtomic(
   );
 }
 
-/**
- * An inline-block keeps its own height, and a percentage of it goes against the block the
- * line belongs to, the same as anywhere else. A line does not make the basis go away; only an
- * indefinite height above does.
- */
+// An inline-block keeps its own height, and a percentage of it goes against the block the
+// line belongs to, the same as anywhere else. A line does not make the basis go away; only an
+// indefinite height above does.
 function atomicContentHeight(
   box: InlineBox,
   available: number,
@@ -916,12 +891,10 @@ function atomicContentHeight(
   return toContentBox(box.style.boxSizing, usedSize(box.style.height, basis), down);
 }
 
-/**
- * An inline-block with an auto width shrinks to fit. The width is solved here rather than by
- * handing the block path a narrower containing block, because every percentage inside the box
- * resolves against the room the line had, not against the width the box ended up with. A one
- * per cent padding on an empty inline-block is not zero.
- */
+// An inline-block with an auto width shrinks to fit. The width is solved here rather than by
+// handing the block path a narrower containing block, because every percentage inside the box
+// resolves against the room the line had, not against the width the box ended up with. A one
+// per cent padding on an empty inline-block is not zero.
 function atomicContentWidth(box: InlineBox, available: number, context: Context): number {
   const style = box.style;
   const border = usedBorderWidths(style);
@@ -951,11 +924,9 @@ function asBlock(box: InlineBox): BlockBox {
   };
 }
 
-/**
- * Where the only item of this flex container would go, in each physical axis. `justify-content`
- * places it along the line and `align-self` across it, and the values that distribute space
- * fall back the way they do for one item. Stretch has nothing to stretch here, so it starts.
- */
+// Where the only item of this flex container would go, in each physical axis. `justify-content`
+// places it along the line and `align-self` across it, and the values that distribute space
+// fall back the way they do for one item. Stretch has nothing to stretch here, so it starts.
 function soleItem(container: BlockBox, child: BlockBox): Deferred['aligned'] {
   const style = container.style;
   const direction = style.flexDirection;
@@ -988,11 +959,9 @@ function soleItem(container: BlockBox, child: BlockBox): Deferred['aligned'] {
   return { within: container.id, x: isRow ? main : cross, y: isRow ? cross : main };
 }
 
-/**
- * Moves a box whose static position is an alignment inside a flex container's content box,
- * once its own size is known. Only when both insets on that axis are auto: an inset pins the
- * box and the alignment has nothing left to say.
- */
+// Moves a box whose static position is an alignment inside a flex container's content box,
+// once its own size is known. Only when both insets on that axis are auto: an inset pins the
+// box and the alignment has nothing left to say.
 function alignStatic(
   axis: AxisResult,
   deferred: Deferred,
@@ -1030,26 +999,17 @@ function alignStatic(
   return { ...axis, start: axis.start + (placement === 'end' ? free : free / 2) };
 }
 
-/**
- * `align-self` on an absolute box whose static position came out of the flow, aligned in a
- * rectangle of the given height starting there. With no height, the only thing to align
- * against is the point itself: the end puts the margin box above it, the centre across it.
- */
+// `align-self` on an absolute box whose static position came out of the flow, aligned in a
+// rectangle of the given height starting there. With no height, the only thing to align
+// against is the point itself: the end puts the margin box above it, the centre across it.
 function selfAligned(box: BlockBox, room: number): Deferred['aligned'] {
   const own = box.style.alignSelf;
   const y: Placement = own === 'flex-end' ? 'end' : own === 'center' ? 'center' : 'start';
   return y === 'start' ? null : { within: { width: 0, height: room }, x: 'start', y };
 }
 
-/**
- * The containing block a positioned inline makes. It starts at the padding edge of the first
- * box the element made and ends at the padding edge of its last, which on two lines is not
- * the rectangle around either of them, and when a block cut the inline in two the block
- * between the halves is one of those boxes. A box with no height does not count, however wide
- * it is: not an empty half, and not the block between the halves when that is empty too. A
- * half as tall as a line counts with no width at all. Chromium measures it this way, and CSS
- * 2.1 describes the two lines.
- */
+// From the padding edge of the first box the element made to that of its last, counting the
+// block between cut halves. Boxes with no height do not count, however wide. Measured.
 function inlineContainingBlock(element: ElementNode, context: Context): Rect | null {
   const all = (context.boxesOf.get(element) ?? []).flatMap((id) => {
     const fragment = context.fragments.get(id);
@@ -1087,11 +1047,9 @@ function elementsOf(root: BlockBox): Pick<Context, 'boxesOf' | 'elementOf' | 'po
   return { boxesOf, elementOf, positionedInlines };
 }
 
-/**
- * An absolutely positioned box is out of the flow, so nothing about it is known until the
- * containing block it hangs from has a size. Both axes go through the same solver; the
- * horizontal one has to finish first, because the height depends on the width.
- */
+// An absolutely positioned box is out of the flow, so nothing about it is known until the
+// containing block it hangs from has a size. Both axes go through the same solver; the
+// horizontal one has to finish first, because the height depends on the width.
 function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void {
   const containing =
     deferred.inside === null ? given : (inlineContainingBlock(deferred.inside, context) ?? given);
@@ -1200,7 +1158,7 @@ function layoutAbsolute(deferred: Deferred, given: Rect, context: Context): void
   );
 }
 
-/** A throwaway pass just to find out how tall the content comes out at that width. */
+// A throwaway pass just to find out how tall the content comes out at that width.
 function measureAbsolute(
   box: BlockBox,
   contentWidth: number,
@@ -1235,11 +1193,9 @@ function measureAbsolute(
   return Math.max(0, result.height - border.top - border.bottom - padding.top - padding.bottom);
 }
 
-/**
- * `heights` is the container's own min and max height, as content. Across a row they still
- * hold the lines when the container has no height of its own. Down a column the cross axis
- * is the width, which is always settled by the time the items are laid out.
- */
+// `heights` is the container's own min and max height, as content. Across a row they still
+// hold the lines when the container has no height of its own. Down a column the cross axis
+// is the width, which is always settled by the time the items are laid out.
 function layoutFlexItems(
   box: BlockBox,
   containing: ContainingBlock,
@@ -1302,7 +1258,7 @@ function layoutFlexItems(
     baselineOf: (index, main) => metrics[index]?.measure(main).baseline ?? null,
   });
 
-  /** Where each item's baseline ended up, from the content top, made up if it has none. */
+  // Where each item's baseline ended up, from the content top, made up if it has none.
   const baselines: number[] = [];
 
   items.forEach((item, index) => {
@@ -1363,7 +1319,7 @@ function layoutFlexItems(
 type ItemMetrics = {
   input: FlexItemInput;
   margin: Edges;
-  /** The width the item's content asks for, which is its cross size down a column. */
+  // The width the item's content asks for, which is its cross size down a column.
   fit: number;
   measure: (main: number) => { cross: number; baseline: number | null };
 };

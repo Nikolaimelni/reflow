@@ -22,11 +22,9 @@ import { USER_AGENT_CSS } from './ua.js';
 
 export type StyleMap = Map<ElementNode, ComputedStyle>;
 
-/**
- * Chromium's default font size is 13px when the family is exactly `monospace`, and 16px
- * otherwise. `monospace, Arial` gets 16, and so does `"Courier New", monospace`: the list has
- * to be the bare generic. This is why a `<pre>` looks smaller than the text around it.
- */
+// Chromium's default font size is 13px when the family is exactly `monospace`, and 16px
+// otherwise. `monospace, Arial` gets 16, and so does `"Courier New", monospace`: the list has
+// to be the bare generic. This is why a `<pre>` looks smaller than the text around it.
 const MONOSPACE_DEFAULT = 13;
 
 type Origin = 'user-agent' | 'author';
@@ -41,7 +39,7 @@ type Candidate = {
   order: number;
 };
 
-/** One selector of a rule with every longhand the rule declares, so it is matched once. */
+// One selector of a rule with every longhand the rule declares, so it is matched once.
 type MatchableRule = { selector: ComplexSelector; candidates: Candidate[] };
 
 let userAgentRules: MatchableRule[] | null = null;
@@ -210,11 +208,9 @@ function computeFor(
   return { style, fontSizeSpecified: fontSize.specified };
 }
 
-/**
- * Until something declares a font size, each element resolves the default for its own family
- * rather than inheriting a length. Once a declaration appears anywhere up the chain, ordinary
- * inheritance takes over.
- */
+// Until something declares a font size, each element resolves the default for its own family
+// rather than inheriting a length. Once a declaration appears anywhere up the chain, ordinary
+// inheritance takes over.
 function resolveFontSize(
   candidate: Candidate | undefined,
   family: readonly string[],
@@ -306,7 +302,7 @@ function globalKeyword(value: readonly Token[]): 'inherit' | 'initial' | 'unset'
   }
 }
 
-/** CSS cascade order: normal user agent, normal author, important author, important user agent. */
+// CSS cascade order: normal user agent, normal author, important author, important user agent.
 function rank(candidate: Candidate): number {
   if (!candidate.important) return candidate.origin === 'user-agent' ? 0 : 1;
   return candidate.origin === 'author' ? 2 : 3;

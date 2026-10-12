@@ -2,12 +2,7 @@ import { type BoxId, frameAt, type PropertyName } from '@reflow/engine';
 import { run, type Viewport } from './run.js';
 import { SAMPLE_CSS, SAMPLE_HTML } from './sample.js';
 
-/**
- * Everything the app knows, in one place. The editors write to `html` and `css`; `source` is
- * the debounced copy the engine actually runs, so typing does not relayout on every keypress.
- * The player owns `cursor` and nothing else, which is what keeps the canvas a pure function
- * of the frame.
- */
+// `source` is the debounced copy of the editors' text, the one the engine actually runs.
 export class Session {
   html = $state(SAMPLE_HTML);
   css = $state(SAMPLE_CSS);
@@ -21,9 +16,7 @@ export class Session {
   selected = $state<BoxId | null>(null);
   view = $state<'boxes' | 'layers' | 'lab'>('boxes');
 
-  /** Each dirty box and how far it sits from the change, for the lab's ripple. */
   dirty = $state<ReadonlyMap<BoxId, number>>(new Map());
-  /** How far the ripple has spread, in rings. */
   wave = $state(0);
   changed = $state<PropertyName | null>(null);
   comparing = $state(true);
@@ -40,7 +33,6 @@ export class Session {
     return 'box' in event ? event.box : null;
   });
 
-  /** Paint order, filtered to the boxes the current frame actually has geometry for. */
   order = $derived(
     this.result.status === 'ok'
       ? this.result.display.items.filter((item) => item.part === 'box').map((item) => item.box)

@@ -28,12 +28,7 @@ export type TextBox = {
   id: BoxId;
   text: string;
   style: ComputedStyle;
-  /**
-   * Set on the text standing in for a list marker inside its item. A symbol, the disc, circle
-   * or square, takes the room Blink gives it rather than the width of the character. Either
-   * kind can be broken after, and a space after it goes the way one at the start of a line
-   * does.
-   */
+  /** The text standing in for a marker inside its item. A symbol takes Blink's room for it. */
   listMarker: 'symbol' | 'counter' | null;
 };
 
@@ -63,7 +58,6 @@ export function isAnonymous(box: Box): boolean {
   return box.kind === 'block' && box.element === null;
 }
 
-/** Text with nothing in it but whitespace, whether or not that whitespace is preserved. */
 export function isWhitespaceText(box: Box): boolean {
   return box.kind === 'text' && box.text.trim() === '';
 }
@@ -105,15 +99,8 @@ export function boxesByElement(root: Box): Map<ElementNode, BoxId[]> {
 }
 
 /**
- * The rectangle a browser reports for an element, which is the union of the rects its boxes
- * made, taken in order the way Blink takes them: an empty rect is skipped, unless what has
- * been gathered so far is itself empty, in which case it replaces it. That is what decides
- * the odd cases. An inline that only opened or closed on a line adds nothing to a union that
- * already has a line of text in it, but it is the whole answer when there is nothing else,
- * and the same goes for the zero height block between the halves of a cut inline.
- *
- * An inline is read a line at a time rather than as the one rect it was laid out into, and
- * an element with no box that was laid out at all has no rectangle.
+ * The rect a browser reports for an element: the union of its boxes' rects in Blink's order, where
+ * an empty rect is skipped unless everything gathered so far is empty too. Inlines go line by line.
  */
 export function reportedRect(
   boxes: readonly BoxId[],
@@ -131,7 +118,6 @@ export function reportedRect(
   return reportedUnion(rects);
 }
 
-/** The union Blink takes, in which an empty rect only counts while nothing else has. */
 export function reportedUnion(rects: readonly Rect[]): Rect | null {
   let union: Rect | null = null;
 

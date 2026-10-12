@@ -21,10 +21,6 @@
   let shareable = $state(true);
   let encoding = 0;
 
-  /**
-   * The whole example lives in the fragment, so a specific case can go in a chat message
-   * rather than being described in one.
-   */
   $effect(() => {
     void decode(window.location.hash.slice(1)).then((shared) => {
       if (shared === null) return;
@@ -63,13 +59,11 @@
     });
   }
 
-  /** Long enough that a run does not fire mid-word, short enough to feel immediate. */
   const DEBOUNCE = 250;
 
   let pending = 0;
 
-  // A dpr change arrives as a resize, and it changes how wide a border is used, so the
-  // layout has to be redone.
+  // A dpr change arrives as a resize, and border widths depend on it.
   $effect(() => {
     const watch = () => {
       session.devicePixelRatio = window.devicePixelRatio;

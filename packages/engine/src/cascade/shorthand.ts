@@ -95,12 +95,8 @@ const ONE_TOKEN: Token = { type: 'number', value: 1 };
 const AUTO_TOKEN: Token = { type: 'ident', value: 'auto' };
 const NO_PERCENT_TOKEN: Token = { type: 'percentage', value: 0 };
 
-/**
- * `flex: 1` means `1 1 0%`, not `1 1 auto`. That difference is why a one-word `flex` makes
- * items share the space evenly while `flex: auto` lets their content matter. A basis on its
- * own brings a grow factor of one with it, and a unitless zero after two factors is the basis
- * rather than a third factor. The two factors go together; the basis may come either side.
- */
+// `flex: 1` is `1 1 0%`, not `1 1 auto`. A lone basis brings a grow of one, and a unitless zero
+// after two factors is the basis.
 function flex(value: readonly Token[]): Longhand[] | null {
   const parts = words(value);
   const first = parts[0]?.[0];
@@ -152,10 +148,8 @@ function isZero(token: Token | undefined): boolean {
 const TYPE_KEYWORDS = ['disc', 'circle', 'square', 'decimal'];
 const POSITION_KEYWORDS = ['outside', 'inside'];
 
-/**
- * A type, a position, or both, in either order, and whatever is missing goes back to its
- * initial value. `none` is the type, unless the type was given as well.
- */
+// A type, a position, or both, in either order, and whatever is missing goes back to its
+// initial value. `none` is the type, unless the type was given as well.
 function listStyle(value: readonly Token[]): Longhand[] | null {
   let type: Token[] | null = null;
   let position: Token[] | null = null;
@@ -182,7 +176,7 @@ function listStyle(value: readonly Token[]): Longhand[] | null {
   ];
 }
 
-/** One word sets both gaps, two set the row gap first. */
+// One word sets both gaps, two set the row gap first.
 function gap(value: readonly Token[]): Longhand[] | null {
   const parts = words(value);
   const [row, column] = parts;

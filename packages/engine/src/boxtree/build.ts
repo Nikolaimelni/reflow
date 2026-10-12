@@ -82,11 +82,9 @@ function buildBox(node: ElementNode, styles: StyleMap, ids: IdSource): Box | nul
   };
 }
 
-/**
- * The text of a marker inside its item. A number is text like any other, and its trailing
- * space is kept: the marker is `white-space: pre` in the browser's own stylesheet. A symbol
- * stands in as one character whose room layout works out from the font.
- */
+// The text of a marker inside its item. A number is text like any other, and its trailing
+// space is kept: the marker is `white-space: pre` in the browser's own stylesheet. A symbol
+// stands in as one character whose room layout works out from the font.
 function insideMarker(
   node: ElementNode,
   style: ComputedStyle,
@@ -106,14 +104,9 @@ function insideMarker(
   return { kind: 'text', id: ids(), text: `${ordinal}. `, style: marker, listMarker: 'counter' };
 }
 
-/**
- * Every child of a flex container becomes a block-level flex item: an inline box is
- * blockified, and a run of text gets an anonymous block of its own. A run of nothing but
- * whitespace is not rendered at all, and `white-space: pre` does not save it, unless what came
- * before it in the flow was text. Then it is an item of its own, even one with nothing in it
- * once its spaces collapse, and it takes its share of the gaps. That is Blink's rule for
- * whitespace in a flex container, and a box out of the flow between the two does not count.
- */
+// Every child of a flex container is blockified, and text gets an anonymous block. Whitespace
+// alone is dropped, even under `pre`, unless text came before it in the flow: then Blink makes
+// it an item of its own, gaps and all.
 function flexItems(children: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
   const items: Box[] = [];
   let run: Box[] = [];
@@ -187,17 +180,15 @@ function buildChildBox(
   return buildBox(child, styles, ids);
 }
 
-/** An out of flow box is not part of the flow it sits in, so it splits nothing. */
+// An out of flow box is not part of the flow it sits in, so it splits nothing.
 function splits(child: Box): boolean {
   return isBlock(child) && child.style.position !== 'absolute';
 }
 
-/**
- * A block inside an inline box cuts it in two. What came before the block is one box, what
- * comes after is another, and the block is their sibling rather than their child. Both halves
- * are the same element, and the side that was cut carries no border or padding, because the
- * box does not end there.
- */
+// A block inside an inline box cuts it in two. What came before the block is one box, what
+// comes after is another, and the block is their sibling rather than their child. Both halves
+// are the same element, and the side that was cut carries no border or padding, because the
+// box does not end there.
 function cutAroundBlocks(children: Box[], ids: IdSource): Box[] {
   return children.flatMap((child) => {
     if (child.kind !== 'inline' || child.atomic) return [child];
@@ -281,11 +272,9 @@ function cutStyle(style: ComputedStyle, opens: boolean, closes: boolean): Comput
   };
 }
 
-/**
- * A block container holds either blocks or inlines, never a mix. When it has both, each run
- * of inline boxes is wrapped in an anonymous block. A run of nothing but whitespace is
- * dropped instead, which is why `<div><p>a</p>\n<p>b</p></div>` has two children and not five.
- */
+// A block container holds either blocks or inlines, never a mix. When it has both, each run
+// of inline boxes is wrapped in an anonymous block. A run of nothing but whitespace is
+// dropped instead, which is why `<div><p>a</p>\n<p>b</p></div>` has two children and not five.
 function organise(original: Box[], parentStyle: ComputedStyle, ids: IdSource): Box[] {
   const children = cutAroundBlocks(original, ids);
   if (!children.some(splits)) return children;

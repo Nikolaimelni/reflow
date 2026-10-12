@@ -5,7 +5,7 @@ import { type DomNode, element, text } from '../dom/node.js';
 import { intrinsicWidths, shrinkToFit } from './intrinsic.js';
 import { fixedAdvanceMeasurer } from './text.js';
 
-/** Half an em per character, so "abcd" is 32px at the default 16px font size. */
+// Half an em per character, so "abcd" is 32px at the default 16px font size.
 const measurer = fixedAdvanceMeasurer();
 
 function widths(css: string, children: DomNode[]) {

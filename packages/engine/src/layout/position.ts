@@ -48,11 +48,7 @@ export type AxisResult = {
   marginEnd: number;
 };
 
-/**
- * One axis of an absolutely positioned box. The same equation runs horizontally and
- * vertically, which is the only reason this stays readable: start, margin, border, padding,
- * size, padding, border, margin and end have to add up to the containing block.
- */
+/** One axis of an absolute box: insets, margins, borders, padding and size add up to the block. */
 export function solveAbsoluteAxis(input: AxisInput): AxisResult {
   const { containerSize, start, end, size, surround } = input;
   const marginStart = input.marginStart;
@@ -100,11 +96,9 @@ export function solveAbsoluteAxis(input: AxisInput): AxisResult {
   return { start: offset, size, marginStart: before, marginEnd: after };
 }
 
-/**
- * With start, size and end all given the box is over-constrained, and auto margins are what
- * absorb the slack. That is how an absolutely positioned box gets centred. If the margins are
- * given too, the end inset is the one that loses.
- */
+// With start, size and end all given the box is over-constrained, and auto margins are what
+// absorb the slack. That is how an absolutely positioned box gets centred. If the margins are
+// given too, the end inset is the one that loses.
 function overConstrained(input: AxisInput, start: number, end: number, size: number): AxisResult {
   const free = input.containerSize - start - end - size - input.surround;
 

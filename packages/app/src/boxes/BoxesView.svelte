@@ -12,10 +12,6 @@
 
   const scale = $derived(width === 0 ? 1 : width / session.viewport.width);
 
-  /**
-   * Tall enough for the finished page, not for the whole viewport, and taken from the final
-   * layout rather than the current frame so the canvas does not jump while scrubbing.
-   */
   const pageHeight = $derived.by(() => {
     if (session.result.status !== 'ok') return session.viewport.height;
     const root = session.result.layout.fragments.get(session.result.boxTree.id);
@@ -36,8 +32,6 @@
     };
   });
 
-  // One frame per change, never one per event. The player can move the cursor as fast as it
-  // likes; the canvas still redraws once.
   $effect(() => {
     const scene = {
       order: session.order,

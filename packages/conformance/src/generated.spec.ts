@@ -7,30 +7,16 @@ import { env } from './env.js';
 import { checkDocument } from './generate/check.js';
 import { documents, type GeneratedDocument, render } from './generate/grammar.js';
 
-/**
- * How many documents to try. Sixty by default, which is enough to catch a whole class of
- * mistake on the way in. CI runs twice that, and a soak run raises it from the command line.
- */
+// Sixty by default; CI runs twice that.
 const RUNS = env.REFLOW_RUNS;
 
-/**
- * Looser than the half pixel the curated fixtures hold to, and deliberately so. Every whole
- * pixel of disagreement the generator turned up was a real rule the engine was missing, and
- * each of those is fixed. What is left under a pixel is baseline arithmetic inside nested
- * inline-blocks, which is written down as open rather than papered over with a smaller
- * number here. It used to be a pixel and a half; of 600 documents that agreed at that, none
- * disagreed at one.
- */
+// Looser than the fixtures' half pixel: what is left under a pixel is baseline arithmetic in
+// nested inline-blocks. Of 600 documents that agreed at 1.5px, none disagreed at 1.
 const TOLERANCE = 1;
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-/**
- * Cases the generator found sit apart from the curated fixtures. The geometry harness reads
- * the top level of the fixture directory only, so a case that still disagrees does not turn
- * that suite red; it waits here with its numbers until somebody fixes it, and then it moves
- * up, where the half pixel rule applies.
- */
+// Below the level the geometry suite reads, so an open find does not turn it red.
 const foundDir = join(here, '..', 'fixtures', 'found');
 const reportDir = join(here, '..', 'report');
 
@@ -62,9 +48,7 @@ test('generated documents agree with Chromium', async ({ page }) => {
   expect(documentsTried, 'nothing was generated').toBeGreaterThan(0);
   expect(edgesCompared, 'nothing was compared').toBeGreaterThan(0);
 
-  // Finding something is what this suite is for, so it does not stop the build. fast-check
-  // has already thrown away every declaration and every element it could without losing the
-  // failure, so what lands on disk is the smallest document that still disagrees.
+  // A find does not fail the build. fast-check has already shrunk it as far as it goes.
   const shrunk = result.failed ? result.counterexample?.[0] : undefined;
   let found: string | null = null;
 

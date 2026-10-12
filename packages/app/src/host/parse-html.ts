@@ -1,14 +1,6 @@
 import { type DomNode, type ElementNode, element, text } from '@reflow/engine';
 
-/**
- * `DOMParser` does the HTML parsing. The parsing spec is enormous and none of it is what this
- * project is about, so the browser keeps that job and hands back a document, which then gets
- * copied into the engine's own node tree.
- *
- * Head content is dropped: those elements generate no boxes, and the stylesheet is handed to
- * the engine separately. The live comparison skips the same set, because it pairs elements by
- * document order.
- */
+// Head content makes no boxes. LiveFrame skips the same tags, as it pairs elements by order.
 export const SKIP: ReadonlySet<string> = new Set([
   'head',
   'style',

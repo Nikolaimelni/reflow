@@ -13,10 +13,8 @@ import { buildTree, COMPARED_PROPERTIES } from './compare.js';
 import { extractPage, measureInPage } from './extract.js';
 import { measurementRequests, tableMeasurer } from './measurer.js';
 
-/**
- * Chromium lays out in sixty-fourths of a pixel, so chasing an exact match on fractional
- * values is a waste of an evening. Half a pixel is the line.
- */
+// Chromium lays out in sixty-fourths of a pixel, so chasing an exact match on fractional
+// values is a waste of an evening. Half a pixel is the line.
 const TOLERANCE = 0.5;
 
 const here = dirname(fileURLToPath(import.meta.url));

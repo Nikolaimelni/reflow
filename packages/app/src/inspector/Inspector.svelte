@@ -11,11 +11,7 @@
     fragment: Fragment | null;
   };
 
-  /**
-   * Walks the trace up to the cursor, so the panel says what the engine knew at this point
-   * rather than what it ended up with. The constraint it was handed sits next to the size it
-   * came back with, which is the pair worth seeing together.
-   */
+  // What the engine knew at the cursor, not what it ended up with.
   function detailsFor(
     trace: readonly LayoutEvent[],
     cursor: number,

@@ -13,12 +13,8 @@ import {
 export type Intrinsic = { min: number; max: number };
 
 /**
- * The spec's preferred minimum and preferred widths. The minimum is the widest thing that
- * cannot be broken any further, usually the longest word. The maximum is what the content
- * would take if it never broke at all. Shrink-to-fit picks a point between them.
- *
- * Percentages resolve to zero here, because the whole point of this pass is that no width is
- * known yet.
+ * Min is the widest unbreakable run, max the width with no breaks at all. Percentages are zero
+ * here, since no width is known yet.
  */
 export function intrinsicWidths(box: Box, measurer: TextMeasurer): Intrinsic {
   if (box.kind === 'text' || (box.kind === 'inline' && !box.atomic)) {
@@ -88,18 +84,16 @@ function inlineIntrinsic(
   measurer: TextMeasurer,
   canWrap: boolean,
 ): Intrinsic {
-  /**
-   * The same rules the line breaker follows, or the two disagree about what a line costs.
-   * A space only counts once it has a word after it, a run with no space in it cannot be
-   * broken however wide it gets, and an inline box's own padding travels with its content.
-   */
+  // The same rules the line breaker follows, or the two disagree about what a line costs.
+  // A space only counts once it has a word after it, a run with no space in it cannot be
+  // broken however wide it gets, and an inline box's own padding travels with its content.
   let min = 0;
   let max = 0;
   let line = 0;
   let run = 0;
-  /** A space that could be broken at: it belongs to the line but not to the run. */
+  // A space that could be broken at: it belongs to the line but not to the run.
   let gap = 0;
-  /** A space that could not: it belongs to both, because nothing may split it off. */
+  // A space that could not: it belongs to both, because nothing may split it off.
   let glue = 0;
   let content = false;
 
@@ -125,7 +119,7 @@ function inlineIntrinsic(
     content = true;
   };
 
-  /** An inline box's own padding cannot be broken away from its content, or counted twice. */
+  // An inline box's own padding cannot be broken away from its content, or counted twice.
   const addEdge = (width: number) => {
     line += width;
     run += width;

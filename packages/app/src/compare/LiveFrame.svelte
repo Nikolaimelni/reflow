@@ -8,22 +8,13 @@
 
   let frame: HTMLIFrameElement | undefined = $state();
 
-  /**
-   * The iframe's scrollbar eats into the content width, so the initial containing block
-   * inside it is narrower than the element. Widening the element by that much gives the
-   * browser exactly the viewport the engine was told about.
-   */
+  // The iframe's own scrollbar narrows its viewport, so the frame is widened by that much.
   let gutter = $state(0);
 
   const document_ = $derived(
     `<!doctype html><html><head><meta charset="utf-8"><style>${session.source.css}</style></head><body>${session.source.html}</body></html>`,
   );
 
-  /**
-   * The browser lays the same source out in an iframe and the two sets of rectangles are
-   * compared element by element. Both trees came out of the same parser, so walking them in
-   * document order lines them up without needing ids.
-   */
   function compare(): void {
     // Between one srcdoc and the next the frame can hold a document with no element in it yet.
     // The load event runs this again once there is one.
@@ -92,9 +83,7 @@
   }
 
   $effect(() => {
-    // New source, or a freshly measured gutter, and the comparison runs again. Without the
-    // gutter here the first pass measures a narrower iframe than the engine was given and
-    // the list sits there stale.
+    // The gutter too: the first pass runs in a frame narrower than the engine's viewport.
     void document_;
     void gutter;
 

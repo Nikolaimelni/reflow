@@ -160,7 +160,7 @@ function present<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
 
-/** The greedy cut the spec asks for: an item goes on the line unless it no longer fits. */
+// The greedy cut the spec asks for: an item goes on the line unless it no longer fits.
 function cutIntoLines(input: FlexLineInput): number[][] {
   if (input.wrap === 'nowrap' || input.mainSize === null) {
     return [input.items.map((_, index) => index)];
@@ -189,11 +189,9 @@ function cutIntoLines(input: FlexLineInput): number[][] {
   return lines;
 }
 
-/**
- * `wrap-reverse` turns the cross axis around: the first line is the one furthest across, and
- * so is the start of every item on it. The lines were solved in that turned around axis, with
- * the margins already swapped to match, so all that is left is to reflect the answer.
- */
+// `wrap-reverse` turns the cross axis around: the first line is the one furthest across, and
+// so is the start of every item on it. The lines were solved in that turned around axis, with
+// the margins already swapped to match, so all that is left is to reflect the answer.
 function turnOver(
   placements: readonly FlexPlacement[],
   input: FlexLineInput,
@@ -267,13 +265,8 @@ export function solveFlexLine(input: FlexLineInput): FlexLineResult {
   };
 }
 
-/**
- * The loop the spec calls resolving flexible lengths. Space is shared out from the flex base
- * sizes, anything the share pushes past its min or max is clamped and frozen, and what it
- * would not take goes round again to the items still free to move. A single pass gets the
- * sizes wrong the moment one item hits its floor: the room it refuses to give up has to come
- * out of somebody else.
- */
+// The spec's loop: share the space, freeze whatever hits its min or max, share what is left
+// again. One pass is wrong as soon as an item hits its floor.
 function resolveMainSizes(input: FlexLineInput): number[] {
   const items = input.items;
   const hypothetical = items.map((item) => clamp(item.basis, item.minMain, item.maxMain));
@@ -340,11 +333,9 @@ function resolveMainSizes(input: FlexLineInput): number[] {
   return target;
 }
 
-/**
- * Every item is placed by its own `align-self`, falling back to the container's `align-items`.
- * The ones asking for a baseline share one: the line makes room for the tallest ascent among
- * them and they all hang from it, while the rest are placed against the line they sit in.
- */
+// Every item is placed by its own `align-self`, falling back to the container's `align-items`.
+// The ones asking for a baseline share one: the line makes room for the tallest ascent among
+// them and they all hang from it, while the rest are placed against the line they sit in.
 function resolveCross(
   input: FlexLineInput,
   mains: readonly number[],
@@ -454,11 +445,9 @@ function distribute(
   }
 }
 
-/**
- * Blink adds each item's share of the space as a whole number of sixty-fourths, rounded to the
- * nearest and away from zero at the half. It is a fraction of a pixel, and it decides whether
- * the last word of a line still fits in an item that was only just squeezed.
- */
+// Blink adds each item's share of the space as a whole number of sixty-fourths, rounded to the
+// nearest and away from zero at the half. It is a fraction of a pixel, and it decides whether
+// the last word of a line still fits in an item that was only just squeezed.
 function toLayoutUnit(value: number): number {
   return (Math.sign(value) * Math.round(Math.abs(value) * 64)) / 64;
 }

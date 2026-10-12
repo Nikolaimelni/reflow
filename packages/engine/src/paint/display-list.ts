@@ -16,19 +16,15 @@ import type { Fragment } from '../trace/events.js';
 export type PaintItem = {
   box: BoxId;
   /**
-   * The box itself, or the line boxes of a block that holds inline content. Those have
-   * nothing to draw, but they are hit tested where that content paints, over the backgrounds
-   * of the blocks that come after, so a line hanging out of its block still finds the block,
-   * as far out as the block itself would reach from where the line starts.
+   * The box, or the line boxes of a block with inline content. Lines draw nothing but are hit
+   * tested where the content paints, so a line hanging out of its block still finds it.
    */
   part: 'box' | 'lines';
   /** `visibility: hidden` keeps a box's space but takes it out of painting and hit testing. */
   visible: boolean;
   /**
-   * A block no element asked for, around a run of inline content that sits among blocks.
-   * Chromium keeps that content as lines of the block around it rather than as a box, so a
-   * pointer goes straight through this one, though not through the lines inside it. A run of
-   * text in a flex container is a box of its own in Chromium too, and does not count.
+   * An anonymous block around inline content among blocks. Chromium has no box there, only lines,
+   * so a pointer goes through it. An anonymous flex item does not count: that one is a box.
    */
   anonymous: boolean;
   /**
@@ -38,7 +34,6 @@ export type PaintItem = {
   clippedBy: BoxId | null;
   /** Position in the flat list, which is the order a painter would draw in. */
   order: number;
-  /** The stacking context this box paints inside. */
   context: BoxId;
   /**
    * The box painting as one piece that this item is drawn as part of: the root, a stacking
@@ -62,27 +57,22 @@ export type DisplayList = {
   contexts: StackingContext[];
 };
 
-/** One entry in a bucket: the box, and the clip it inherited on the way down. */
 type Entry = { box: Box; clip: BoxId | null };
 
 type Bucket = {
   negative: (Entry & { z: number })[];
   blocks: Entry[];
-  /** `own` marks an atomic inline, which paints in its step as one unit. */
+  // `own` marks an atomic inline, which paints in its step as one unit.
   inlines: (Entry & { own: boolean; part: 'box' | 'lines' })[];
-  /**
-   * Positioned with no z-index of its own, or transparent, so it paints on top of the plain
-   * content.
-   */
+  // Positioned with no z-index of its own, or transparent, so it paints on top of the plain
+  // content.
   level: Entry[];
   positive: (Entry & { z: number })[];
-  /**
-   * Set while painting a box that paints as one piece without being a stacking context. What
-   * is layered inside it was handed to the context when the box was, so it is not gathered
-   * again here.
-   */
+  // Set while painting a box that paints as one piece without being a stacking context. What
+  // is layered inside it was handed to the context when the box was, so it is not gathered
+  // again here.
   hoisted: boolean;
-  /** Halves that paint with the first half of their element, never on their own. */
+  // Halves that paint with the first half of their element, never on their own.
   skip: ReadonlySet<BoxId>;
   together: ReadonlyMap<BoxId, Box[]>;
   flexItems: ReadonlySet<BoxId>;
@@ -92,20 +82,16 @@ type Bucket = {
 type State = {
   items: PaintItem[];
   contexts: StackingContext[];
-  /**
-   * A layered inline that a block cut in two is still one element: its halves paint together,
-   * under the first of them, and whatever is positioned inside any half paints after all of
-   * them rather than under the next half.
-   */
+  // A layered inline that a block cut in two is still one element: its halves paint together,
+  // under the first of them, and whatever is positioned inside any half paints after all of
+  // them rather than under the next half.
   together: Map<BoxId, Box[]>;
   followers: Set<BoxId>;
-  /** A flex item takes a z-index without being positioned. */
+  // A flex item takes a z-index without being positioned.
   flexItems: Set<BoxId>;
-  /**
-   * The clip an absolutely positioned box is under, which is the one around its containing
-   * block. A box that clips between the two does not clip it: the box is not inside it in
-   * the sense that counts.
-   */
+  // The clip an absolutely positioned box is under, which is the one around its containing
+  // block. A box that clips between the two does not clip it: the box is not inside it in
+  // the sense that counts.
   absoluteClips: Map<BoxId, BoxId | null>;
 };
 
@@ -188,12 +174,10 @@ export function formsStackingContext(style: ComputedStyle, flexItem = false): bo
   return (style.position !== 'static' || flexItem) && style.zIndex.kind === 'integer';
 }
 
-/**
- * Painted as one unit with the positioned boxes rather than with the plain content. A box that
- * is transparent and not positioned goes where one positioned with a z-index of zero would,
- * since the compositor needs the whole of it before it can fade it, and a flex item with a
- * z-index goes where its z-index says.
- */
+// Painted as one unit with the positioned boxes rather than with the plain content. A box that
+// is transparent and not positioned goes where one positioned with a z-index of zero would,
+// since the compositor needs the whole of it before it can fade it, and a flex item with a
+// z-index goes where its z-index says.
 function layered(style: ComputedStyle, flexItem = false): boolean {
   return (
     style.position !== 'static' ||
@@ -278,10 +262,8 @@ function push(
   });
 }
 
-/**
- * A positioned box with `z-index: auto` does not start a stacking context, and neither does an
- * atomic inline, but each paints as one piece, so it recurses without adding a level.
- */
+// A positioned box with `z-index: auto` does not start a stacking context, and neither does an
+// atomic inline, but each paints as one piece, so it recurses without adding a level.
 function descend(box: Box, state: State, context: BoxId, depth: number, clip: BoxId | null): void {
   if (box.kind === 'text' || !formsStackingContext(box.style, state.flexItems.has(box.id))) {
     paint(box, state, context, depth, clip, true);
@@ -293,12 +275,10 @@ function descend(box: Box, state: State, context: BoxId, depth: number, clip: Bo
   paint(box, state, box.id, depth + 1, clip);
 }
 
-/**
- * Gathers what paints inside one stacking context. Non-positioned boxes hand their own
- * descendants over to the same buckets, which is why all the blocks come before all the
- * inline content rather than being interleaved per subtree. Flex items do not: they paint the
- * way inline-blocks do, which `items` says these children are.
- */
+// Gathers what paints inside one stacking context. Non-positioned boxes hand their own
+// descendants over to the same buckets, which is why all the blocks come before all the
+// inline content rather than being interleaved per subtree. Flex items do not: they paint the
+// way inline-blocks do, which `items` says these children are.
 function collect(
   children: readonly Box[],
   bucket: Bucket,
@@ -341,22 +321,18 @@ function collect(
   }
 }
 
-/** A block laying out inline content has line boxes. An inline that is not atomic has none. */
 function holdsLines(box: Box): boolean {
   if (box.kind === 'text' || (box.kind === 'inline' && !box.atomic)) return false;
   return box.children.some((child) => child.kind !== 'block');
 }
 
-/** Flex items paint in the order `order` puts them in, the way inline blocks would. */
 function painted(box: BlockBox | InlineBox): readonly Box[] {
   return box.style.display === 'flex' ? inFlexOrder(box.children) : box.children;
 }
 
-/**
- * Files a layered box under the step its z-index puts it in. One that makes no stacking
- * context of its own only paints as one piece: what is layered inside it belongs to the same
- * context as the box, and is sorted there by its own z-index, after the box.
- */
+// Files a layered box under the step its z-index puts it in. One that makes no stacking
+// context of its own only paints as one piece: what is layered inside it belongs to the same
+// context as the box, and is sorted there by its own z-index, after the box.
 function layer(box: Box, bucket: Bucket, around: BoxId | null): void {
   if (box.kind === 'text' || bucket.skip.has(box.id)) return;
   const clip =
@@ -383,7 +359,7 @@ function layer(box: Box, bucket: Bucket, around: BoxId | null): void {
   );
 }
 
-/** What comes out of a box that paints as one piece: its layered descendants, and nothing else. */
+// What comes out of a box that paints as one piece: its layered descendants, and nothing else.
 function escapes(children: readonly Box[], bucket: Bucket, clip: BoxId | null): void {
   for (const child of children) {
     if (child.kind === 'text') continue;
@@ -452,11 +428,9 @@ export function hitTest(
     return false;
   }
 
-  /**
-   * Chromium hit tests a block's lines from the last to the first, and a point inside a line's
-   * box stops there. So a padded box that hangs down from one line into the box of the next is
-   * not found where that box is, even though nothing else is drawn there.
-   */
+  // Chromium hit tests a block's lines from the last to the first, and a point inside a line's
+  // box stops there. So a padded box that hangs down from one line into the box of the next is
+  // not found where that box is, even though nothing else is drawn there.
   function underLaterLine(rect: Rect, unit: BoxId): boolean {
     const line = geometry.lineOf?.get(rect);
     if (line === undefined || linesUnit.get(line.block) !== unit) return false;
@@ -465,20 +439,14 @@ export function hitTest(
   }
 }
 
-/**
- * Blink only takes a point on a line box when it is also inside a rectangle as big as the
- * block, laid from the line's own corner. So a line that hangs out of its block finds the block
- * for as far as the block itself reaches from where the line starts: the first few pixels of a
- * second line under a block ten pixels tall, and nothing past the block's width along a line
- * that runs over. It looks like a check meant for rounded borders, given the line's position
- * and the block's size. Measured, and it covers every arrangement tried.
- */
+// Blink takes a point on a line box only inside a rect the size of the block laid from the
+// line's corner. It looks like a rounded-border check given the wrong box. Measured.
 function asBigAsTheBlock(line: Rect, block: Fragment | undefined): Rect | undefined {
   if (block === undefined) return undefined;
   return { x: line.x, y: line.y, width: block.rect.width, height: block.rect.height };
 }
 
-/** What a box clips to, which is inside its border and not at the edge of it. */
+// What a box clips to, which is inside its border and not at the edge of it.
 function paddingBox(fragment: Fragment | undefined): Rect | undefined {
   if (fragment === undefined) return undefined;
   const { rect, border } = fragment;
@@ -490,7 +458,7 @@ function paddingBox(fragment: Fragment | undefined): Rect | undefined {
   };
 }
 
-/** Like `inside`, but a point on the far edges counts, which is how that rectangle is tested. */
+// Like `inside`, but a point on the far edges counts, which is how that rectangle is tested.
 function within(rect: Rect | undefined, x: number, y: number): boolean {
   if (rect === undefined) return false;
   return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;

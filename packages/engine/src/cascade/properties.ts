@@ -131,10 +131,8 @@ export type ComputeContext = {
 };
 
 /**
- * A browser rounds a border down to whole device pixels, and never down to nothing. On a
- * 1.25 display a 2px border is used as 1.6px and a 1px border as 0.8px, which is why a
- * bordered box measures shorter there than the arithmetic says. It shows up in
- * `getComputedStyle`, so this is a used value decision rather than a painting one.
+ * Down to whole device pixels and never to nothing: at a ratio of 1.25 a 2px border is 1.6px.
+ * getComputedStyle reports it that way too.
  */
 export function snapToDevicePixels(width: number, devicePixelRatio: number): number {
   if (width <= 0) return 0;
@@ -209,7 +207,7 @@ const padding: PropertyDefinition<LengthPercentage>['parse'] = (value, context) 
 const maxSize: PropertyDefinition<MaxSize>['parse'] = (value, context) =>
   keyword('none')(value) === 'none' ? NONE : nonNegative(lengthPercentage(value, context));
 
-/** `thin`, `medium` and `thick` are the only keywords, and browsers agree on these pixels. */
+// `thin`, `medium` and `thick` are the only keywords, and browsers agree on these pixels.
 const borderWidth: PropertyDefinition<Px>['parse'] = (value, context) => {
   const snap = (width: number) => px(snapToDevicePixels(width, context.devicePixelRatio));
 
@@ -239,7 +237,7 @@ const lineHeight: PropertyDefinition<LineHeight>['parse'] = (value, context) => 
   return nonNegative(lengthPercentage(value, context));
 };
 
-/** `Times New Roman` arrives as three idents, and quoted names as one string token. */
+// `Times New Roman` arrives as three idents, and quoted names as one string token.
 const fontFamily: PropertyDefinition<string[]>['parse'] = (value) => {
   const families: string[] = [];
   let current: string[] = [];

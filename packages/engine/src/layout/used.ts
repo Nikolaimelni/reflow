@@ -2,11 +2,7 @@ import type { BorderStyle, ComputedStyle } from '../cascade/properties.js';
 import type { Gap, Inset, LengthPercentage, Margin, MaxSize, Px, Size } from '../cascade/values.js';
 import type { Edges } from '../geometry.js';
 
-/**
- * A border with no style takes no space, whatever its width says. This is the first place
- * where a computed value and a used value part company, and it is the reason a fixture with
- * `border-width: 5px` and no `border-style` matches Chromium at zero rather than five.
- */
+/** A border with no style takes no space, whatever its width says. */
 export function usedBorderWidths(style: ComputedStyle): Edges {
   return {
     top: used(style.borderTopStyle, style.borderTopWidth),

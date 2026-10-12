@@ -1,10 +1,6 @@
 import type { Box, BoxId } from '@reflow/engine';
 
-/**
- * How far each dirty box sits from the one that changed, counting a step to a parent and a
- * step to a child the same. It is what lets the lab show the invalidation spreading outwards
- * instead of appearing all at once, which is the part people do not picture correctly.
- */
+// Steps from the changed box, up or down the tree, so the lab can show the ripple spreading.
 export function rings(root: Box, target: BoxId, dirty: ReadonlySet<BoxId>): Map<BoxId, number> {
   const parents = new Map<BoxId, BoxId>();
   const children = new Map<BoxId, BoxId[]>();

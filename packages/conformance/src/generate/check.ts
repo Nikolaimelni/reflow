@@ -13,12 +13,6 @@ import { measurementRequests, tableMeasurer } from '../measurer.js';
 
 export type Check = { compared: number; points: number; misses: string[] };
 
-/**
- * One document, laid out twice. The browser gets it as a page, the engine gets the same two
- * strings, and every element's border box is compared. This is the same comparison the
- * geometry harness makes, run against something nobody wrote by hand. When every box agrees,
- * what the pointer lands on is compared too, which is the paint order.
- */
 export async function checkDocument(
   page: Page,
   html: string,

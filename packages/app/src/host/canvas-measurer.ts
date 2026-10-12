@@ -1,16 +1,7 @@
 import type { FontMetrics, FontSpec, TextMeasurer } from '@reflow/engine';
 
-/**
- * The engine cannot measure text on its own, so this is the half that knows about browsers.
- *
- * Canvas gives advance widths, which agree with the DOM to about a hundredth of a pixel. It
- * does not give the rest: `fontBoundingBoxAscent` and its descent come back as whole numbers
- * whatever the screen is, while the browser lays out with metrics snapped to device pixels, so
- * on a 1.25 display they drift apart by up to a pixel and the app quietly disagrees with the
- * browser beside it. The extents and the line box `line-height: normal` produces are measured
- * off a real line instead, once per font. Everything is cached, because a layout asks for the
- * same word over and over.
- */
+// Advance widths come from canvas. Font extents do not: canvas rounds them to whole pixels while
+// the browser snaps them to device pixels, so they are measured off a real line instead.
 export function canvasMeasurer(): TextMeasurer {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
@@ -47,7 +38,6 @@ export function canvasMeasurer(): TextMeasurer {
   };
 }
 
-/** The canvas font shorthand, which is the CSS one: style, weight, size, family. */
 export function fontString(font: FontSpec): string {
   const slant = font.style === 'normal' ? '' : `${font.style} `;
   return `${slant}${font.weight} ${font.size}px ${font.family.join(', ')}`;

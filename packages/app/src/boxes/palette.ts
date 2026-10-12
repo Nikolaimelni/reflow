@@ -1,7 +1,3 @@
-/**
- * The four box model colours, the same ones a browser's own inspector uses. They are the
- * only legend the app needs, and they mean the same thing in every view.
- */
 export const PALETTE = {
   content: '#6e9cd4',
   padding: '#8fb068',

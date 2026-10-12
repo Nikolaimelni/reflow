@@ -5,11 +5,7 @@ export type Colour = { r: number; g: number; b: number; a: number };
 export const TRANSPARENT: Colour = { r: 0, g: 0, b: 0, a: 0 };
 export const BLACK: Colour = { r: 0, g: 0, b: 0, a: 1 };
 
-/**
- * A short list on purpose. The named colours run to a hundred and forty and none of them
- * teach anything about layout, so the ones here are the ones a test fixture actually reaches
- * for. Everything else goes through hex or `rgb()`.
- */
+// Only the names fixtures use. Everything else goes through hex or `rgb()`.
 const NAMED: Record<string, Colour | undefined> = {
   transparent: TRANSPARENT,
   black: BLACK,
@@ -62,14 +58,8 @@ export function formatColour(colour: Colour): string {
   return colour.a >= 1 ? `rgb(${rgb})` : `rgba(${rgb}, ${serialiseAlpha(colour.a)})`;
 }
 
-/**
- * The shortest run of digits that lands back on the same eight bit alpha, which is what the
- * colour spec asks for and what a browser prints. `#1b3f5c80` is 128/255, or 0.50196, and it
- * comes back as 0.5 because 0.5 rounds to 128 as well.
- *
- * The digits come from the byte, not from what was written: `0.3%` is stored as 1/255 and
- * Chromium prints 0.004.
- */
+// The shortest digits that land back on the same eight bit alpha, the way a browser prints it.
+// They come from the stored byte: `0.3%` is 1/255, which Chromium prints as 0.004.
 function serialiseAlpha(alpha: number): string {
   const byte = Math.round(alpha * 255);
   const stored = byte / 255;
@@ -120,7 +110,6 @@ function fromHex(digits: string): Colour | null {
   return null;
 }
 
-/** Both the comma form and the space form, and a percentage alpha after a slash. */
 function fromRgb(tokens: readonly Token[]): Colour | null {
   const values: { value: number; percent: boolean }[] = [];
 

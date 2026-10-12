@@ -1,14 +1,9 @@
 import type { Rect } from '@reflow/engine';
 
-/** Half a CSS pixel, the same line the conformance harness draws. */
+// Half a CSS pixel, the same line the conformance harness draws.
 const TOLERANCE = 0.5;
 
-/**
- * One box, the engine's rectangle against the browser's. There is deliberately no allowance
- * for device pixel rounding here: the engine is told what screen it is on and snaps border
- * widths the same way a browser does, so anything left over is the engine's own fault and
- * should say so.
- */
+// No allowance for device pixel rounding: the engine snaps borders the way the browser does.
 export function compareRects(name: string, ours: Rect, theirs: Rect): string | null {
   const apart: string[] = [];
 

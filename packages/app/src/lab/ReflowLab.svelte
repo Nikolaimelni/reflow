@@ -12,7 +12,6 @@
 
   const { session }: { session: Session } = $props();
 
-  /** How long the ripple takes to reach the far end, whatever the tree looks like. */
   const SPREAD = 700;
 
   const CLASSES: { name: Invalidation; blurb: string }[] = [

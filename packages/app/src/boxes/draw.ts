@@ -2,24 +2,20 @@ import type { BoxId, Fragment, Rect } from '@reflow/engine';
 import { PALETTE } from './palette.js';
 
 export type Scene = {
-  /** Boxes in paint order, so overlaps land the way the engine says they should. */
   order: readonly BoxId[];
   frame: ReadonlyMap<BoxId, Fragment>;
-  /** Where an inline box that wraps actually is, one rect per line. */
   lines: ReadonlyMap<BoxId, readonly Rect[]>;
   labels: ReadonlyMap<BoxId, string>;
   highlight: BoxId | null;
   selected: BoxId | null;
   diverging: ReadonlyMap<BoxId, string>;
-  /** Each dirty box and its ring, from the reflow lab. */
   dirty: ReadonlyMap<BoxId, number>;
-  /** Rings revealed so far, so the ripple can be animated by moving one number. */
   wave: number;
   viewport: { width: number; height: number };
 };
 
 export type View = {
-  /** Device pixels per CSS pixel of the page being laid out. */
+  // Device pixels per CSS pixel of the page being laid out.
   scale: number;
   width: number;
   height: number;
@@ -72,11 +68,7 @@ export function draw(context: CanvasRenderingContext2D, scene: Scene, view: View
   }
 }
 
-/**
- * The dirty set nests: html holds body holds everything the change touched. One wash per box
- * stacks fourteen of them into an opaque smear, so the wash goes on as a single union fill and
- * the ripple outwards is left to the outlines, a shade fainter each ring.
- */
+// The dirty set nests, and a wash per box stacks into an opaque smear, so it is one union fill.
 function drawDirty(context: CanvasRenderingContext2D, scene: Scene, view: View): void {
   const revealed = [...scene.dirty]
     .filter(([, ring]) => ring <= scene.wave)
@@ -128,15 +120,8 @@ function drawGrid(context: CanvasRenderingContext2D, scene: Scene, view: View): 
   context.stroke();
 }
 
-/**
- * Outside in: margin, border, padding, content. Each of the first three is drawn as a band
- * rather than a filled rectangle, because filling them stacks four alphas on top of each
- * other and every box comes out the same olive colour.
- *
- * `first` and `last` say whether this is where the box starts and where it ends. A box that
- * wraps has its left edge on the first line only and its right edge on the last, and nothing
- * down either side of the lines in between.
- */
+// Bands rather than filled rectangles, or four stacked alphas turn every box the same olive.
+// A box that wraps has its left edge on its first line only and its right edge on its last.
 function drawBox(
   context: CanvasRenderingContext2D,
   fragment: Fragment,
@@ -161,7 +146,6 @@ function drawBox(
   fill(context, content, PALETTE.content, 0.32);
 }
 
-/** The area between two rectangles, punched out with an even-odd fill. */
 function band(
   context: CanvasRenderingContext2D,
   outer: Rect,

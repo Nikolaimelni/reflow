@@ -22,14 +22,8 @@ type Formatter = (style: ComputedStyle) => string | null;
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const;
 
-/**
- * Only properties whose computed value the browser reports back unchanged. Width, height and
- * anything else that `getComputedStyle` resolves against a real box belongs to the geometry
- * harness, not here: comparing a percentage against a used pixel value is a guaranteed miss.
- *
- * `font-family` is left out on purpose. Its initial value is whatever the user picked in the
- * browser's settings, so there is nothing to agree on. Fixtures declare a family instead.
- */
+// Only what getComputedStyle reports unresolved; sizes belong to the geometry suite.
+// font-family is left out: its initial value is a browser setting.
 const FORMATTERS: Record<string, Formatter> = {
   display: (style) => style.display,
   position: (style) => style.position,
@@ -134,7 +128,7 @@ export function compareElement(
   return comparisons;
 }
 
-/** Chromium reports the initial `text-align` as `start`, which for this subset means left. */
+// Chromium reports the initial `text-align` as `start`, which for this subset means left.
 function normalise(property: string, value: string): string {
   if (property !== 'text-align') return value;
   if (value === 'start') return 'left';

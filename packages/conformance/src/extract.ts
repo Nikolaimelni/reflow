@@ -25,12 +25,8 @@ export type ExtractedPage = {
   nodes: ExtractedNode[];
 };
 
-/**
- * Runs inside the page, so it may not reference anything outside its own body. Playwright
- * ships the source of this function to Chromium and calls it there.
- */
+// Runs inside the page, so it may not use anything outside its own body.
 export function extractPage(propertyNames: string[]): ExtractedPage {
-  // Elements that never generate a box, and that the engine's tree does not carry either.
   const skip = ['head', 'style', 'script', 'link', 'meta', 'title', 'base'];
 
   const css = Array.from(document.querySelectorAll('style'))
@@ -94,17 +90,8 @@ export type Measurements = {
   metrics: Record<string, { ascent: number; descent: number; lineHeight: number }>;
 };
 
-/**
- * Also runs in the page. Taking the numbers from the same browser that laid the fixture out
- * is what makes the comparison fair, and it sidesteps pinning a font file: both sides end up
- * measuring whatever Chromium actually loaded.
- *
- * Advances come from canvas. The font's extents do not: `fontBoundingBoxAscent` and its
- * descent are whole numbers whatever the screen is, while Blink lays out with metrics snapped
- * to device pixels, so on a 1.25 display the two drift apart by up to a pixel. Both the
- * extents and the line box `line-height: normal` produces are measured off a live line
- * instead, which is the same answer the browser is using.
- */
+// Also runs in the page, so both sides measure the font Chromium actually loaded. Extents come
+// off a live line: canvas rounds them to whole pixels.
 export function measureInPage(requests: MeasureRequest[]): Measurements {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
@@ -150,10 +137,7 @@ export function measureInPage(requests: MeasureRequest[]): Measurements {
   return { widths, metrics };
 }
 
-/**
- * Runs in the page. Numbers the elements exactly the way `extractPage` does, so a hit test
- * answer can be matched up with the engine's own tree.
- */
+// Runs in the page, and numbers elements the way extractPage does.
 export function hitTestInPage(points: readonly { x: number; y: number }[]): number[] {
   const skip = ['head', 'style', 'script', 'link', 'meta', 'title', 'base'];
   const indexOf = new Map<Element, number>();
