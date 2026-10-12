@@ -25,7 +25,7 @@
 
   type Plane = {
     context: BoxId;
-    depth: number;
+    order: number;
     zIndex: number | 'auto';
     label: string;
     boxes: Placed[];
@@ -53,17 +53,27 @@
     const result = session.result;
     const contexts = new Map<BoxId, Plane>();
 
+    // Planes go in the order their contexts paint, not by how deeply they nest: a z-index: 999
+    // inside a z-index: 1 paints before a sibling z-index: 2, so its plane sits behind.
+    const paintedAt = new Map<BoxId, number>();
+    result.display.items.forEach((item, index) => {
+      if (!paintedAt.has(item.box)) paintedAt.set(item.box, index);
+    });
+
     for (const context of result.display.contexts) {
       contexts.set(context.box, {
         context: context.box,
-        depth: context.depth,
+        order: paintedAt.get(context.box) ?? 0,
         zIndex: context.zIndex,
         label: result.labels.get(context.box) ?? '',
         boxes: [],
       });
     }
 
-    const painted = result.display.items.filter((item) => item.part === 'box');
+    const painted = result.display.items.filter((item) => {
+      const rect = result.layout.fragments.get(item.box)?.rect;
+      return item.part === 'box' && rect !== undefined && rect.width > 0 && rect.height > 0;
+    });
 
     let shown = 0;
     for (const item of painted) {
@@ -73,7 +83,6 @@
       const box = result.boxes.get(item.box);
       const plane = contexts.get(item.context);
       if (fragment === undefined || box === undefined || plane === undefined) continue;
-      if (fragment.rect.width <= 0 || fragment.rect.height <= 0) continue;
 
       plane.boxes.push({
         box: item.box,
@@ -90,7 +99,9 @@
     }
 
     return {
-      planes: [...contexts.values()].sort((a, b) => a.depth - b.depth),
+      planes: [...contexts.values()]
+        .sort((a, b) => a.order - b.order)
+        .map((plane, rank) => ({ ...plane, order: rank })),
       shown,
       total: painted.length,
     };
@@ -180,8 +191,8 @@
           ` translateZ(${-((built.planes.length - 1) * GAP) / 2}px)`}
     >
       {#each built.planes as plane (plane.context)}
-        <div class="plane" style:transform={flat ? 'none' : `translateZ(${plane.depth * GAP}px)`}>
-          <span class="plane-label" style:left={flat ? '0' : `${plane.depth * 18}px`}>
+        <div class="plane" style:transform={flat ? 'none' : `translateZ(${plane.order * GAP}px)`}>
+          <span class="plane-label" style:left={flat ? '0' : `${plane.order * 18}px`}>
             {plane.label}
             {plane.zIndex === 'auto' ? '' : `z-index ${plane.zIndex}`}
           </span>
