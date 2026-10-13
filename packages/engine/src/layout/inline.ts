@@ -1046,34 +1046,11 @@ function breakIntoLines(
         return start < at - 1 && content ? start : at;
       }
 
-      if (
-        boundaries.has(at) &&
-        current.slice(0, at).some(({ piece }) => holdsALine(piece)) &&
-        !heldTogether(at)
-      ) {
+      if (boundaries.has(at) && current.slice(0, at).some(({ piece }) => holdsALine(piece))) {
         return at;
       }
     }
     return -1;
-  };
-
-  // A div's opening edge is glued like a character: no break straight after it, and none in
-  // front of it unless a space or an atomic comes first. Measured.
-  const heldTogether = (at: number): boolean => {
-    const passedOver = (piece: Piece | undefined) =>
-      piece !== undefined &&
-      ((isEdge(piece.kind) && piece.mayHang) || piece.kind === 'out-of-flow');
-    let before = at - 1;
-    while (before >= 0 && passedOver(current[before]?.piece)) before--;
-    let after = at;
-    while (after < current.length && passedOver(current[after]?.piece)) after++;
-
-    const opensTag = (piece: Piece | undefined) => piece?.kind === 'edge-start' && !piece.mayHang;
-    const previous = current[before]?.piece;
-    if (opensTag(previous)) return true;
-    return (
-      opensTag(current[after]?.piece) && previous?.kind !== 'atomic' && previous?.kind !== 'space'
-    );
   };
 
   // Back to the last space and start again there. A closing edge that follows it stays put:

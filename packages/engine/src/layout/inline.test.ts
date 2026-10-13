@@ -603,16 +603,15 @@ describe('atomic inlines', () => {
     expect(keeps.rectOf(span).height).toBe(16);
   });
 
-  it('holds the opening of a div to what comes before it, unless that is a space or an atomic', () => {
+  it('breaks in front of a div that opens before an atomic, whatever comes before it', () => {
     const lines = (before: DomNode[]) => {
       const opened = element('div', { classes: ['inl'] }, [element('span', { classes: ['over'] })]);
       return page(css, [element('p', {}, [...before, opened])], 100).lines.length;
     };
 
-    // Not after a word, and not after an empty div either, but a space or an inline-block in
-    // front of it is somewhere to break.
-    expect(lines([text('x')])).toBe(1);
-    expect(lines([element('div', { classes: ['inl'] })])).toBe(1);
+    // Chromium 153 glued the div to a word or an empty div in front of it. 156 does not.
+    expect(lines([text('x')])).toBe(2);
+    expect(lines([element('div', { classes: ['inl'] })])).toBe(2);
     expect(lines([text('x ')])).toBe(2);
     expect(lines([element('span', { classes: ['block'] })])).toBe(2);
   });

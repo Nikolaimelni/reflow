@@ -39,10 +39,10 @@ once: `pnpm -F @reflow/conformance exec playwright install chromium`.
 
 ## Deploying it
 
-It is a static bundle, set up for Cloudflare Pages: build with
-`pnpm -F @reflow/engine build && pnpm -F @reflow/app build` and serve `packages/app/dist`.
-`packages/app/public/_headers` adds a CSP and the usual security headers, which matter here
-because a shared link carries someone else's HTML.
+Every push to `main` that passes CI is published to GitHub Pages at
+[nikolaimelni.github.io/reflow](https://nikolaimelni.github.io/reflow/). Pages sends no headers
+of its own, so the build puts a content security policy in the page instead, which matters
+here because a shared link carries someone else's HTML.
 
 ## What it supports
 
